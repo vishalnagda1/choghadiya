@@ -26,6 +26,11 @@
         text-align: center;
       }
 
+      .current-status {
+        color: white;
+        background: rgb(255, 152, 0);
+      }
+
       table,
       th,
       td {
@@ -320,16 +325,14 @@
 
       setInterval(function () {
         if (old) {
-          old.style.color = "black";
-          old.style.background = "white";
+          doc.classList.remove("current-status");
         }
 
         const doc = document.getElementById(getCellID());
-        doc.style.color = "white";
-        doc.style.background = "#ff9800";
+        doc.classList.add("current-status");
 
         old = doc;
-      }, 3000);
+      }, 1000);
     </script>
   </body>
 </html>
