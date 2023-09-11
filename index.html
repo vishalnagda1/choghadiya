@@ -59,6 +59,22 @@
             color: #fff;
             transition: background-color 0.3s ease;
         }
+
+        /* Responsive Styles */
+        @media screen and (max-width: 600px) {
+            .table-container {
+                margin: 0;
+                border-radius: 0;
+            }
+
+            h1 {
+                border-radius: 0;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -66,7 +82,7 @@
     <div class="table-container">
         <h1>दिन का चौघड़िया</h1>
         <table class="day-table">
-          <th>प्रात: समय (6 बजे से)</th>
+            <th>प्रात: समय (6 बजे से)</th>
           <th>रवि</th>
           <th>सोम</th>
           <th>मंगल</th>
@@ -159,7 +175,7 @@
     <div class="table-container">
         <h1>रात का चौघड़िया</h1>
         <table class="night-table">
-          <th>रात समय (6 बजे से)</th>
+            <th>रात समय (6 बजे से)</th>
           <th>रवि</th>
           <th>सोम</th>
           <th>मंगल</th>
