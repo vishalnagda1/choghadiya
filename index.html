@@ -24,6 +24,7 @@
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            overflow-x: auto; /* Add horizontal scrolling for small screens */
         }
 
         h1 {
@@ -60,19 +61,30 @@
             transition: background-color 0.3s ease;
         }
 
-        /* Responsive Styles */
+        /* Make the first column sticky and the rest scrollable */
         @media screen and (max-width: 600px) {
-            .table-container {
-                margin: 0;
-                border-radius: 0;
-            }
-
-            h1 {
-                border-radius: 0;
+            table {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
             }
 
             th, td {
-                padding: 10px;
+                min-width: 80px; /* Smaller width for first column */
+                padding: 7px; /* Slightly smaller padding */
+            }
+
+            th:first-child, td:first-child {
+                position: sticky;
+                left: 0;
+                background-color: #ffcc80;
+                z-index: 1;
+            }
+
+            .table-container {
+                margin: 0;
+                border-radius: 0;
+                overflow-x: auto;
             }
         }
     </style>
