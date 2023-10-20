@@ -1,6 +1,6 @@
 {
   "name": "chaughadiya",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "This application is based on astrology, and shows the status of current time based on astrological view.",
   "main": "index.js",
   "scripts": {

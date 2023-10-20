@@ -316,34 +316,44 @@
       { start: "04:30", end: "06:00", prefix: "430-559" },
     ];
 
+    // Function to get the current cell ID based on the time
     function getCellID() {
       const date = new Date();
       const hh = (date.getHours() < 10 ? "0" : "") + date.getHours();
       const mm = (date.getMinutes() < 10 ? "0" : "") + date.getMinutes();
       const hhmm = hh + ":" + mm;
-
+  
       const currentDay = date.getDay();
-
+      let previousDay = currentDay - 1;
+  
+      if (previousDay === -1) {
+        previousDay = 6; // Set to Saturday if it's currently Sunday
+      }
+  
       // Determine whether it's day or night
       const timeRanges = date.getHours() >= 6 && date.getHours() < 18 ? dayTimeRanges : nightTimeRanges;
-
+  
       for (const range of timeRanges) {
         if (hhmm >= range.start && hhmm < range.end) {
-          return range.prefix + "-" + currentDay;
+          if (hhmm >= "00:00" && hhmm < "06:00") {
+            return range.prefix + "-" + previousDay;
+          } else {
+            return range.prefix + "-" + currentDay;
+          }
         }
       }
-
+  
       console.error("Time error - " + date);
       alert("Invalid time. Please report an issue with this time - " + date);
     }
-
+  
     let old;
-
+  
     setInterval(function () {
       if (old) {
         old.classList.remove("current-status");
       }
-
+  
       const doc = document.getElementById(getCellID());
       if (doc) {
         doc.classList.add("current-status");
@@ -352,7 +362,7 @@
         console.error("Element not found for ID: " + getCellID());
       }
     }, 1000);
-  </script>
+  </script>  
 </body>
 
 </html>
