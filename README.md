@@ -38,7 +38,7 @@ If you would like to contribute to the development of this project, please follo
 5. Submit a pull request to the main repository.
 
 ## License
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [AGPL-3.0 License](LICENSE).
 
 ---
 
