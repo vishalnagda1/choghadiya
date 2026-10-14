@@ -122,6 +122,8 @@ const state = {
     sheetError: null, // null | "query-required" | "geocode-empty" | "geocode-network" | "geocode-http" → FE-04 S6/S7
     query: '', // last submitted city query (FE-04 Retry re-submits it)
     expandedSlot: null, // FE-05
+    locRequesting: false, // CR2 — a manual getCurrentPosition is in flight (button disabled)
+    locDenied: false, // CR2 — show the sheet-local loc.denied line (F8 step 4)
   },
 };
 
@@ -133,6 +135,15 @@ let geocoder = null;
 
 /** Pending geolocation watchdog timer id (see GEOLOCATION_WATCHDOG_MS). */
 let geoWatchdog = null;
+
+/**
+ * CR2 — watchdog for the MANUAL "use my current location" request. Kept separate from
+ * `geoWatchdog` because the two failure paths differ: the auto-prompt degrades to the
+ * page-level S5 notice, the manual request degrades to the sheet-local `loc.denied`
+ * line (03-ux F8 step 4). Same bound, so a browser that never settles can never leave
+ * the button disabled forever.
+ */
+let locWatchdog = null;
 
 /** Current-slot poll timer id (see startSlotPoll). */
 let slotPollTimer = null;
@@ -166,6 +177,9 @@ function init() {
   dom.sheetMsg = document.getElementById('sheet-msg');
   dom.retrySearch = document.getElementById('retry-search');
   dom.sheetStatus = document.getElementById('sheet-status');
+  dom.useCurrent = document.getElementById('use-current');
+  dom.useCurrentLabel = document.getElementById('use-current-label');
+  dom.sheetLocNote = document.getElementById('sheet-loc-note');
   dom.results = document.getElementById('results');
   dom.dateLabel = document.getElementById('date-label');
   dom.prev = document.getElementById('prev-day');
@@ -210,6 +224,8 @@ function init() {
   // --- FE-03: location surfaces -------------------------------------------------
   dom.locChip.addEventListener('click', openSheet);
   dom.locClear.addEventListener('click', clearLocation);
+  // CR2 — the manual "use my current location" button (03-ux §3.10b / F8).
+  dom.useCurrent.addEventListener('click', useCurrentLocation);
   dom.closeSheet.addEventListener('click', () => dom.sheet.close());
   dom.sheetForm.addEventListener('submit', onSubmitCity);
   // Sheet close is the single place that returns focus to the chip (US-18 AC2,
@@ -424,6 +440,18 @@ function clearGeoWatchdog() {
 /** Granted: slots render for the device coords with the device's IANA zone (US-4 AC1/AC3). */
 function onGeoSuccess(position) {
   clearGeoWatchdog();
+  applyDeviceLocation(position);
+  render();
+}
+
+/**
+ * The single writer for a granted DEVICE fix, shared by the startup auto-prompt
+ * (onGeoSuccess) and the manual button (onManualGeoSuccess) so both produce an
+ * identical Location: device coords + the device's Intl IANA zone, no third-party
+ * name (the chip shows `loc.my`, 03-ux F2 step 1), `label` stays '' per 04-arch §4.1,
+ * and the fix is persisted through session-store (FE-1) so a reload skips the prompt.
+ */
+function applyDeviceLocation(position) {
   const { latitude, longitude } = position.coords;
   state.location = {
     latitude,
@@ -438,7 +466,6 @@ function onGeoSuccess(position) {
   state.ui.notice = null;
   state.viewedDate = todayAtLocation();
   persistSettings.location(); // FE-1: remember the device fix so a reload skips the prompt
-  render();
 }
 
 /** Denied / timed out / position unavailable → S5 hook (FE-04 owns the notice copy). */
@@ -472,6 +499,102 @@ function deviceTimeZone() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Manual "use my current location" (v2.3.0 CR2, 03-ux §3.10b / F8)    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The manual re-trigger path. A stored location suppresses the *auto*-prompt (FE-1)
+ * but never this button — it is the ONLY way to re-request a device fix on demand, and
+ * it works after a denied auto-prompt, an unavailable/insecure context, or a
+ * stored-location load alike (03-ux F8 step 6).
+ *
+ * Idempotent while in flight: the `state.ui.locRequesting` guard (belt) plus the
+ * disabled button (braces) mean repeated taps issue no second `getCurrentPosition`
+ * call (F8 step 5). The permission flow is byte-identical to the auto-prompt — the same
+ * GEOLOCATION_OPTIONS and the same granted writer (`applyDeviceLocation`).
+ */
+function useCurrentLocation() {
+  if (state.ui.locRequesting) return; // no double-prompt while a fix is in flight
+  const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
+  // No geolocation at all (insecure context / unsupported browser) → the sheet-local
+  // loc.denied line, never a throw and never the page-level banner (F8 step 4).
+  if (!geo || typeof geo.getCurrentPosition !== 'function') {
+    onManualGeoFailure();
+    return;
+  }
+  state.ui.locRequesting = true;
+  state.ui.locDenied = false; // clear any previous denial line for this attempt
+  renderUseCurrent();
+  armLocWatchdog();
+  geo.getCurrentPosition(onManualGeoSuccess, onManualGeoFailure, GEOLOCATION_OPTIONS);
+}
+
+/**
+ * Guarantee the requesting state is never permanent (a browser can ignore our
+ * `timeout` and invoke NEITHER callback — reproduced over CDP). Same bound as the
+ * auto-prompt's watchdog; a genuinely late success still wins (onManualGeoSuccess).
+ */
+function armLocWatchdog() {
+  clearLocWatchdog();
+  if (typeof window === 'undefined') return;
+  locWatchdog = window.setTimeout(() => {
+    locWatchdog = null;
+    if (state.ui.locRequesting) onManualGeoFailure();
+  }, GEOLOCATION_WATCHDOG_MS);
+}
+
+function clearLocWatchdog() {
+  if (locWatchdog !== null && typeof window !== 'undefined') window.clearTimeout(locWatchdog);
+  locWatchdog = null;
+}
+
+/**
+ * Granted (F8 step 3): the fix overwrites any stored location, the sheet closes (focus
+ * returns to the chip via onSheetClose), the chip relabels to `loc.my`, `loc.granted`
+ * is announced in the polite status line, and both lists + boundaries re-render for the
+ * device location.
+ */
+function onManualGeoSuccess(position) {
+  clearLocWatchdog();
+  state.ui.locRequesting = false;
+  state.ui.locDenied = false;
+  applyDeviceLocation(position);
+  render();
+  // Announce AFTER render (renderDateBar owns #live's steady state) so the granted
+  // confirmation is the last thing the polite region reads (03-ux §7.3).
+  dom.live.textContent = t('loc.granted', state.lang);
+  if (dom.sheet.open) dom.sheet.close(); // focus return happens in onSheetClose
+}
+
+/**
+ * Denied / timed out / unavailable / insecure context (F8 step 4): the button returns
+ * to rest (still tappable — the user may have just fixed a permission) and the
+ * sheet-local `loc.denied` line appears above the city field. The sheet stays open and
+ * the typed-city path is untouched; the page-level `geo.denied` banner is NOT involved
+ * (that belongs to the startup auto-prompt).
+ */
+function onManualGeoFailure() {
+  clearLocWatchdog();
+  state.ui.locRequesting = false;
+  state.ui.locDenied = true;
+  renderUseCurrent();
+}
+
+/**
+ * Paint the manual button's state (03-ux §3.10b / §7.3): requesting → disabled +
+ * `aria-busy="true"` + the `geo.loading` label; rest → the `loc.useCurrent` label. The
+ * sheet-local denial line follows `state.ui.locDenied`. Called from render() (so a
+ * language switch re-localises it) and from the request lifecycle above.
+ */
+function renderUseCurrent() {
+  const requesting = state.ui.locRequesting;
+  dom.useCurrent.disabled = requesting;
+  dom.useCurrent.setAttribute('aria-busy', String(requesting));
+  dom.useCurrentLabel.textContent = t(requesting ? 'geo.loading' : 'loc.useCurrent', state.lang);
+  dom.sheetLocNote.hidden = !state.ui.locDenied;
+}
+
+/* ------------------------------------------------------------------ */
 /* City search sheet (US-5, 03-ux S2 / F2)                             */
 /* ------------------------------------------------------------------ */
 
@@ -484,6 +607,9 @@ function getGeocoder() {
 function openSheet() {
   state.ui.sheetOpen = true;
   setSheetError(null);
+  // A fresh sheet session starts with no manual-denial line (03-ux F8 step 4).
+  state.ui.locDenied = false;
+  renderUseCurrent();
   dom.results.replaceChildren();
   announceSheet('');
   if (!dom.sheet.open) dom.sheet.showModal(); // focus containment + Esc for free
@@ -865,6 +991,7 @@ function render() {
   applyDictionary();
   renderNotDefined();
   renderChip();
+  renderUseCurrent(); // CR2 — the manual button's label/busy state + the denial line
   renderDateBar();
   renderNotice();
   renderSections();

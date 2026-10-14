@@ -197,7 +197,28 @@
     <button type="button" class="sheet-close" id="close-sheet" aria-label="बंद करें">✕</button>
   </div>
   <div class="sheet-body">
+    <!-- v2.3.0 CR2 (03-ux §3.10b / F8): the manual "use my current location" button.
+         The sheet is the ONE place the user changes location, so the device-fix path
+         lives directly above the typed-city path (one entry point, one state machine).
+         Full-width, ≥44 px, --brand fill, leading decorative 📍 (aria-hidden). The
+         label (loc.useCurrent) is app.js-owned (like #loc-name): it swaps to
+         geo.loading while a fix is in flight, when the button is also disabled +
+         aria-busy so a second tap can never double-prompt (idempotent). Its three
+         states are all announced (03-ux §7.3). -->
+    <button type="button" class="loc-current" id="use-current" aria-busy="false">
+      <span aria-hidden="true">📍</span>
+      <span id="use-current-label" data-i18n="loc.useCurrent">मेरी वर्तमान लोकेशन उपयोग करें</span>
+    </button>
     <p class="sheet-privacy" data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
+    <!-- F8 step 4: the sheet-LOCAL denial line, directly above the city field. It is
+         role="status" (polite) and uses the ℹ glyph + text, NOT --danger — the user is
+         not blocked, the typed-city path still works. Deliberately NOT the page-level
+         geo.denied banner, which belongs to the startup auto-prompt. Toggled by
+         app.js from state.ui.locDenied. -->
+    <p class="sheet-note" id="sheet-loc-note" role="status" hidden>
+      <span aria-hidden="true">ℹ</span>
+      <span data-i18n="loc.denied">लोकेशन की अनुमति नहीं मिली — शहर लिखें या ब्राउज़र में अनुमति दें</span>
+    </p>
     <form class="field-row" id="city-form">
       <label class="sr" for="city" data-i18n="city.fieldLabel">शहर का नाम</label>
       <input id="city" type="text" inputmode="text" autocomplete="off" maxlength="64"

@@ -679,6 +679,44 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .4) }
   line-height: var(--lh-xs);
   color: var(--text-muted);
 }
+/* v2.3.0 CR2 — "use my current location" (03-ux §3.10b / F8): full-width, ≥44 px,
+   --brand fill, leading decorative 📍 (aria-hidden in the markup). Requesting →
+   the button is disabled + aria-busy and the label swaps to geo.loading (app.js);
+   the label stays at full contrast so it never drops below the §4.8 ratios. The
+   global :focus-visible ring (above) gives it a visible focus state. */
+.loc-current {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 var(--sp-3);
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font: inherit;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.loc-current:disabled { cursor: default }
+/* F8 step 4 — the sheet-LOCAL denial line, directly above the city field:
+   role="status", glyph ℹ + text, --text (NOT --danger: the typed path still works,
+   this is not an error). Never colour-only. */
+.sheet-note {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text);
+}
+.sheet-note > [aria-hidden] { flex: 0 0 auto }
 .field-row { display: flex; gap: var(--sp-2) }
 .field-row input {
   flex: 1 1 auto;
