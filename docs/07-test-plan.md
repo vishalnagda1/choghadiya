@@ -382,3 +382,155 @@ two explicitly-manual measurements (MAN-01, MAN-02).**
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | qa-engineer | Initial test plan: levels & tooling, environments, entry/exit criteria, regression scope, severity taxonomy, named suites (S-SEQ 112-assertion, S-SCHED fixture/polar/DST, S-GEO error taxonomy, S-I18N M4 gate, S-SMOKE, S-AXE M7 gate), US-1..US-19 traceability matrix. |
+| v2.3.0 addendum | 2026-10-14 | qa-engineer | §12 appended: change items 1–7 → named test cases `QA230-*`, acceptance criteria traced to `docs/00-brief.md` change log + `docs/03-ux.md` §6/§7.5 + `docs/04-architecture.md` §16 + `docs/01-research.md` §11–13. |
+
+---
+
+## 12. v2.3.0 addendum — change items 1–7 (CR1–CR7)
+
+Card: `t_e4d61d3a` (QA-1 · v2.3.0 test plan addendum + regression execution).
+Scope: the seven post-release change items in `docs/00-brief.md` change log (2026-10-14),
+implemented by the M5 wave (`docs/05-plan.md` §8). This section **extends** §1–§10; the
+v1.0 levels, tooling, severity taxonomy (§7), regression scope (§5) and exit criteria (§4)
+still govern, with the v2.3.0 surfaces added below.
+
+### 12.1 What changed in the surface under test
+
+| # | Change item (brief change log) | Spec of record | Implemented by |
+|---|-------------------------------|----------------|----------------|
+| 1 | Time format: **12h default** + a 12h/24h toggle | `03-ux` §3.10a, §7.5(11); `04-arch` §16.2 `formatTime` hourCycle | BE-B `t_3d1c5170`, FE-1 `t_8d2651f9` |
+| 2 | Manual **"use my current location"** button (in addition to the auto-prompt) | `03-ux` §3.10b/F8, §7.5(12) | FE-2 `t_24eee6a8` |
+| 3 | **Attribution lines** removed/replaced (RS-3 **Option B**) | `01-research` §13.6; `03-ux` §6.1b | FE-4 `t_bf7bfef8` |
+| 4 | **Calendar date picker** ±10 civil days (replaces/extends prev-next) | `03-ux` §3.10c/F9, §7.5(13) | FE-3 `t_d7975f6c` |
+| 5 | **Inauspicious periods** Vaar Vela / Kaal Vela / Kaal Ratri (S8) | `01-research` §11; `04-arch` §16.2; `03-ux` §3.8, §7.5(14) | BE-A `t_ae7c48a6`, FE-5 `t_4d08f3fd` |
+| 6 | **Current-choghadiya detail panel** (S9) with contextual notes | `01-research` §12; `03-ux` §3.9, §7.5(15) | RS-2 `t_f27d12cf`, FE-6 `t_778b1ea0` |
+| 7 | **Persistence & caching** (7a settings, 7b geocode TTL cache) | `00-brief` item 7; `04-arch` §16.2/§16.3 | BE-C `t_a46a447b`, FE-1, FE-FIX `t_ab3859f8` |
+
+**Item 7 scope note (client-confirmed).** The brief change log item 7 was updated (CTO
+edit, 2026-10-14) to **`localStorage`** — settings persist across full browser restarts,
+no expiry; API-response cache expires on TTL. The shipped `STORAGE_SCOPE` is `'session'`
+(`session-store.js`, ADR-009 default until the client answered). `QA230-7a*` therefore
+tests **both** readings and records which one the build satisfies; the storage-scope
+mismatch is a reportable finding, not a silent pass.
+
+### 12.2 Test cases — item 1 (time format)
+
+| ID | Case | Expected (traced) | Level |
+|----|------|-------------------|-------|
+| `QA230-1a` | Fresh session (no stored timeFormat) renders **12-hour** everywhere: 16 slot ranges, sunrise/sunset/next-rise small print, S8 ranges, S9 range, S2 result-row city times | `hh:mm am|pm`, Latin digits + ASCII `am/pm` in **both** languages (`03-ux` §3.10d); `#b-h12` `aria-pressed="true"`, `#b-h24` `"false"` | L1 `SCH` 12h pins + L3 smoke 12h row assertion + L4 live |
+| `QA230-1b` | Toggle → **24h**: every time on the page re-renders in place (`HH:MM`, no `am/pm`) within 100 ms; no reload | `03-ux` §3.10a/§7.5(11) | L3 smoke (24h re-render of rows + S8 + S9) + L4 live |
+| `QA230-1c` | Toggle back → 12h; `aria-pressed` follows the active cycle on both options | `03-ux` §3.10a | L3 smoke + L4 live |
+| `QA230-1d` | Toggle **+ reload** → the chosen cycle survives an in-tab reload | `03-ux` §7.5(11); `04-arch` §16.3 `choghadiya.settings.timeFormat` | L3 smoke (check 19) + L4 live |
+| `QA230-1e` | Out-of-contract `hourCycle` throws `RangeError`; 3-arg default renders 12h; `h23` byte-identical to v2.2.0 | `04-arch` §16.2 | L1 `choghadiya.test.js` (BE-B) |
+
+### 12.3 Test cases — item 2 (manual geolocation button)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-2a` | The button exists **inside S2** as its first control, full-width, ≥ 44 px, labelled `loc.useCurrent` | `03-ux` §3.10b/F8 | L3 smoke + L4 live |
+| `QA230-2b` | **Grant**: click → requesting (`disabled` + `aria-busy="true"`, label → `geo.loading`) → grant closes the sheet, chip → `loc.my`, `loc.granted` announced, whole page re-renders for device coords + device tz, stored location overwritten | `03-ux` §3.10b; US-4 AC1 | L4 live (CDP geolocation override + granted permission) |
+| `QA230-2c` | **Denied/unavailable**: `loc.denied` appears **inside the sheet** as `role="status"` above the field; the typed path still works; button returns to rest and stays tappable; **no** page-level `geo.denied` banner | `03-ux` §3.10b/F8 step 4 | L4 live |
+| `QA230-2d` | Works **after a denied auto-prompt** and **after a stored-location load** (both suppress the auto-prompt only) | `03-ux` §3.10b; ADR-009 | L4 live |
+| `QA230-2e` | **Double-press idempotence**: re-taps while in flight issue **exactly one** `getCurrentPosition` call (button disabled) | `03-ux` §3.10b | L4 live (counting stub) |
+| `QA230-2f` | No `NaN`/`Invalid Date`/`undefined` in any of the three states; no horizontal scroll at 320 px | US-9 AC2 / US-16 | L4 live |
+
+### 12.4 Test cases — item 3 (attribution & disclosure copy)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-3a` | The two v2.2.0 body lines are **gone** from the footer and the city sheet ("A searched city name is sent to Open-Meteo/GeoNames. Location is never stored." / "Geocoding by Open-Meteo / GeoNames") | `01-research` §13.6; `03-ux` §6.1b | L1 `i18n.test.js` stale-string lock + L4 live DOM scan |
+| `QA230-3b` | One minimal footer credit `attribution.geocoding` remains, naming both providers + CC BY 4.0, byte-equal to §6 in **both** languages | `01-research` §13.6 B1 | L1 `i18n.test.js` byte-lock (122 keys) + L4 live |
+| `QA230-3c` | Rewritten `privacy.line` is **truthful about what the build actually stores** (settings + geocode cache, per scope) | `01-research` §13.7 | L4 live + §12.10 F2 |
+| `QA230-3d` | RS-3 §13.6 B1 hyperlink requirement (`Open-Meteo`/`GeoNames`/`CC BY 4.0` → real `<a>`) — **deferred** | `03-ux` §6.1b FE-4 note | L4 live: assert presence/absence + record |
+| `QA230-3e` | No untranslated/stale copy on the new surfaces; every visible string maps to a §6 key | M4, `03-ux` §7.5(17) | L1 `i18n.test.js` + L3 smoke |
+
+### 12.5 Test cases — item 4 (calendar picker ±10)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-4a` | Native `<input type="date">`; `min`/`max` = **viewed location's civil date ∓10** (21 days inclusive); `value` = viewed date; `aria-label` = `date.picker.label` | `03-ux` §3.10c; §7.5(13) | L3 smoke + L4 live |
+| `QA230-4b` | Picking any date re-renders both lists + S8 + S9 + the label; off-today drops the highlight (no `aria-current`) and shows `panel.selectPrompt` | US-14 AC3, §3.10c | L3 smoke + L4 live |
+| `QA230-4c` | **Edges disabled**: at `min` `‹` is `disabled`+`aria-disabled="true"`, at `max` `›` is; clicking a disabled arrow is inert; the range hint `date.picker.range` is present | `03-ux` §3.10c, §7.5(13) | L3 smoke + L4 live |
+| `QA230-4d` | **Clamping of `‹`/`›`/Alt-arrows** shares one clamp path (`setViewedDate`); a refused/cleared commit snaps the field back to the rendered date | `03-ux` §3.10c | L4 live (Alt+arrow clamp) + FE-3 probe |
+| `QA230-4e` | **Location change re-clamps**: `min`/`max` recomputed from the new location's today; a viewed date outside the new window snaps to the new today | `03-ux` §3.10c/F9 step 5 | L4 live |
+| `QA230-4f` | **London tz date correctness**: at a local time near midnight the location's civil "today" drives `min`/`max`/`value` (not the device date) | US-3 AC3, §3.10c | L1 `todayIn`/`addDays` + FE-3 probe (Europe/London 23:30Z → 2026-10-15) |
+| `QA230-4g` | Label never truncated at 320/360/390/420 px; keyboard-only date change works | §7.5(13) | L3 smoke (320 px) + L4 live |
+
+### 12.6 Test cases — item 5 (inauspicious periods, S8)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-5a` | 3 period rows for the viewed **date + location**: Vaar Vela / Kaal Vela / Kaal Ratri, each with the range in the **active** time format and its one-line `periods.<name>.desc` | `03-ux` §3.8; `01-research` §11.1 | L3 smoke (Mumbai fixture) + L4 live |
+| `QA230-5b` | Values vs the **RS-1 §11.5 Mumbai 2026-10-14** cross-check, **±2 min**: Vaar Vela 12:24–13:52, Kaal Vela 09:28–10:56, Kaal Ratri 03:28–05:00 (Oct 15) | `01-research` §11.5; US-6 AC2 / M3 | L1 `inauspicious.test.js` + **L4 MAN-01 live Drik** (§12.9) |
+| `QA230-5c` | **Cross-midnight**: Kaal Ratri carries the trailing civil-date suffix (`· <formatDate>`), only when the period ends on a later civil date | `03-ux` §3.8 | L3 smoke + L4 live |
+| `QA230-5d` | **Saturday doubles**: 2 Kaal Velas + 2 Kaal Ratris render (from the `*Periods` arrays, not the first-occurrence scalars) | `01-research` §11.3; `04-arch` §16.6 Q2 | L1 `inauspicious.test.js` + L4 live |
+| `QA230-5e` | **Polar hidden**: `defined:false` hides the whole block (heading never alone) alongside S3; no `NaN`/empty row | `03-ux` §3.8 states; US-9 AC2 | L4 live (89 N) + L1 `inauspicious.test.js` |
+| `QA230-5f` | A `null` period renders `periods.notApplicable` in place of a range | `03-ux` §3.8 states | L1 + FE-5 probe |
+| `QA230-5g` | **All four re-render triggers** refresh S8 in place: date nav/picker, location change, language toggle, time-format toggle | `03-ux` §7.5(14) | L3 smoke + L4 live |
+| `QA230-5h` | Names are **never** labelled Yamagandam/Gulika/Rahu Kaal in the DOM | `01-research` §11.0; `04-arch` §16.2 | L4 live DOM scan + L1 |
+
+### 12.7 Test cases — item 6 (detail panel, S9)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-6a` | **Default = current** slot on load/reload (today at the location): badge `panel.badge.current`, `panel.note.current`, tier note, all four content fields | `03-ux` §3.9 | L3 smoke + L4 live |
+| `QA230-6b` | **Tap-select** a non-current row → panel shows it; that row gets `aria-pressed="true"` + `aria-controls="choghadiya-panel"`; badge gone; `panel.note.tapAgain`; `aria-current` stays **exclusive** to the live row | `03-ux` §3.9; US-14 AC1 | L3 smoke + L4 live |
+| `QA230-6c` | **Same-tap + reload revert** to the current slot (selection is UI-only, never persisted) | `03-ux` §3.9; ADR-009 | L3 smoke + L4 live |
+| `QA230-6d` | **Off-today**: no slot is current → `panel.selectPrompt` until a tap; the first tap shows that slot; still no `aria-current` anywhere | `03-ux` §3.9; US-14 AC3 | L3 smoke + L4 live |
+| `QA230-6e` | **Overlap warning names the period**: `panel.note.overlay.<vaarVela|kaalVela|kaalRatri>` shown exactly when `overlappingPeriod()` returns that slug; ⚠ paired with text, never colour-only | `03-ux` §3.9; `04-arch` §16.2 | L1 `inauspicious.test.js` + L4 live (all three slugs) |
+| `QA230-6f` | **Bilingual + time-format re-render**: language and 12h/24h toggles re-render the panel in place; the selection is preserved across those two toggles, cleared on a date/location change (TL-1 ruling) | `03-ux` §3.9/§3.10a; TL-1 `t_e38223d2` | L3 smoke + L4 live |
+| `QA230-6g` | Panel is a labelled `region` (`aria-labelledby`), **not** `aria-live`; no focusable control of its own; focus never moves on tap | `03-ux` §3.9 a11y | L4 live + L3 axe |
+| `QA230-6h` | No `NaN`/`Invalid Date`/`undefined`; no horizontal scroll at 320 px with the panel + warning open; 200 % zoom clean | US-9 AC2 / US-16 | L4 live |
+
+### 12.8 Test cases — item 7 (persistence & caching)
+
+| ID | Case | Expected | Level |
+|----|------|----------|-------|
+| `QA230-7a1` | **Settings persistence across reload**: `timeFormat`, `lang`, last selected `location` survive an in-tab reload; every persisted key is namespaced `choghadiya.*` | `04-arch` §16.3; §7.5 | L3 smoke (checks 19–21) + L4 live |
+| `QA230-7a2` | **Scope check (client-confirmed)**: settings survive a **full browser restart** (new tab / new session) — the brief's `localStorage` requirement | `00-brief` item 7 | L4 live: record the shipped `STORAGE_SCOPE` + behaviour (finding §12.10 F2) |
+| `QA230-7a3` | **Prompt suppression**: with a stored location, the auto geolocation prompt does **not** fire on load (0 `getCurrentPosition` calls); the stored location renders immediately | ADR-009, FE-1 | L4 live (geo override + reload) |
+| `QA230-7b1` | **Geocode cache written**: a city search writes `choghadiya.geocache.entry.<lang>\u0000<query>` + `choghadiya.geocache.index`, each a `{t,v}` envelope with `t` ≈ now + 24 h and a non-empty result array | `04-arch` §16.2; RS-3 §13.7 | L4 live (sessionStorage read) + smoke §20 (`t_7ed6b2ab`) |
+| `QA230-7b2` | **Same query within TTL → 0 network calls across reload**: after a same-tab reload, re-submitting the identical query costs **0** requests to `geocoding-api.open-meteo.com` and still renders results | `04-arch` §16.2 | smoke §20 (`t_7ed6b2ab`) + L4 live (performance resource entries) |
+| `QA230-7b3` | **Expired entry → refetch**: with `t` in the past, the next search fires ≥1 request and rewrites a fresh 24 h envelope | `04-arch` §16.2 | smoke §20 (`t_7ed6b2ab`) + L4 live |
+| `QA230-7c` | **Storage-failure / private-mode degradation**: when storage read/write throws (quota / disabled / private mode), the app keeps working (toggle, search, render) with **zero throws** and a silent in-memory fallback | `04-arch` §16.2; US-9 AC2 | L1 `session-store.test.js` + L4 live (throwing `setItem`) |
+| `QA230-7d` | `sessionStorage`/`localStorage` appears **only** in `session-store.js` (SEC-STORAGE grep gate) | `04-arch` §16.5 | L1 `make greps` |
+
+### 12.9 Manual item MAN-01 (v2.3.0) — M3 ±2 min panchang comparison for the **three new periods**
+
+Method (same as the v1.0 `MAN-01`, extended): compute the three periods with the **shipped**
+`inauspicious.js#computeInauspicious` and compare each boundary against **live Drik Panchang**
+(the project's comparison bar, `01-research` §11.5) for the same location/date. Drik labels the
+periods directly on its Choghadiya table, so the comparison is boundary-by-boundary, not just
+sunrise/sunset. Run at **≥ 2–3 location/date combos**, including a **Saturday** (double periods).
+
+| # | Location / civil date | TZ | Shipped (Vaar Vela / Kaal Vela / Kaal Ratri) | Live Drik | Δ |
+|---|-----------------------|----|----------------------------------------------|-----------|---|
+| 1 | Mumbai 2026-10-14 (Wed) | Asia/Kolkata | 12:24–13:52 / 09:28–10:56 / 03:28–05:00 (Oct 15) | 12:24–13:52 / 09:28–10:56 / 03:28–05:00 | **0 / 0 / 0 min** |
+| 2 | Mumbai 2026-10-17 (Sat) | Asia/Kolkata | 13:51–15:19 / 06:33–08:00 + 16:46–18:14 / 18:14–19:46 + 05:01–06:33 (Oct 18) | 13:51–15:19 / 06:33–08:01 + 16:47–18:14 / 18:14–19:47 + 05:01–06:33 | **≤ 1 min** (4 double boundaries) |
+| 3 | London 2026-10-14 (Wed) | Europe/London | 12:46–14:06 / 10:04–11:25 / 04:05–05:45 (Oct 15) | 12:46–14:07 / 10:04–11:25 / 04:06–05:45 | **≤ 1 min** |
+| 4 | New York 2026-10-14 (Wed) | America/New_York | 12:41–14:05 / 09:53–11:17 / 03:54–05:31 (Oct 15) | 12:42–14:06 / 09:54–11:18 / 03:55–05:31 | **≤ 1 min** |
+
+Expected: every boundary within **±2 min** (US-6 AC2 / M3). Recorded in `docs/08-test-report.md` §13.5.
+
+### 12.10 v2.3.0 traceability — change item → test case → suite
+
+| Item | Brief criterion | Primary case(s) | Suite(s) |
+|------|-----------------|-----------------|----------|
+| 1 | 12h default everywhere; toggle ↔ 24h; toggle + reload persistence | `QA230-1a..1e` | `S-SCHED`, `S-SMOKE`, L4 |
+| 2 | manual geolocation button (grant / denied / after-stored / double-press) | `QA230-2a..2f` | `S-SMOKE`, L4 |
+| 3 | attribution removed/replaced (RS-3 option), copy byte-check, bilingual, nothing stale | `QA230-3a..3e` | `S-I18N`, L4 |
+| 4 | picker ±10 (edges disabled), clamping, location re-clamp, London tz date | `QA230-4a..4g` | `S-SCHED`, `S-SMOKE`, L4 |
+| 5 | 3 periods for date+location, RS-1 Mumbai ±2 min, polar hidden, 4 re-render triggers | `QA230-5a..5h`, `MAN-01` | `S-SCHED`(inauspicious), `S-SMOKE`, L4 |
+| 6 | default=current / tap / same-tap+reload revert / off-today prompt / overlap naming the period / bilingual+format re-render | `QA230-6a..6h` | `S-SMOKE`, L4 |
+| 7 | settings persistence, prompt suppression, geocode cache (TTL), storage-failure degradation | `QA230-7a1..7d` | `S-SMOKE`, `S-GEO`/`session-store`, L4 |
+
+Regression scope for this wave (§5 of the base plan): full `make test` + `make check`
+(tests + greps + smoke + axe), plus the v2.2.0 regression set **S3/S5/S6/S7**, `aria-current`
+"Now" exclusivity, night-after-midnight attribution, DST fixtures, CSP/`textContent`-only,
+320 px no-scroll, 44×44 targets and reduced-motion — all re-run in `docs/08-test-report.md` §13.
+
+### 12.11 Exit criteria for the v2.3.0 verdict
+
+Same bar as §4, extended: every `QA230-*` case either passes an automated test / named manual
+check or is reported as an explicit finding; **no open Critical/High**; all seven change items
+traced; `MAN-01` measured with real numbers; verdict recorded in `docs/08-test-report.md` §13.

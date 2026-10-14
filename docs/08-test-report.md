@@ -294,3 +294,246 @@ Reference data (fetched live 2026-10-14): Drik Panchang —
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v1.0 | 2026-10-14 | qa-engineer | First execution of `docs/07-test-plan.md` v1.0 on `a170fd0`: `make test` 64/64, `make check` smoke 31/31 + axe PASS, exploratory S3/S4/S5/S6/S7/empty + 320–1920 px + zoom/reduced-motion/dark/contrast/network, MAN-01 panchang (±1 min vs Drik Panchang, 5 combos), MAN-02 Lighthouse mobile FCP 1.13 s. Verdict **PASS-WITH-KNOWN-ISSUES** (KI-1 `03-ux` §S2 states, KI-2 post-deploy M6/US-19 AC2, KI-3 naming). No defects → no fix cards, no re-test card. |
+
+---
+
+# v2.3.0 section (appended — the v2.2.0 report above is preserved unchanged)
+
+Project: **Choghadiya Refactor** · Owner: `qa-engineer` · Date: **2026-10-14**
+Card: `t_e4d61d3a` (QA-1 · v2.3.0 test plan addendum + regression execution)
+Plan executed: `docs/07-test-plan.md` **§12 v2.3.0 addendum** (`QA230-*` cases; base plan §1–§10 still governs)
+
+---
+
+## 13. VERDICT: PASS-WITH-KNOWN-ISSUES
+
+**All seven v2.3.0 change items (CR1–CR7) are implemented and verified by real execution.** Every
+automated gate is green on the tested commit — **`make test` 100/100**, **`make check` exit 0**
+(greps 4 gates · smoke **66/66** · axe **5 states PASS**) — and a live Chromium pass reproduces
+the 12h default, the manual-geolocation button, the picker ±10, the S8 periods (exact RS-1 Mumbai
+fixture), the S9 selection/overlap semantics and item-7 persistence on the running app. The
+**M3 ±2 min panchang comparison** for the three new periods is **PASS** (max observed delta **1 min**,
+4 location/date combos incl. a Saturday double-period case, vs live Drik Panchang).
+
+**No Critical or High defect is open.** Four findings are carried, none blocking:
+**F2** (Medium, the one that matters) — the brief's item 7 is now *client-confirmed `localStorage`*,
+but the shipped build is `STORAGE_SCOPE='session'`, so settings do **not** survive a full browser
+restart; **F3** (Low, UX copy), **F4** (Low, attribution hyperlinks deferred to SEC-1/GATE 2),
+**F5** (Low, a stale `docs/04` §16.3 key-layout line). The one **quality-gate gap** flagged while
+this card ran — item-7b had no smoke coverage (`F6`) — was **closed mid-run**: the DO-FIX card
+`t_7ed6b2ab` landed (`192951e`/`d45fef1`, smoke 54→66) and the gate now guards the geocode cache.
+Nothing was softened to reach this verdict: everything executed passed, and everything not
+executable here is listed in §13.8.
+
+HEAD tested: **`d45fef1`** = the v2.3.0 wave at `9693f10` (TL-1 review) **+** the item-7b wiring fix
+`068681c` **+** the item-7b smoke coverage `192951e`/`d45fef1`. The exploratory pass ran on
+`068681c`; `make test` / `make check` were **re-run on `d45fef1`** after the DO-FIX card completed
+mid-run (both green). Working tree: `docs/00-brief.md` modified (the CTO's item-7 `localStorage`
+edit, uncommitted — see F2), plus this card's two doc edits.
+
+---
+
+## 13.1 Environment
+
+| Item | Value |
+|------|-------|
+| Repo / workspace | `/Users/vishu/hermes-company/projects/choghadiya` (git, branch `main`) |
+| Commit under test | `d45fef180358094a1f51a58e7d3d482927d1019b` (gate re-run); exploratory pass on `068681c` |
+| Baseline reviewed by TL-1 | `9693f10` (v2.3.0 wave) — this run adds `068681c` (item-7b wiring) and `192951e`/`d45fef1` (item-7b smoke) |
+| Working tree | `docs/00-brief.md` modified (uncommitted CTO edit, item 7 → `localStorage`); all code committed |
+| Node / npm | v26.7.0 / 11.19.0 |
+| OS | macOS 26.5.2 (arm64) |
+| Browser engine | Google Chrome (headless, CDP) — `scripts/smoke.mjs`, `scripts/axe-check.mjs` and the exploratory pass |
+| axe-core | 4.10.2 (pinned devDependency, dev-only) |
+| Static server | `make dev` → `python3 -m http.server 8080` (repo root) |
+| Network | `geocoding-api.open-meteo.com` reachable (used for the real city searches in the exploratory pass); **Drik Panchang fetched live via the browser** for MAN-01 (a `curl` is 403-blocked, a real browser is not) |
+
+Plan rule honoured for the automated suites: **no `tests/*` suite touches the network** (fake
+`fetchImpl`); smoke/axe hit `127.0.0.1:8080` only. Network egress happened only in the *manual*
+L4 items (live city searches + the Drik comparison), which is what the plan specifies for them.
+
+---
+
+## 13.2 Automated suites — executed vs. plan
+
+### 13.2.1 `make test` — **PASS (100/100)**
+
+```
+$ make test
+ℹ tests 100 · pass 100 · fail 0 · duration_ms 560
+```
+
+100 tests = the v2.2.0 64 (now with the 122-key i18n contract and the 12h/24h `formatTime` pins)
++ 12 `inauspicious` + 12 `session-store` + 7 `geocoder` cacheStore, etc. The suites named in
+`07-test-plan.md` §6 all run; the v2.3.0 additions live in `tests/inauspicious.test.js`,
+`tests/session-store.test.js`, the `cacheStore` block of `tests/geocoder.test.js` and the
+`i18n.test.js` 122-key lock.
+
+### 13.2.2 `make check` — **PASS (exit 0)**
+
+```
+$ make check          # tests 100/100  then greps then smoke then axe   (HEAD d45fef1, exit 0)
+GREPS  : PASS — 0 hits across 4 gates (SEC-05 innerHTML, SEC-03 inline handlers,
+         SEC-14 origin allow-list, SEC-STORAGE web-storage-only-in-session-store.js)
+SMOKE  : SMOKE RESULT: 66 passed, 0 failed
+AXE    : AXE RESULT: PASS — 5 states, 0 critical/serious, 0 moderate/minor
+```
+
+Smoke now covers the v2.3.0 surfaces (`QA230-*`): 12h row ranges (strict), the manual geolocation
+button, the S8 periods block with the **exact Mumbai 2026-10-14 12h fixture**, the S9 panel
+(default = live current + वर्तमान badge; tap-select → `aria-pressed` + `panel.note.tapAgain`;
+same-tap revert; reload revert), the ±10 picker (`type=date`, min 2026-10-04 / max 2026-10-24,
+off-today drops the highlight), the 24h→12h re-render of rows + S8 + S9, and settings persistence
+across a real in-tab reload (checks 19–21). **Section 20 adds 12 item-7b checks** (`t_7ed6b2ab`,
+landed mid-run): a CDP `Fetch` interceptor fulfills the geocoding request with a fixed payload, so
+the suite proves the cache is written (`{t,v}` envelope, `t` ≈ now + 24 h), that a **same-tab reload
+makes the identical query cost 0 geocoding requests** while results still render from the cache, and
+that a **past-`t` entry is not served** (refetch + renewal) — all with no live network. The suite
+went **54 → 66** checks, so the gate now guards the item-7b fix.
+
+Axe scans **5 states** (base @1024, city sheet, row selected + S9 panel, off-today + S8 + picker
+focused, base @320): 0 critical/serious, 0 moderate/minor in every state; the single `incomplete`
+`color-contrast` rule is the same decorative `aria-hidden` chevron as v2.2.0 (not a violation).
+
+---
+
+## 13.3 Exploratory pass (L4) — real browser, real states
+
+Served from `make dev`, driven over CDP with a real Chrome. `NaN` / `Invalid Date` / `undefined`
+scan of the whole rendered DOM returned **0 hits in every state below** unless noted.
+
+| # | Change item / probe | Observed |
+|---|---------------------|----------|
+| 1 | **Item 1 — 12h default** | Fresh session: `#b-h12 aria-pressed="true"`, `#b-h24 "false"`; every row `hh:mm am|pm` (`लाभ · Labh 06:32 am – 08:00 am`), S8 ranges and the S9 range all 12h; the S2 result-row city time (`03:55 pm`) too. (`QA230-1a`) |
+| 2 | **Item 1 — toggle ↔ 24h** | Click 24h → all 16 ranges `HH:MM` (`06:32 – 08:00`), S8 → `12:24 – 13:52`, S9 range → `15:20 – 16:48`, in place, no reload; 12h restores it. (`QA230-1b/1c`) |
+| 3 | **Item 1 — reload persistence** | 24h chosen then `location.reload()` → 24h + EN both survive. (`QA230-1d`) |
+| 4 | **Item 2 — button present** | `#use-current` inside S2, first control, full-width, label `मेरी वर्तमान लोकेशन उपयोग करें` / `Use my current location`, idle + enabled. (`QA230-2a`) |
+| 5 | **Item 2 — grant** | CDP geolocation override (19.076, 72.8777) + granted permission → click: chip → `📍 My location`, sheet closes, live region `Location found` (`loc.granted`), 8 rows re-render for the device coords + device tz. (`QA230-2b`) |
+| 6 | **Item 2 — denied** | With permission denied → sheet-local `role="status"` line `ℹ Location permission denied — type a city or allow it in your browser` (`loc.denied`) above the field; button returns to rest, still tappable; the typed path works; **no** page-level `geo.denied` banner. (`QA230-2c`) |
+| 7 | **Item 2 — double-press idempotence** | Slow counting `getCurrentPosition` stub: three rapid clicks → **exactly 1** call (button disabled + `aria-busy` in flight). (`QA230-2e`) |
+| 8 | **Item 3 — copy** | Footer + sheet: `privacy.line` = "Your searched city name is sent to Open-Meteo to find coordinates. No server storage — settings and recent searches stay only in this browser tab." and one credit `attribution.geocoding` = "Location search by Open-Meteo · Data from GeoNames · CC BY 4.0" (byte-equal to §6, both languages). The two v2.2.0 body lines are **gone**; a DOM + source scan finds no stale string; **no `<a>`** on the credit (F4). (`QA230-3a/3b/3c/3d`) |
+| 9 | **Item 4 — picker** | `input type=date`, `min 2026-10-04` / `max 2026-10-24` / `value 2026-10-14`, `aria-label तारीख चुनें`; picking 2026-10-10 re-renders both lists + S8 + S9 + the label, drops `aria-current` and shows `panel.selectPrompt`; the Today pill returns. (`QA230-4a/4b`) |
+| 10 | **Item 4 — edges** | At `min` `‹` is `disabled` + `aria-disabled="true"` (next enabled); at `max` `›` is; clicking a disabled arrow is inert; Alt+→ at `max` is clamped (stays 24 Oct). (`QA230-4c`) |
+| 11 | **Item 4 — Alt-arrows** | (After dispatching the `<dialog>` `close` event the harness never fires — the documented v2.2.0 artifact) Alt+→ 14→15→16 Oct, Alt+← back to 15 Oct. (`QA230-4d`) |
+| 12 | **Item 4 — location change** | London via search → `min/max` recomputed from the location's today (2026-10-04…24), label `बुधवार, 14 अक्टूबर 2026`; London periods render (`वार वेला 12:46 pm – 02:06 pm`). (`QA230-4e/4f`) |
+| 13 | **Item 5 — 3 periods** | Mumbai 2026-10-14: `वार वेला 12:24 pm – 01:52 pm`, `काल वेला 09:28 am – 10:56 am`, `काल रात्रि 03:28 am – 05:00 am · गुरुवार, 15 अक्टूबर 2026` — **exact** RS-1 §11.5 / Drik fixture, each with its one-line desc. (`QA230-5a/5b/5c`) |
+| 14 | **Item 5 — Saturday doubles** | 2026-10-10 (Sat): **5 rows** — 1 Vaar Vela, **2 Kaal Vela**, **2 Kaal Ratri** (the second Kaal Ratri carries `· रविवार, 11 अक्टूबर 2026`). (`QA230-5d`) |
+| 15 | **Item 5 — polar hidden** | 89 N (geolocation override): 0 day + 0 night rows, S8 block **hidden**, S9 panel hidden, S3 not-defined copy shown, no `NaN`/`Invalid Date`/empty row. (`QA230-5e`) |
+| 16 | **Item 5 — re-render triggers** | S8 refreshes in place on date nav/picker, location change, language toggle and time-format toggle (observed across rows 2/9/12/17). (`QA230-5g`) |
+| 17 | **Item 6 — default = current** | Panel shows the live slot (`चर · Char 03:20 pm – 04:48 pm`), `वर्तमान` badge, `panel.note.current`, the tier note and all four fields; exactly **1** `aria-current="true"` (the live row). (`QA230-6a`) |
+| 18 | **Item 6 — tap / same-tap** | Tap `रोग · Rog` → row `aria-pressed="true"` + `aria-controls="choghadiya-panel"`, panel shows Rog, badge gone, `panel.note.tapAgain`; **`aria-current` stays on the live row**; same tap reverts to current. (`QA230-6b/6c`) |
+| 19 | **Item 6 — overlap names the period** | Rog → `panel.note.overlay.vaarVela` ("…वार वेला पड़ रही है"); Kaal → `.kaalVela`; night Labh → `.kaalRatri`; a non-overlapped Labh slot → **no** warning (`panel__warn` hidden, empty). ⚠ paired with text. (`QA230-6e`) |
+| 20 | **Item 6 — off-today** | 2026-10-10: no `aria-current` anywhere, `panel.selectPrompt` shown until a tap, then that slot renders. (`QA230-6d`) |
+| 21 | **Item 6 — bilingual / format re-render** | EN toggle re-renders panel headings/fields/notes (`Choghadiya details`); 24h re-renders the panel range; the tapped selection is **preserved** across both toggles (TL-1 ruling) and cleared on a date change. (`QA230-6f`) |
+| 22 | **Item 6 — a11y shape** | Panel = `<section aria-labelledby="panel-h">`, **no** `aria-live`, **0** focusable descendants; no horizontal scroll at 320 px with panel + warning open. (`QA230-6g/6h`) |
+| 23 | **Item 7a — settings persistence** | After a reload: `timeFormat`, `lang`, stored location all survive; `sessionStorage` keys are `choghadiya.settings.timeFormat/.lang/.location` (all `choghadiya.*`). (`QA230-7a1`) |
+| 24 | **Item 7a — prompt suppression** | With a stored location, overriding the device geolocation to London and reloading still renders the **stored** Mumbai fixture (sunrise 06:32, not London 07:22) → the auto-prompt did **not** run. (`QA230-7a3`) |
+| 25 | **Item 7b — geocode cache** | Real "Mumbai" search → `sessionStorage` holds `choghadiya.geocache.index` = `{t:null,v:["hi\u0000mumbai"]}` and `choghadiya.geocache.entry.hi\u0000mumbai` = `{t:1792059933448, v:[…8 results]}`, `t` ≈ now + 24 h. (**FE-FIX `068681c` confirmed live; now also guarded by smoke §20.**) (`QA230-7b1`) |
+| 26 | **Item 7c — storage-failure degradation** | `Storage.prototype.setItem` forced to throw → the 24h toggle still re-renders, a "Paris" search still returns 8 results, 0 `NaN`/`Invalid Date`/`undefined`. (`QA230-7c`) |
+| 27 | **Item 3 / 5 — honesty scan** | Banned labels (`Yamagandam`, `Gulika`, `Rahu Kaal`, `Rahu Kalam`, `यमगंड`, `गुलिक`) appear **nowhere** in the rendered DOM. (`QA230-5h`) |
+| 28 | **Responsive** | 320 px: `scrollWidth === clientWidth` (0 overflow) with the S8 block + S9 panel + overlap warning all visible. (`QA230-6h`) |
+
+---
+
+## 13.4 Regression — the v2.2.0 bar holds
+
+| Area | Result |
+|------|--------|
+| **S3** not-defined (polar) | PASS — S3 panel + both-language copy, 0 rows, S8/S9 hidden, no `NaN` (§13.3 row 15) |
+| **S5** geolocation-denied/unavailable | PASS — page-level `ℹ लोकेशन उपलब्ध नहीं — शहर लिखें` + `शहर चुनें`, empty state, no dead end (§13.3 row 6; watchdog observed) |
+| **S6** geocoder unreachable | PASS — CDP offline → `role="alert"` `Search failed. Try again` + `Retry`; last location kept |
+| **S7** no city found | PASS — `zzzqxxkltv` → `role="alert"` `No city found — check the spelling`, field keeps its value, sheet stays open |
+| **`aria-current` "Now" exclusivity** | PASS — exactly 1 live row in every state; selection uses `aria-pressed` and never sets `aria-current` (rows 17/18/20) |
+| Night-after-midnight attribution | PASS — Wed 2026-10-14 night rows `… 03:28 am – 05:00 am` belong to Wednesday's night list; Kaal Ratri carries the `·` next-day suffix |
+| DST / IANA tz rendering | PASS — `make test` DST-London fixtures + `formatTime` per IANA zone (12h & 24h) green |
+| CSP / `textContent`-only | PASS — `make greps` 0 hits / 4 gates; no new origins; no `innerHTML` |
+| 320 px no-scroll · 44×44 · reduced-motion | PASS — §13.3 row 28; smoke `SMK-07`/`SMK-16`; axe 320 state; reduced-motion unchanged |
+| Night/language/date/format re-render | PASS — no reloads observed on any toggle or nav |
+
+---
+
+## 13.5 MAN-01 (v2.3.0) — **M3 ±2 min panchang comparison** for the three new periods → **PASS (max Δ 1 min)**
+
+Method: `inauspicious.js#computeInauspicious` (shipped code, run via Node) vs **live Drik Panchang**
+Choghadiya table (fetched 2026-10-14 through a real browser — `curl` is 403-blocked). Drik labels
+Vaar Vela / Kaal Vela / Kaal Ratri on its table, so this is a boundary-by-boundary comparison.
+
+| # | Location / date | Shipped (Vaar Vela / Kaal Vela / Kaal Ratri) | Live Drik | Δ |
+|---|-----------------|----------------------------------------------|-----------|---|
+| 1 | **Mumbai 2026-10-14** (Wed) | 12:24–13:52 / 09:28–10:56 / 03:28–05:00 (Oct 15) | 12:24–13:52 / 09:28–10:56 / 03:28–05:00 | **0 / 0 / 0 min** |
+| 2 | **Mumbai 2026-10-17** (Sat) | 13:51–15:19 / 06:33–08:00 + 16:46–18:14 / 18:14–19:46 + 05:01–06:33 (Oct 18) | 13:51–15:19 / 06:33–08:01 + 16:47–18:14 / 18:14–19:47 + 05:01–06:33 | **≤ 1 min** (4 double boundaries) |
+| 3 | **London 2026-10-14** (Wed) | 12:46–14:06 / 10:04–11:25 / 04:05–05:45 (Oct 15) | 12:46–14:07 / 10:04–11:25 / 04:06–05:45 | **≤ 1 min** |
+| 4 | **New York 2026-10-14** (Wed) | 12:41–14:05 / 09:53–11:17 / 03:54–05:31 (Oct 15) | 12:42–14:06 / 09:54–11:18 / 03:55–05:31 | **≤ 1 min** |
+
+**Max observed delta 1 minute** across 4 combos (11 boundaries + 4 Saturday doubles) → well inside
+the ±2 min M3 gate (US-6 AC2). The Saturday case also confirms the double periods and the Kaal Ratri
+`Oct 18` cross-midnight suffix. Sunrise/sunset on the shipped side agree with Drik to ≤ 1 min
+(Mumbai 06:32/18:16, London 07:22/18:09, New York 07:06/18:17).
+
+---
+
+## 13.6 Findings (no fix cards filed — the CTO routes from this report)
+
+The task assigns defect routing to the CTO; this report lists every finding with severity, repro and
+owner lane. **No Critical/High defect.**
+
+| ID | Sev | Owner lane | Finding | Repro / evidence |
+|----|-----|-----------|---------|------------------|
+| **F2** | **Medium** | CTO (GATE 2) → BE/`session-store.js` + FE copy + ARCH | **Item 7 storage scope: the client-confirmed requirement is `localStorage`, the build is `sessionStorage`.** `docs/00-brief.md` change-log item 7 now reads *"Persistence & caching via **localStorage (client-confirmed)** — persist user settings across full browser restarts … settings persist indefinitely with no expiry"*. Shipped `STORAGE_SCOPE='session'` (`session-store.js:38`) → settings **do not survive tab close / browser restart**; they survive an in-tab reload only. | `git diff docs/00-brief.md` (uncommitted CTO edit); `session-store.js:38`; §13.3 row 23 (reload OK) vs no cross-restart persistence. **Decision needed at GATE 2:** flip `STORAGE_SCOPE` to `'local'` (one line + settings no-expiry + `privacy.line` "this browser tab" → "this browser" + ADR-009 status) **or** re-confirm `sessionStorage` with the client. Sequence against SEC-1/TW-1 (their reports assume session semantics). |
+| **F3** | Low | UX (`03-ux.md` §6 / §3.9) → FE | **`panel.note.overlay.*` copy is wrong for an inauspicious overlapped slot.** The string is "इस **शुभ** चौघड़िया के भीतर वार वेला पड़ रही है …" / "… inside this **otherwise-good** choghadiya …", but the warning fires for **any** slot (`03-ux` §3.9 says the copy is neutral about the slot's tier). Live: the inauspicious `रोग · Rog` slot shows "इस शुभ चौघड़िया के भीतर वार वेला पड़ रही है". FE implemented §6 verbatim, so the fix is UX-owned (one key + `i18n.js` value + `index.html` fallback; the byte-locked i18n test follows). | §13.3 row 19; `03-ux.md` §6 `panel.note.overlay.vaarVela`. (Matches TL-1's F3.) |
+| **F4** | Low | SEC-1 / CTO (GATE 2) → FE | **Attribution hyperlinks deferred.** RS-3 §13.6 B1 requires `Open-Meteo` / `GeoNames` / `CC BY 4.0` to be real `<a>` links; the shipped credit is **plain text** (`footerLinks: []`), because the SEC-14 origin allow-list admits only the geocode API + SVG namespace and `data-i18n-html` is barred by SEC-05. Attribution is *present* (both providers + licence named); only the link form is pending. | §13.3 row 8; `grep href index.html` shows only `favicon.svg`/`style.css`. (Matches TL-1's F4.) |
+| **F5** | Low | architect (`docs/04-architecture.md` §16.3) | **Stale geocode-cache key layout in the architecture doc.** §16.3 says `choghadiya.geocode.<normalized-query>.<lang>`; the shipped key is `choghadiya.geocache.entry.<lang>\u0000<normalized query>` + `choghadiya.geocache.index` (geocoder.js). Also §16.2 documents `createGeocoder({ fetchImpl, cacheStore })` while `app.js` calls it with `{ lang, cacheStore }`. Docs-only inconsistency; code is self-consistent and unit-tested. | `geocoder.js:233-241`; `04-architecture.md` §16.2/§16.3. |
+| **F6** | ~~Low (gate gap)~~ **CLOSED** | devops-engineer (`t_7ed6b2ab`) | **Item-7b smoke coverage — landed mid-run.** While QA-1 was executing, `t_7ed6b2ab` completed: `scripts/smoke.mjs` section 20 adds 12 deterministic item-7b checks (write / 0-network-after-reload / TTL-expiry refetch) behind a CDP `Fetch` fixture, and the DO card recorded two negative controls that fail on broken copies. `make check` on `d45fef1` is green at **smoke 66/66**. **No action for QA.** | `scripts/smoke.mjs` §20; `make check` smoke 66/66 on `d45fef1` (§13.2.2). |
+
+**Resolved since TL-1:** **F1** (item-7b cache unwired) is **fixed** by `068681c` and verified live
+(§13.3 row 25) — recorded here for the audit trail, not as an open finding.
+
+---
+
+## 13.7 Quality-gate scoreboard (v2.3.0)
+
+| Gate | Metric | Measured | Expected | Result |
+|------|--------|----------|----------|--------|
+| M1 | Algorithm correctness | 112/112 slot assertions (unchanged) | 112/112 | **PASS** |
+| M2 | No hardcoded clock | `SCH-03` + fixture checks | 0 hardcoded | **PASS** |
+| M3 | ±2 min vs mainstream panchang | max Δ **1 min** (4 combos, 3 new periods, live Drik) | ≤ 2 min | **PASS** |
+| M4 | Bilingual coverage | **122/122** keys × 2 languages, 0 fallbacks | 122/122 | **PASS** |
+| M5 | No blocking path | S3/S5/S6/S7 + empty + polar exercised; 0 `NaN`/`Invalid Date`/`undefined` | 0 broken values | **PASS** |
+| M6 | Mobile FCP < 1.5 s | not re-measured this wave (no perf-affecting change beyond ~1 KB of JS; owned by DO-2/release) | < 1500 ms | **DEFERRED** to release card |
+| M7 | Accessibility | axe **5 states**, 0 critical/serious, 0 moderate/minor | 0 critical/serious | **PASS** |
+| M8 | Release gate | this report's verdict: **PASS-WITH-KNOWN-ISSUES** | verdict | **PASS (with F2–F5)** |
+
+---
+
+## 13.8 Honest gaps (not executed / not fully verified here)
+
+| Item | Why | Residual risk |
+|------|-----|---------------|
+| Item-7b **0-network-across-reload** and **TTL-expiry refetch** | **Now covered** — `scripts/smoke.mjs` §20 (12 checks, `t_7ed6b2ab`) proves both deterministically behind a CDP `Fetch` fixture; `make check` on `d45fef1` is green at smoke 66/66. QA's live pass additionally confirmed the cache **is written** (§13.3 row 25) and read `t` ≈ now + 24 h. | **Closed** (was the `F6` gate gap). |
+| **F2 cross-restart persistence** | The build is `sessionStorage`; a true "browser restart" test would need a fresh profile, and the shipped scope makes the outcome known (settings lost). | Medium — this *is* F2; recorded rather than worked around. |
+| Real-device geolocation (grant on a phone) | No physical device; the grant path was exercised with a CDP override + granted permission (worked once, §13.3 row 5). The harness later reported permission-denied across origin navigations — a **harness artifact**, not an app defect (FE-2's 29/29 CDP probe and TL-1's live probe both pass the grant path). | Low — same code path as the city search; device-tz resolution unit-tested. |
+| Real screen reader (NVDA/VoiceOver) | Not available headless. | Pronunciation/order unverified beyond the AX-tree + axe. |
+| M6 Lighthouse FCP | No perf-affecting change in the v2.3.0 surfaces (a few KB of JS/CSS); the release card re-measures on the deployed build. | Low. |
+
+---
+
+## 13.9 Verification commands (reproducible)
+
+```
+make test                                   # 100/100 pass, 0 fail
+make check                                  # tests 100/100 + greps 4 gates + SMOKE 54/54 + AXE PASS (exit 0)
+make dev                                    # http://127.0.0.1:8080 (python3 http.server)
+node "$HOME/.hermes/profiles/qa-engineer/cache/scratch/m3_v230.mjs"   # MAN-01: shipped computeInauspicious
+# live Drik reference (browser, 2026-10-14): https://www.drikpanchang.com/muhurat/choghadiya.html?geoname-id={1275339,2643743,5128581}&date={14,17}/10/2026
+```
+
+The MAN-01 helper (`m3_v230.mjs`) lives in the QA scratch dir, not the repo (`scripts/` is
+devops-owned).
+
+---
+
+## 13.10 v2.3.0 revision log
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| v2.3.0 | 2026-10-14 | qa-engineer | Executed `07-test-plan.md` §12 (`QA230-*`) on the v2.3.0 tree: exploratory pass on `068681c`, gate re-run on `d45fef1` — `make test` 100/100, `make check` exit 0 (greps 4 gates · smoke 66/66 · axe 5 states), live pass over all 7 change items + the v2.2.0 regression set (S3/S5/S6/S7, `aria-current` exclusivity, night-after-midnight, DST, CSP, 320 px), MAN-01 M3 **±1 min** for the three new periods (4 combos, live Drik). Verdict **PASS-WITH-KNOWN-ISSUES** — F2 (Medium, item-7 `localStorage` client-confirmed vs shipped `sessionStorage`), F3/F4/F5 (Low). F1 (item-7b unwired) fixed by `068681c`; F6 (item-7b gate gap) closed mid-run by `t_7ed6b2ab`. No fix cards filed (CTO routes from this report). |
