@@ -15,8 +15,8 @@
 <!-- SEC-04: every asset reference is same-origin and carries ?v=${ASSET_VERSION}
      (04-architecture §7 / §11.5). ASSET_VERSION == package.json version == 2.1.0 baseline;
      the release card bumps it to 2.2.0 in the same commit as the tag (05-plan §M4). -->
-<link rel="icon" href="favicon.svg?v=2.3.1">
-<link rel="stylesheet" href="style.css?v=2.3.1">
+<link rel="icon" href="favicon.svg?v=2.3.2">
+<link rel="stylesheet" href="style.css?v=2.3.2">
 </head>
 <body>
 
@@ -377,10 +377,10 @@
 <!-- ===== App entry (FE-02, t_f0568729) — the ES module load ADR-002 specifies
      (type="module", src="app.js"). FE-01 shipped no script element because app.js did
      not exist yet and escalated the routing question; FE-02 is the M1 integration
-     ticket, so this single line is its only change to index.html. The ?v=2.3.1 query
+     ticket, so this single line is its only change to index.html. The ?v=2.3.2 query
      follows SEC-04 / 04-arch §11.5 (ASSET_VERSION == package.json version; the release
      commit bumps it). ===== -->
-<script type="module" src="app.js?v=2.3.1"></script>
+<script type="module" src="app.js?v=2.3.2"></script>
 
 </body>
 </html>

@@ -10,6 +10,40 @@ written in English.
 
 ---
 
+## [2.3.2] — 2026-10-14
+
+Date-bar polish: a themed calendar and a stable › button. App behaviour is
+otherwise unchanged from v2.3.1.
+
+### Changed
+
+- **Themed calendar replaces the browser's native date popup.** Tapping the date
+  now opens an in-page calendar directly under it, in the page's own colours and
+  fonts. It follows light/dark mode and shows Hindi or English weekday/month names
+  (via `Intl`, no new i18n keys — the contract stays at 119). It shows only the
+  ±10-day window (out-of-window days disabled), marks the viewed date and today,
+  and supports the keyboard (arrows, Home/End, PageUp/PageDown, Enter/Space, Esc)
+  plus click-outside to close.
+- **Today pill moved before ›.** At ≥600 px the "आज / Today" pill now sits between
+  the date and ›, so › no longer jumps ~59 px left when the pill appears. Tab order
+  follows the visual order: ‹ → date → Today → ›.
+
+### Fixed
+
+- **The date picker did not open on phones.** v2.3.1 called `showPicker()` from
+  `pointerdown`, which is not a user activation for touch, so every tap threw
+  `NotAllowedError`. Superseded by the in-page calendar above.
+- **The native calendar opened off to one side** of the date on wide screens
+  (anchored to the full-width overlay input's left edge). Superseded likewise.
+
+### Verification
+
+`make check` exit 0: tests 108/108, SEC-22 greps 0 hits / 4 gates, smoke 69/69
+(new: calendar open / pick / keyboard clamp / Esc), axe PASS (6 states, incl. the
+open calendar). Shipped JS 59.8 KB gzip (< 60 KB NFR-P3 budget).
+
+---
+
 ## [2.3.1] — 2026-10-14
 
 A client-requested copy tidy-up plus one bug fix. App behaviour is otherwise
@@ -288,5 +322,6 @@ awareness or language toggle. Kept here as the version baseline (`package.json`
 `2.1.0`) that `v2.2.0` bumps from; it predates this repository's history.
 
 [Unreleased]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.1...HEAD
+[2.3.2]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/vishalnagda1/choghadiya/compare/v2.2.0...v2.3.0

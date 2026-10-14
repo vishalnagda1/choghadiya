@@ -1,12 +1,48 @@
 # Release Notes — Choghadiya
 
-**Current release: v2.3.1 (2026-10-14).** Previous release: v2.3.0. This file
-describes the current release in full; the v2.3.0 notes are kept below (and in
+**Current release: v2.3.2 (2026-10-14).** Previous release: v2.3.1. This file
+describes the current release in full; the v2.3.1 and v2.3.0 notes are kept below (and in
 full in git history and [CHANGELOG.md](CHANGELOG.md)).
 
 ---
 
-## v2.3.1 — 2026-10-14 (current)
+## v2.3.2 — 2026-10-14 (current)
+
+**Release:** v2.3.2 (semver *patch* on the v2.3.1 baseline)
+**Date:** 2026-10-14
+**Target:** GitHub Pages — <https://time.gitick.com/>
+**Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
+
+### What this release is
+
+Date-bar polish. Beyond the calendar and the › button below, the app is
+**unchanged from v2.3.1**.
+
+### Changed
+
+- **A calendar that matches the app.** Tapping the date opens a calendar right
+  under it, in the app's own colours and fonts, in light or dark mode, with Hindi
+  or English day and month names. Only the selectable ±10 days can be picked;
+  today is ringed and the date you're viewing is highlighted. It works with the
+  keyboard (arrow keys, Home/End, Page Up/Down, Enter, Esc) and closes when you
+  tap outside it.
+- **The › button stays put.** On wider screens the "आज / Today" button now sits
+  between the date and ›, so › no longer jumps left when Today appears.
+
+### Fixed
+
+- The date picker now opens on phones (in v2.3.1 a tap on touch screens did not
+  open it).
+- The calendar no longer opens off to one side of the date on wide screens.
+
+### Verification
+
+`make check` exit 0 — tests 108/108, security greps 0 hits, smoke 69/69, axe PASS
+(including the open calendar). Shipped JS 59.8 KB gzip, under the 60 KB budget.
+
+---
+
+## v2.3.1 — 2026-10-14 (previous release)
 
 **Release:** v2.3.1 (semver *patch* on the v2.3.0 baseline)
 **Date:** 2026-10-14
