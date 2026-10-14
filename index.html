@@ -191,9 +191,25 @@
   </main>
 
   <!-- ===== Footer (contentinfo landmark) — 03-ux §1.1, US-6/US-17 ===== -->
+  <!-- v2.3.0 items 3 + 7 (FE-4, t_bf7bfef8). The two v2.2.0 body lines are gone.
+       RS-3 (docs/01 §13) showed full removal (option A) is NOT lawful — Open-Meteo
+       (CC BY 4.0 + "link next to displayed location data") and GeoNames (CC BY 4.0
+       credit) both require attribution while their data is displayed — so the
+       recommended Option B is applied: ONE minimal credit line (§13.6 B1) plus the
+       rewritten privacy line (§13.6 B2). Both visible strings are exactly the §6
+       dictionary values (rendered by app.js applyDictionary), so no UI copy lives
+       outside i18n.js (US-11 AC3) and the static fallback text below is the `hi`
+       value, asserted by tests/i18n.test.js.
+       OPEN ITEM (a security decision, deliberately NOT taken here): §13.6/§6.1b
+       want the three provider/licence words to be real hyperlinks
+       (open-meteo.com, geonames.org, creativecommons.org/by/4.0). That would put
+       three new http(s) origins into a shipped file, which the SEC-14 allow-list
+       in scripts/security-greps.mjs currently rejects (and this card's acceptance
+       criteria freeze that allow-list), so the credit ships as plain text and the
+       hyperlink half is flagged for SEC-1 / GATE 2. ===== -->
   <footer class="app">
-    <p data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
-    <p data-i18n="attribution.geocoding">Geocoding by Open-Meteo / GeoNames</p>
+    <p data-i18n="privacy.line">खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स और हाल की खोजें केवल इस ब्राउज़र टैब में रहती हैं।</p>
+    <p data-i18n="attribution.geocoding">स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0</p>
     <p data-i18n="convention.note">सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है</p>
     <p data-i18n="footer.noTracking">कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं</p>
   </footer>
@@ -228,7 +244,10 @@
       <span aria-hidden="true">📍</span>
       <span id="use-current-label" data-i18n="loc.useCurrent">मेरी वर्तमान लोकेशन उपयोग करें</span>
     </button>
-    <p class="sheet-privacy" data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
+    <!-- v2.3.0 item 7 (FE-4): the sheet-local disclosure is the rewritten §6
+         privacy.line — "no server storage; per-tab local cache only" — replacing the
+         v2.2.0 "never stored" claim, which item 7 made stale. -->
+    <p class="sheet-privacy" data-i18n="privacy.line">खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स और हाल की खोजें केवल इस ब्राउज़र टैब में रहती हैं।</p>
     <!-- F8 step 4: the sheet-LOCAL denial line, directly above the city field. It is
          role="status" (polite) and uses the ℹ glyph + text, NOT --danger — the user is
          not blocked, the typed-city path still works. Deliberately NOT the page-level

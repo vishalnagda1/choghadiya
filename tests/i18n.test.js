@@ -158,3 +158,48 @@ test('index.html data-i18n* hooks all resolve to a dictionary key (no copy outsi
   );
   assert.deepEqual(unresolved, [], `index.html references unknown i18n keys: ${unresolved.join(', ')}`);
 });
+
+/**
+ * The static fallback text inside a `data-i18n` node is what a JS-disabled visitor
+ * (and the first paint, before app.js runs) actually reads, so it is shipped copy
+ * and must be the `hi` value — not a leftover of a superseded wording. FE-4
+ * (t_bf7bfef8, v2.3.0 items 3 + 7) replaced exactly such leftovers: the footer and
+ * the city sheet still carried the v2.2.0 "A searched city name is sent to
+ * Open-Meteo/GeoNames. Location is never stored." / "Geocoding by Open-Meteo /
+ * GeoNames" text while the dictionary already held the new §6 strings. This lock
+ * makes that class of drift a hard gate failure.
+ */
+test('every index.html data-i18n fallback text is the `hi` dictionary string (no stale shipped copy)', () => {
+  const html = readFileSync(htmlPath, 'utf8');
+  // Leaf elements only: a node with element children is filled by JS, not shipped copy.
+  const nodes = [...html.matchAll(/<([a-z][a-z0-9]*)\b[^>]*\sdata-i18n="([^"]+)"[^>]*>([^<]*)<\/\1>/gi)]
+    .map((m) => ({ tag: m[1], key: m[2], text: m[3] }));
+  assert.ok(nodes.length >= 20, `expected the footer/sheet/header copy nodes, matched ${nodes.length}`);
+  const mismatches = nodes
+    .filter((n) => n.text.trim() !== DICT.hi[n.key])
+    .map((n) => `${n.tag}[data-i18n=${n.key}] expected ${JSON.stringify(DICT.hi[n.key])} got ${JSON.stringify(n.text.trim())}`);
+  assert.deepEqual(mismatches, [], `index.html fallback copy drifted from the hi dictionary:\n${mismatches.join('\n')}`);
+});
+
+/**
+ * v2.3.0 items 3 + 7: the two removed v2.2.0 strings must not survive in any shipped
+ * file — not as a hook fallback, not in the dictionary, not in prose that would be
+ * re-copied. RS-3 (docs/01 §13) is why: the credit line is rewritten (option B), not
+ * deleted, and the privacy line is rewritten to the "no server storage; per-tab
+ * local cache only" stance.
+ */
+test('the superseded v2.2.0 attribution/privacy strings are gone from index.html and i18n.js', () => {
+  const stale = [
+    'Location is never stored',
+    'Geocoding by Open-Meteo',
+    'Open-Meteo/GeoNames',
+    'लोकेशन सेव नहीं होती',
+    'शहर खोजने पर लिखा गया नाम',
+  ];
+  for (const rel of ['../index.html', '../i18n.js']) {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    for (const s of stale) {
+      assert.ok(!src.includes(s), `${rel} still contains the superseded string ${JSON.stringify(s)}`);
+    }
+  }
+});
