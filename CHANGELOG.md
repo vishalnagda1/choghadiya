@@ -10,7 +10,7 @@ written in English.
 
 ---
 
-## [Unreleased] — planned as v2.2.0
+## [2.2.0] — 2026-10-14
 
 This release is the refactor of the app from a **static, hardcoded-timing page**
 into a **dynamic, location-aware, bilingual** tool. It ships as **v2.2.0** (a

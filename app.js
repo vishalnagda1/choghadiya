@@ -28,9 +28,9 @@
 // S5/S6/S7 components; every degradation keeps the date bar and the language
 // toggle alive (03-ux §3 S3, §2 F3).
 
-import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.1.0';
-import { DEFAULT_LANG, t } from './i18n.js?v=2.1.0';
-import { createGeocoder, isAbortError } from './geocoder.js?v=2.1.0';
+import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.2.0';
+import { DEFAULT_LANG, t } from './i18n.js?v=2.2.0';
+import { createGeocoder, isAbortError } from './geocoder.js?v=2.2.0';
 
 /**
  * Quality glyph per Slot.tier (03-ux §4.1: ✓✓ / ✓ / ○ / ✕). Always paired with the

@@ -3,13 +3,16 @@
 **Release:** v2.2.0 (semver minor, bumping the `package.json` baseline `2.1.0`)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** approved for release — GATE 2 client sign-off received 2026-10-14
+**Status:** released — GATE 2 client sign-off 2026-10-14; tagged `v2.2.0` and pushed to `vishalnagda1/choghadiya` `main`
+**Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
-> **Versioning note.** The package baseline is `2.1.0`; this release is cut as
-> **`v2.2.0`** by the release step, which bumps `package.json` to `2.2.0`, updates
-> every asset `?v=` token, and creates the annotated tag `v2.2.0` in the same
-> commit. The figures below were measured on `main` *before* that bump (i.e. at
-> `?v=2.1.0`); `make check` is re-run on the release commit.
+> **Versioning note.** The package baseline was `2.1.0`; this release is cut as
+> **`v2.2.0`**. The release step bumped `package.json` to `2.2.0`, updated every
+> asset `?v=` token, re-ran the full `make check` gate green on the release
+> commit, and created the annotated tag `v2.2.0` in the same commit (which was
+> pushed to `main` alongside it). The integrity figure below is the measured
+> shipped-JS budget; it is independent of the `?v=` string and is unchanged by
+> the bump.
 
 ---
 
@@ -139,7 +142,7 @@ calculation is network-free, and the only outbound call is the user-initiated ge
 
 ## Verification summary
 
-Measured on `main` (pre-bump) — every command below was executed and passed:
+Re-run on the **release commit** (post-bump, `?v=2.2.0`) — every command below was executed and passed:
 
 | Check | Command | Result |
 |-------|---------|--------|
@@ -162,11 +165,12 @@ security: 0 Critical / 0 High, all F1–F3 fixes landed).
 
 ## Deploy / rollback
 
-Deployment to GitHub Pages (`vishalnagda1/choghadiya`, `main`) and the release
-tag are handled by the release tooling; see the deploy runbook owned by that
-step. This app is a static bundle, so rollback is a `git revert` of the release
-commit plus a redeploy (the `?v=` bump busts the Pages cache on the next
-deploy).
+Deployed to GitHub Pages (`vishalnagda1/choghadiya`, `main`) with the annotated
+tag `v2.2.0`. The full runbook — pre-flight gate, release bump/tag/push
+commands, Pages verification, the post-deploy smoke + Lighthouse FCP gate, and
+rollback — is [`docs/DEPLOY.md`](docs/DEPLOY.md). This app is a static bundle,
+so rollback is a `git revert` of the release commit plus a redeploy (the `?v=`
+bump busts the Pages cache on the next deploy).
 
 ---
 
