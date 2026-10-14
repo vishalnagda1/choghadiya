@@ -951,3 +951,152 @@ the same name differently? Findings:
 **Excluded / not usable**
 - vedhoroscope.com — Choghadiya: 8 Segments Explained — search hit, deployment "temporarily paused", page unreadable; **not cited** — https://www.vedhoroscope.com/articles/choghadiya-8-segments-explained
 - astrologydivine.com choghadiya guide — HTTP 403 — **not cited**
+
+---
+
+## 13. v2.3.0 addendum — geocoder attribution & disclosure
+
+Added 2026-10-14 for v2.3.0 change-request item 3 (`docs/00-brief.md` change log; interaction with item 7).
+All URLs accessed **2026-10-14**. Research only — no product code.
+
+### 13.0 Executive summary — the answer
+
+- **You may NOT remove both lines entirely.** Open-Meteo serves its geocoding data under **CC BY 4.0** and its own licence terms require a **link next to any displayed location data**; the underlying **GeoNames** database is also **CC BY 4.0** and asks for credit with a link. Option **A (full removal) is non-compliant.**
+- **Recommendation = Option B:** keep **one** minimal visible credit line (footer) that attributes **both** providers **and** links the licence, and keep **one** short rewritten privacy line for item 7. Exact EN + HI copy is in **§13.6**; it is the smallest wording that satisfies both licences.
+- The v2.2.0 line **`attribution.geocoding`** ("Geocoding by Open-Meteo / GeoNames") is pure attribution → **cannot be dropped**; it can only be shortened/reworded if the credit + links survive.
+- The v2.2.0 line **`privacy.line`** did **double duty**: (1) a *privacy disclosure* (typed city name is sent out) and (2) part of the *attribution* (it names Open-Meteo/GeoNames). Only the privacy half is the client's to remove, and item 7 *changes* that half anyway ("no server storage; local session cache only") — so it is **rewritten, not deleted**.
+- Neither licence mandates a **verbatim** string. GeoNames says "with a link or another reference"; Open-Meteo gives an example ("Weather data by Open-Meteo.com"). So a custom one-liner + hyperlinks is compliant.
+- **Attribution is triggered because the app *displays* GeoNames-derived data** (the matched place name, coordinates, timezone). The typed query is the user's own input, not GeoNames data — but the *result* shown on screen is.
+- **Option C is not viable:** no keyless, CORS-friendly, **forward** geocoder exists that is free of an attribution obligation. Nominatim/OSM also requires attribution ("Clearly display attribution…", ODbL); Photon is OSM/ODbL too; BigDataCloud's keyless API is **reverse-only** (GPS→city) and its fair-use policy forbids using it for a typed city search.
+- **Item 7 truthfulness:** whatever wording survives must not claim "nothing is stored" unqualified — `sessionStorage` (settings + geocoder TTL cache) does persist per tab. The recommended privacy line is written around that.
+- **GATE-2 flag (mandatory):** the recommendation is **B (not full removal)**, so **the client must confirm at GATE 2** before frontend implements.
+- Net effect for the client: the two big body lines go away as requested; **one small footer credit remains**, carrying Open-Meteo + GeoNames + a CC BY 4.0 link.
+
+### 13.1 Exactly what the client asked to remove
+
+| i18n key | string (v2.2.0, as shipped) | nature |
+|---|---|---|
+| `privacy.line` | EN: "A searched city name is sent to Open-Meteo/GeoNames. Location is never stored." (HI: "शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।") | **privacy disclosure + partial attribution** |
+| `attribution.geocoding` | EN: "Geocoding by Open-Meteo / GeoNames" (HI identical) | **pure attribution** |
+
+Reference: `index.html:163-164`, `index.html:187` (sheet copy), `i18n.js:83-84,143-144`.
+
+### 13.2 Open-Meteo — licence & terms (quoted)
+
+**Source:** Terms & Privacy — https://open-meteo.com/en/terms · Licence — https://open-meteo.com/en/license (both accessed 2026-10-14).
+
+Free non-commercial API terms (quote):
+
+> "You accept to the CC-BY 4.0 licence, as specified in the licence conditions."
+> — https://open-meteo.com/en/terms
+
+Licence page (quote) — note it lists **GeoNames** explicitly as the location source:
+
+> "Location database from GeoNames (CC-BY Licence)"
+> "API data are offered under Attribution 4.0 International (CC BY 4.0)"
+> "Attribution: You must give appropriate credit, provide a link to the licence, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use."
+> "You must include a link next to any location Open-Meteo data are displayed, for example:
+> `<a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>`"
+> — https://open-meteo.com/en/license
+
+**Reading for our app:** the geocoding API (https://geocoding-api.open-meteo.com/v1/search) is documented under the same "Usage licence: Non-Commercial … less than 10.000 daily API calls. See Terms" (https://open-meteo.com/en/docs/geocoding-api). It returns **location data** (place name, coordinates, timezone) which our UI **displays**, so the "**link next to any location Open-Meteo data are displayed**" clause applies: we must show a **link** to Open-Meteo next to the displayed location. CC BY 4.0 additionally requires a **link to the licence** and credit.
+
+(The licence page's slogan example mentions "Weather data"; we use the geocoding endpoint, not the forecast endpoint — the obligation is the same CC BY 4.0 attribution; phrase our credit around "location search", not "weather".)
+
+**CC BY 4.0 — the operative attribution clause (quote):**
+
+> "Attribution. If You Share the Licensed Material (including in modified form), You must:
+> … identification of the creator(s) … ; a copyright notice; a notice that refers to this Public License; a notice that refers to the disclaimer of warranties; a URI or hyperlink to the Licensed Material … ; indicate if You modified the Licensed Material … ; and indicate the Licensed Material is licensed under this Public License, and include the text of, or the URI or hyperlink to, this Public License."
+> — https://creativecommons.org/licenses/by/4.0/legalcode.en (§3(a))
+
+**Privacy note (relevant to item 7):** Open-Meteo's own privacy statement — https://open-meteo.com/en/terms — says:
+
+> "We may collect non-personal information, such as IP addresses, for technical reasons … but this information is not linked to user identities in any way. For troubleshooting purposes, we keep webserver log files that may contain sensitive information such as geographical coordinates. We do not share this data with any third party. All log files will be deleted after a period of 90 days."
+
+So the v2.2.0 claim "Location is never stored" was **our** claim (we store nothing), not a statement that no copy exists anywhere — good that item 7 narrows the wording.
+
+### 13.3 GeoNames — licence & terms (quoted)
+
+**Source:** Terms & Conditions on https://www.geonames.org/export/ · About https://www.geonames.org/about.html · data readme https://download.geonames.org/export/dump/readme.txt (all accessed 2026-10-14).
+
+Quote (the attribution requirement):
+
+> "cc-by licence (creative commons attribution license). **You should give credit to GeoNames when using data or web services with a link or another reference to GeoNames.**"
+> — https://www.geonames.org/export/ (emphasis added)
+
+> "The GeoNames geographical database is available for download free of charge under a creative commons attribution license."
+> "This work is licensed under a Creative Commons Attribution 4.0 License."
+> — https://www.geonames.org/about.html
+
+> "This work is licensed under a Creative Commons Attribution 4.0 License, see https://creativecommons.org/licenses/by/4.0/"
+> — https://download.geonames.org/export/dump/readme.txt
+
+**Reading for our app:** GeoNames asks for **credit with a link or another reference to GeoNames**. It does **not** prescribe a fixed sentence, so a custom one-liner naming GeoNames + a hyperlink satisfies it. Because Open-Meteo re-serves GeoNames data, the GeoNames database is still the source of the place names we display → credit GeoNames as well as Open-Meteo ("~~This product includes data from GeoNames.org~~" style sentence is *permitted* but *not required*; the link-based credit is what the terms ask for).
+
+### 13.4 Is a searched city name "data from the service"?
+
+Split the two directions:
+
+- **Query (us → service):** the typed city name is the **user's own input**, not GeoNames/Open-Meteo data. Sending it is a *privacy* event (a third-party request carrying the query + the user's IP), **not** an attribution event. It triggers the disclosure half of `privacy.line`, and DPDP/GDPR transparency counsel keeping a truthful note — but no licence obliges us to disclose it.
+- **Result (service → us → screen):** the matched place **name, coordinates, and timezone are GeoNames-derived data served by Open-Meteo**, and the app **displays** them (the chip, the schedule). This is the event that **triggers CC BY 4.0 attribution** — for both Open-Meteo (service/data) and GeoNames (underlying database).
+
+**Conclusion:** attribution is required **whenever a geocoded place is shown** (i.e. always, since the chip/schedule show the resolved location). It is not required *only* by the act of typing, but the app virtually always ends up displaying the result, so the credit line must exist in the shipped UI.
+
+### 13.5 Options compared
+
+| | Option | Compliant? | Consequences / notes | Verdict |
+|---|---|---|---|---|
+| **A** | Remove **both** lines entirely | **No** | Breaches Open-Meteo's "link next to any location … displayed" + CC BY 4.0, and GeoNames' credit request. CC BY 4.0 rights **terminate automatically on breach** (CC BY 4.0 §6); Open-Meteo may block abusive apps at any time; GeoNames previews a 10k/day credit regime. Practical enforcement risk is low for a small tool, but it is formally non-compliant and contradicts the project's own compliance posture (docs/01 §3, §8). | **Reject** |
+| **B** | **One minimal footer credit** (both providers + licence link) **+ one rewritten privacy line** | **Yes** | Smallest footprint that satisfies both licences and item 7. Removes the two big body lines; leaves a single unobtrusive footer row. See §13.6 for exact EN + HI. | **Recommend** |
+| **C** | Switch to an attribution-free geocoder | **Not achievable** | No keyless, CORS-friendly, **forward** (name→coords) geocoder is free of an attribution obligation: Nominatim/OSM = ODbL + "Clearly display attribution as suitable for your medium" (https://operations.osmfoundation.org/policies/nominatim/); Photon = OSM/ODbL; BigDataCloud keyless = **reverse-only** (device GPS→city) and its fair-use policy *forbids* pre-stored/typed-coordinate use for a city search (https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api). Switching would also reopen the timezone-resolution work Open-Meteo already solves. | **Reject** |
+
+### 13.6 Recommended exact replacement copy (Option B)
+
+**B1 — attribution credit (mandatory; footer, once per page).** Smallest line that satisfies BOTH licences and includes the required links.
+
+| i18n key (proposed) | Hindi | English | where |
+|---|---|---|---|
+| `attribution.geocoding` | `स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0` | `Location search by Open-Meteo · Data from GeoNames · CC BY 4.0` | footer, one line |
+
+Hyperlink targets (the licence requires *links*, not just text — resolve at render time):
+- `Open-Meteo` → `https://open-meteo.com/`
+- `GeoNames` → `https://www.geonames.org/`
+- `CC BY 4.0` → `https://creativecommons.org/licenses/by/4.0/`
+
+Add `rel="noopener noreferrer" target="_blank"` (matches the site's existing outbound-link hygiene; security-grep SEC-14 allow-list already permits outbound https origins, verify no new origin is introduced). The three hosts above are non-allowed-listed origins — **CTO/devops note: if `scripts/security-greps.mjs` enforces an origin allow-list, add `https://open-meteo.com`, `https://www.geonames.org`, `https://creativecommons.org`.**
+
+**Micro-variant** (if the footer must be one shorter string, still compliant): `Open-Meteo · GeoNames · CC BY 4.0` / `Open-Meteo · GeoNames · CC BY 4.0` (keep the same three links). Do **not** shorten below naming both providers + a licence link.
+
+**B2 — privacy disclosure (rewritten for item 7; client may still choose to drop this one — see §13.8).**
+
+| i18n key (proposed) | Hindi | English | where |
+|---|---|---|---|
+| `privacy.line` | `खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स और हाल की खोजें केवल इस ब्राउज़र टैब में रहती हैं।` | `Your searched city name is sent to Open-Meteo to find coordinates. No server storage — settings and recent searches stay only in this browser tab.` | location sheet + footer, one line |
+
+Notes: "No server storage" replaces the item-7-stale "Location is never stored"; the trailing clause makes it **truthful about the `sessionStorage` cache** (item 7) and per-tab lifetime. `attribution.geocoding` (B1) is the **non-negotiable** half; `privacy.line` (B2) is good practice + DPDP/GDPR transparency, not a licence obligation.
+
+### 13.7 Interaction with item 7 (`sessionStorage`)
+
+Item 7 relaxes the v2.2.0 "no storage ever" stance to **"no server storage; local session cache only"** (settings, language, last location, geocoder TTL cache). Any surviving disclosure must therefore:
+- keep "**no server storage**" (still true — nothing is persisted server-side by us), and
+- **not** say or imply "nothing is stored locally / no storage" (false once `sessionStorage` caches the query + location).
+B2 is written to hold under both. If UX keeps only B1 (attribution) and drops B2, the item-7 copy must still appear somewhere truthful (e.g. a settings/about line) — flag to UX-1 §6.1.
+
+### 13.8 Risk of removal — stated plainly, and the GATE-2 flag
+
+- **Removing both lines (Option A) is a licence breach.** Open-Meteo (CC BY 4.0 + its "link next to displayed location data" term) and GeoNames (CC BY 4.0 credit-with-link) both require attribution while their data is displayed. Breach means the CC BY 4.0 grants **terminate automatically** (§6), Open-Meteo may block the app's calls, and the project's stated compliance posture (docs/01 §3) is violated.
+- **Realistic exposure** for a small non-commercial tool is low (no built-in enforcement), but "low enforcement risk" is not "compliant" — the recommendation stands on compliance, not on catch-me.
+- **Option B is a genuinely tiny footprint:** one footer row for B1 (+ optionally B2). It meets the client's intent (the two prominent body lines disappear) without a licence breach.
+- **GATE-2 flag (required):** *if the recommended option ≠ full removal, the client must confirm at GATE 2.* Recommendation = **B**, therefore **client confirmation at GATE 2 is required before frontend applies it.** If the client insists on **full removal (A)**, that is an explicit, recorded acceptance of a CC BY 4.0 attribution breach — the CTO/security should not implement it silently.
+
+### 13.9 Sources for this addendum (all accessed 2026-10-14)
+
+- Open-Meteo — Terms & Privacy (free-tier CC-BY acceptance; privacy/log-retention) — https://open-meteo.com/en/terms
+- Open-Meteo — Licence (GeoNames listed as location source; CC BY 4.0 attribution; "link next to any location … displayed"; example credit) — https://open-meteo.com/en/license
+- Open-Meteo — Geocoding API docs (endpoint, non-commercial licence pointer) — https://open-meteo.com/en/docs/geocoding-api
+- GeoNames — About (CC attribution licence; "This work is licensed under a Creative Commons Attribution 4.0 License") — https://www.geonames.org/about.html
+- GeoNames — Data / Terms and Conditions ("give credit to GeoNames … with a link or another reference") — https://www.geonames.org/export/
+- GeoNames — Gazetteer extract readme.txt (CC BY 4.0 licence statement) — https://download.geonames.org/export/dump/readme.txt
+- Creative Commons — CC BY 4.0 legal code §3(a) (attribution clause, verbatim) — https://creativecommons.org/licenses/by/4.0/legalcode.en
+- OSMF — Nominatim Usage Policy ("Clearly display attribution…"; ODbL; no autocomplete) — https://operations.osmfoundation.org/policies/nominatim/
+- BigDataCloud — Free client-side Reverse Geocoding API + Fair Use Policy (keyless but reverse-only; client-side-only; no attribution clause found) — https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api · https://www.bigdatacloud.com/docs/article/fair-use-policy-for-free-client-side-reverse-geocoding-api
