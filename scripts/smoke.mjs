@@ -993,20 +993,37 @@ async function main() {
       JSON.stringify({ meaning: String(panelDefault.meaning).slice(0, 40) }));
 
     // --- 15. CR4: the calendar picker (±10 civil days) drives the view ---
-    const picker = JSON.parse(await page.evaluate(`JSON.stringify({
-      type: document.getElementById('datepicker').type,
-      min: document.getElementById('datepicker').min,
-      max: document.getElementById('datepicker').max,
-      value: document.getElementById('datepicker').value,
-      label: document.getElementById('date-label').textContent,
-      disabled: document.getElementById('datepicker').disabled,
-    })`));
+    // v2.3.2: a themed in-page popup (#calendar) opened by the date-label button.
+    const picker = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const trigger = document.getElementById('datepicker');
+      const closedBefore = document.getElementById('calendar').hidden;
+      trigger.click();
+      const days = [...document.querySelectorAll('#cal-body .cal-day:not(:disabled)')];
+      return {
+        closedBefore,
+        open: !document.getElementById('calendar').hidden,
+        expanded: trigger.getAttribute('aria-expanded'),
+        enabled: days.length,
+        min: days[0] && days[0].dataset.date,
+        max: days.length ? days[days.length - 1].dataset.date : null,
+        pressed: [...document.querySelectorAll('#cal-body .cal-day[aria-pressed="true"]')].map((b) => b.dataset.date),
+        today: (document.querySelector('#cal-body .cal-day[aria-current="date"]') || {}).dataset?.date,
+        focused: document.activeElement && document.activeElement.dataset.date,
+        title: document.getElementById('cal-title').textContent,
+        label: document.getElementById('date-label').textContent,
+        disabled: trigger.disabled,
+      };
+    })())`));
     const RANGE_DAYS_14 = { min: '2026-10-04', max: '2026-10-24' }; // Mumbai civil date 2026-10-14 ∓ 10
-    r.check('the date picker is a native date control with min/max = the location civil date ∓10',
-      picker.type === 'date' && picker.disabled === false
-      && picker.min === RANGE_DAYS_14.min && picker.max === RANGE_DAYS_14.max
-      && picker.value === MUMBAI_DATE,
+    r.check('the date-label button opens the calendar with exactly the 21 days of the location civil date ∓10',
+      picker.closedBefore === true && picker.open === true && picker.expanded === 'true'
+      && picker.disabled === false && picker.enabled === 21
+      && picker.min === RANGE_DAYS_14.min && picker.max === RANGE_DAYS_14.max,
       JSON.stringify(picker));
+    r.check('the open calendar marks and focuses the viewed date, marks today, and has a month title',
+      picker.pressed.join(',') === MUMBAI_DATE && picker.today === MUMBAI_DATE
+      && picker.focused === MUMBAI_DATE && /\S/.test(picker.title) && !/NaN|Invalid/.test(picker.title),
+      JSON.stringify({ pressed: picker.pressed, today: picker.today, focused: picker.focused, title: picker.title }));
 
     const dayNames = () => page.evaluate(
       "JSON.stringify([...document.querySelectorAll('#day-list button.slot')].map(b => b.dataset.name))",
@@ -1014,27 +1031,47 @@ async function main() {
     const labelBeforePick = picker.label;
     const dayNamesBeforePick = await dayNames();
     const picked = JSON.parse(await page.evaluate(`JSON.stringify((() => {
-      const el = document.getElementById('datepicker');
-      el.value = '2026-10-15';
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { value: el.value, label: document.getElementById('date-label').textContent };
+      document.querySelector('#cal-body .cal-day[data-date="2026-10-15"]').click();
+      return {
+        open: !document.getElementById('calendar').hidden,
+        focusOnTrigger: document.activeElement === document.getElementById('datepicker'),
+        label: document.getElementById('date-label').textContent,
+      };
     })())`));
     const dayNamesAfterPick = await dayNames();
-    r.check('picking an adjacent date re-renders the slot lists and the date label',
-      picked.value === '2026-10-15' && picked.label !== labelBeforePick
+    r.check('picking an adjacent date closes the calendar and re-renders the slot lists and the date label',
+      picked.open === false && picked.focusOnTrigger === true && picked.label !== labelBeforePick
       && dayNamesAfterPick.join(',') !== dayNamesBeforePick.join(','),
       JSON.stringify({ label: picked.label, before: dayNamesBeforePick.join(','), after: dayNamesAfterPick.join(',') }));
+    const keyNav = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const key = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+      document.getElementById('datepicker').click();
+      const out = { start: document.activeElement.dataset.date };
+      key('ArrowRight'); out.right = document.activeElement.dataset.date;
+      key('ArrowDown'); out.down = document.activeElement.dataset.date;
+      key('PageDown'); out.pageDown = document.activeElement.dataset.date;
+      key('ArrowDown'); out.clamped = document.activeElement.dataset.date;
+      key('PageUp'); out.pageUp = document.activeElement.dataset.date;
+      key('Escape');
+      out.closed = document.getElementById('calendar').hidden;
+      out.focusOnTrigger = document.activeElement === document.getElementById('datepicker');
+      return out;
+    })())`));
+    r.check('the calendar grid is keyboard-operable and clamps to the ±10 window; Esc closes it',
+      keyNav.start === '2026-10-15' && keyNav.right === '2026-10-16' && keyNav.down === '2026-10-23'
+      && keyNav.pageDown === RANGE_DAYS_14.max && keyNav.clamped === RANGE_DAYS_14.max
+      && keyNav.pageUp === RANGE_DAYS_14.min && keyNav.closed === true && keyNav.focusOnTrigger === true,
+      JSON.stringify(keyNav));
     r.check('an off-today picked date drops the highlight and shows the neutral panel prompt (US-14 AC3)',
       (await page.evaluate("document.querySelectorAll('button.slot[aria-current=\"true\"]').length")) === 0
       && (await page.evaluate("document.getElementById('panel-body').hidden")) === true
       && (await page.evaluate("document.getElementById('panel-prompt').hidden")) === false);
     await page.evaluate(`(() => {
-      const el = document.getElementById('datepicker');
-      el.value = '${MUMBAI_DATE}';
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('datepicker').click();
+      document.querySelector('#cal-body .cal-day[data-date="${MUMBAI_DATE}"]').click();
     })()`);
     await page.waitFor(
-      `document.getElementById('datepicker').value === '${MUMBAI_DATE}'
+      `document.getElementById('calendar').hidden
        && document.querySelector("button.slot[aria-current='true']") !== null`,
       { label: 'fixture date restored after the picker probe' },
     );

@@ -68,26 +68,32 @@
 
     <!-- ===== Date bar — 03-ux §1.1, US-12/US-13; calendar picker 03-ux §3.10c (CR4) =====
          The formatted date label IS the picker's trigger (no separate icon button: at
-         320 px a 4th 44 px control would truncate the Hindi date). The native
-         <input type="date"> is transparent and exactly overlays the visible label, so a
-         tap anywhere on the date text opens the native picker; it is NEVER display:none
-         / visibility:hidden (that would drop it from the a11y tree and from
-         clickability). min/max are the viewed location's civil date ∓10 (21 days
-         inclusive) and are set by app.js renderDateBar() — never hardcoded here.
-         v2.3.1 (item 8b bug fix): the overlay alone did not reliably open the native
-         calendar (a click that lands on the transparent input only focuses it in
-         Chrome; the picker needs an explicit, in-gesture showPicker()), so app.js
-         wires a pointerdown/click handler on `.picker-field` that calls
-         datePicker.showPicker() with a focus() fallback. -->
+         320 px a 4th 44 px control would truncate the Hindi date): a <button> that
+         opens the #calendar popup below it.
+         v2.3.2: the native <input type="date"> overlay (CR4, v2.3.1 item 8b) is gone —
+         its popup opened off to one side and could not follow the page theme, type or
+         language. The themed popup shows ONLY the selectable window (the viewed
+         location's civil date ∓10, 21 days inclusive), built by app.js renderCalendar()
+         — never hardcoded here. -->
     <div class="datebar">
       <button type="button" class="nav" id="prev-day" aria-label="पिछला दिन">‹</button>
       <div class="label">
-        <span class="picker-field">
-          <label class="d" id="date-label" for="datepicker"></label>
+        <button type="button" class="picker-field" id="datepicker"
+                aria-haspopup="dialog" aria-expanded="false" aria-controls="calendar"
+                aria-label="तारीख चुनें" aria-describedby="date-label">
+          <span class="d" id="date-label"></span>
           <span class="caret" aria-hidden="true">⌄</span>
-          <input class="picker-input" id="datepicker" type="date"
-                 aria-label="तारीख चुनें" aria-describedby="date-label">
-        </span>
+        </button>
+        <!-- v2.3.2: the themed calendar popup (replaces the native date popup, which
+             cannot follow the page's palette, type or language). app.js
+             renderCalendar() fills it with the ±10-day window only. -->
+        <div class="calendar" id="calendar" role="dialog" aria-label="तारीख चुनें" hidden>
+          <p class="cal-title" id="cal-title" aria-hidden="true"></p>
+          <table class="cal-grid" role="grid" aria-label="तारीख चुनें">
+            <thead><tr id="cal-weekdays"></tr></thead>
+            <tbody id="cal-body"></tbody>
+          </table>
+        </div>
       </div>
       <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
       <!-- Today pill LAST in the DOM so the tab order is exactly the documented

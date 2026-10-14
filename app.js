@@ -48,15 +48,10 @@
 // (`setViewedDate`), and both nav buttons disable at the edges. No custom JS calendar,
 // no new dependency; `i18n.js` already carries `date.picker.label`.
 //
-// v2.3.1 (t_b9bb50be, item 8b) — DATE PICKER DID NOT OPEN. Root cause: the transparent
-// overlay input only received a click that FOCUSED it; Chrome's native calendar popup
-// (and its opening) is not triggered by that focus, and a tap forwarded from the
-// <label for="datepicker"> or landing on the caret never reaches the input's own
-// activation behaviour. Fix: a `pointerdown` handler on the whole 44 px `.picker-field`
-// calls `datePicker.showPicker()` from inside the user gesture (preventDefault'ing the
-// native focus-first activation so the popup opens exactly once), with a `focus()`
-// fallback when the API is missing. The overlay input stays (never display:none — it
-// carries the native date semantics + keyboard path); only the OPEN is made explicit.
+// v2.3.1 (item 8b) made the native picker open via showPicker(); v2.3.2 replaced the
+// native control with a themed in-page popup (#calendar: page tokens, Hindi/English
+// via Intl, keyboard grid) because the native popup opened off to one side and
+// ignored the theme. Picks still go through `setViewedDate`; no new i18n keys.
 //
 // FE-6 (t_778b1ea0, v2.3.0 item 6 / CR6): the S9 choghadiya detail panel. A slot row is
 // now a SELECTION control — `aria-pressed` + `aria-controls="choghadiya-panel"` — and
@@ -245,9 +240,12 @@ function init() {
   dom.sheetLocNote = document.getElementById('sheet-loc-note');
   dom.results = document.getElementById('results');
   dom.dateLabel = document.getElementById('date-label');
-  dom.datePicker = document.getElementById('datepicker');
-  // v2.3.1 (item 8b): the 44 px hit target that actually opens the native calendar.
-  dom.pickerField = dom.datePicker.closest('.picker-field');
+  dom.datePicker = document.getElementById('datepicker'); // the calendar's trigger button
+  dom.calendar = document.getElementById('calendar');
+  dom.calGrid = dom.calendar.querySelector('.cal-grid');
+  dom.calTitle = document.getElementById('cal-title');
+  dom.calWeekdays = document.getElementById('cal-weekdays');
+  dom.calBody = document.getElementById('cal-body');
   dom.prev = document.getElementById('prev-day');
   dom.next = document.getElementById('next-day');
   dom.todayPill = document.getElementById('today-pill');
@@ -300,17 +298,19 @@ function init() {
   dom.prev.addEventListener('click', () => stepDay(-1));
   dom.next.addEventListener('click', () => stepDay(1));
   dom.todayPill.addEventListener('click', goToToday);
-  // --- FE-3 (CR4): the native calendar picker drives `viewedDate` -----------------
-  // 'change' fires on a committed value (picker selection, typed field + blur,
-  // Spinner/arrow commit); 'input' additionally fires while typing/stepping, but
-  // onPickDate() ignores anything that is not a complete in-range ISO date, so a
-  // half-typed value can never move the view.
-  dom.datePicker.addEventListener('change', onPickDate);
-  dom.datePicker.addEventListener('input', onPickDate);
-  // v2.3.1 (item 8b): OPEN the popup explicitly, from inside the gesture. Wired to
-  // pointerdown on the field (not click on the input) so a tap on the visible label
-  // or caret — which never reaches the input — opens it too.
-  dom.pickerField.addEventListener('pointerdown', openDatePicker);
+  // --- v2.3.2: the themed calendar popup drives `viewedDate` ----------------------
+  dom.datePicker.addEventListener('click', toggleCalendar);
+  dom.calBody.addEventListener('click', onCalendarClick);
+  dom.calendar.addEventListener('keydown', onCalendarKey);
+  // Light dismiss: a press outside the popup and its trigger, or focus leaving both.
+  document.addEventListener('pointerdown', (event) => {
+    if (!dom.calendar.hidden && !dom.calendar.contains(event.target)
+        && !dom.datePicker.contains(event.target)) closeCalendar(false);
+  });
+  dom.calendar.addEventListener('focusout', (event) => {
+    const to = event.relatedTarget;
+    if (to && !dom.calendar.contains(to) && to !== dom.datePicker) closeCalendar(false);
+  });
 
   // --- FE-04: degradation surfaces ----------------------------------------------
   // S5's action button opens the sheet, so the city field is directly reachable
@@ -522,53 +522,168 @@ function stepDay(delta) {
   setViewedDate(next);
 }
 
-/**
- * The native `type="date"` control commits a value (03-ux §3.10c). Anything that is
- * not a complete ISO civil date inside the current range is ignored — including the
- * half-typed intermediate values `input` fires — so the view can never be driven to a
- * malformed or out-of-range date by a partially typed field.
- *
- * On a committed (`change`) refusal the control is put back to the date actually being
- * viewed: a typed out-of-range date or a cleared field must not leave the bar showing
- * a date the page is not rendering. `input` does NOT snap back — that would fight the
- * user mid-keystroke.
- */
-function onPickDate(event) {
-  const range = dateRange();
-  if (!range) return;
-  const value = dom.datePicker.value;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value) && value >= range.min && value <= range.max) {
-    setViewedDate(value);
-    return;
-  }
-  if (event && event.type === 'change' && value !== state.viewedDate) {
-    dom.datePicker.value = state.viewedDate;
-  }
+/* v2.3.2 — the themed calendar popup */
+
+/** Intl locale for calendar labels — the same mapping formatDate()/formatTime() use. */
+function calendarLocale(lang) {
+  return lang === 'hi' ? 'hi-IN' : 'en-IN';
+}
+
+/** A civil "YYYY-MM-DD" as a UTC-noon Date — for Intl labels formatted in 'UTC' only. */
+function civilNoonUTC(dateISO) {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12));
+}
+
+/** Day of week (0 = Sunday) of a civil date — pure arithmetic, no zone involved. */
+function civilWeekday(dateISO) {
+  return civilNoonUTC(dateISO).getUTCDay();
 }
 
 /**
- * v2.3.1 (item 8b) — open the native calendar from a tap anywhere in `.picker-field`.
- *
- * Chrome does not open a date input's popup just because the input got focus: a click
- * that only focuses it (which is what the transparent overlay received, and what a
- * `<label for>` forwards) leaves the user staring at a calendar that never appears.
- * `showPicker()` opens it, but only while a real user activation is live — so it is
- * called straight from the `pointerdown` gesture, and the native focus-first
- * activation is cancelled so the popup opens exactly once.
- *
- * Degrades safely: no location → the control is inert (S4 / no-location state);
- * an engine without `showPicker()` (older Firefox/Safari) falls back to `focus()`,
- * which keeps the keyboard path (typing + arrow/Alt-arrow stepping) working. A real
- * `change` from the picker still flows through onPickDate() unchanged.
+ * Build the popup: whole Sunday-first weeks around the ±10-day window (out-of-window
+ * days disabled). Viewed date = aria-pressed, today = aria-current; roving tabindex.
  */
-function openDatePicker(event) {
-  if (!state.location || dom.datePicker.disabled) return; // no-location: picker inert
-  if (event && event.button !== undefined && event.button !== 0) return; // primary only
-  event.preventDefault();
-  if (typeof dom.datePicker.showPicker === 'function') {
-    try { dom.datePicker.showPicker(); return; } catch { /* fall through to focus */ }
+function renderCalendar(focusDate) {
+  const range = dateRange();
+  if (!range) return;
+  const locale = calendarLocale(state.lang);
+  const fmt = (opts) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', numberingSystem: 'latn', ...opts });
+  const active = focusDate || state.viewedDate;
+
+  // "अक्टूबर 2026", or "अक्टूबर–नवंबर 2026" when the window spans two months.
+  const monthYear = fmt({ month: 'long', year: 'numeric' });
+  const from = civilNoonUTC(range.min);
+  const to = civilNoonUTC(range.max);
+  let title;
+  try {
+    title = range.min.slice(0, 7) === range.max.slice(0, 7)
+      ? monthYear.format(from)
+      : monthYear.formatRange(from, to);
+  } catch {
+    title = `${monthYear.format(from)} – ${monthYear.format(to)}`;
   }
-  dom.datePicker.focus();
+  dom.calTitle.textContent = title;
+
+  const gridStart = addDays(range.min, -civilWeekday(range.min));
+  const gridEnd = addDays(range.max, 6 - civilWeekday(range.max));
+
+  const weekdayShort = fmt({ weekday: 'short' });
+  const weekdayLong = fmt({ weekday: 'long' });
+  dom.calWeekdays.replaceChildren();
+  for (let i = 0; i < 7; i += 1) {
+    const day = civilNoonUTC(addDays(gridStart, i));
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.abbr = weekdayLong.format(day);
+    th.textContent = weekdayShort.format(day);
+    dom.calWeekdays.append(th);
+  }
+
+  const monthShort = fmt({ month: 'short' });
+  const rows = [];
+  let row = null;
+  for (let iso = gridStart; iso <= gridEnd; iso = addDays(iso, 1)) {
+    if (civilWeekday(iso) === 0) {
+      row = document.createElement('tr');
+      rows.push(row);
+    }
+    const inRange = iso >= range.min && iso <= range.max;
+    const td = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cal-day';
+    btn.dataset.date = iso;
+    btn.tabIndex = iso === active ? 0 : -1;
+    btn.setAttribute('aria-label', safeFormatDate(iso, state.location.timezone, state.lang));
+    btn.setAttribute('aria-pressed', String(iso === state.viewedDate));
+    if (iso === range.today) btn.setAttribute('aria-current', 'date');
+    if (!inRange) btn.disabled = true;
+    const num = document.createElement('span');
+    num.textContent = String(Number(iso.slice(8)));
+    btn.append(num);
+    // A month tag where the month changes, so a 2-month window is never ambiguous.
+    if (inRange && (iso === range.min || iso.endsWith('-01'))) {
+      const m = document.createElement('span');
+      m.className = 'm';
+      m.setAttribute('aria-hidden', 'true');
+      m.textContent = monthShort.format(civilNoonUTC(iso));
+      btn.append(m);
+    }
+    td.append(btn);
+    row.append(td);
+  }
+  dom.calBody.replaceChildren(...rows);
+}
+
+function isCalendarOpen() {
+  return Boolean(dom.calendar) && !dom.calendar.hidden;
+}
+
+/** The trigger (the date label button) toggles the popup. */
+function toggleCalendar() {
+  if (isCalendarOpen()) closeCalendar(true);
+  else openCalendar();
+}
+
+function openCalendar() {
+  if (!state.location || dom.datePicker.disabled) return; // no-location: picker inert
+  renderCalendar();
+  dom.calendar.hidden = false;
+  dom.datePicker.setAttribute('aria-expanded', 'true');
+  focusCalendarDay(state.viewedDate);
+}
+
+/** Close the popup; `restoreFocus` returns focus to the trigger (Esc / a pick). */
+function closeCalendar(restoreFocus) {
+  if (!isCalendarOpen()) return;
+  dom.calendar.hidden = true;
+  dom.datePicker.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) dom.datePicker.focus();
+}
+
+/** Move the roving tabindex to `dateISO` and focus it (in-window days only). */
+function focusCalendarDay(dateISO) {
+  const target = dom.calBody.querySelector(`.cal-day[data-date="${dateISO}"]:not(:disabled)`);
+  if (!target) return;
+  for (const btn of dom.calBody.querySelectorAll('.cal-day[tabindex="0"]')) btn.tabIndex = -1;
+  target.tabIndex = 0;
+  target.focus();
+}
+
+/** A day pick: close first (focus back on the trigger), then the one clamp path. */
+function onCalendarClick(event) {
+  const btn = event.target.closest('.cal-day');
+  if (!btn || btn.disabled) return;
+  closeCalendar(true);
+  setViewedDate(btn.dataset.date);
+}
+
+/** Grid keys (WAI-ARIA date picker): arrows, Home/End, PageUp/Down (window ends), Esc; clamped. */
+function onCalendarKey(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeCalendar(true);
+    return;
+  }
+  const btn = event.target.closest && event.target.closest('.cal-day');
+  const range = dateRange();
+  if (!btn || !range || event.altKey || event.ctrlKey || event.metaKey) return;
+  const from = btn.dataset.date;
+  const weekday = civilWeekday(from);
+  const moves = {
+    ArrowLeft: addDays(from, -1),
+    ArrowRight: addDays(from, 1),
+    ArrowUp: addDays(from, -7),
+    ArrowDown: addDays(from, 7),
+    Home: addDays(from, -weekday),
+    End: addDays(from, 6 - weekday),
+    PageUp: range.min,
+    PageDown: range.max,
+  };
+  if (!(event.key in moves)) return;
+  event.preventDefault();
+  focusCalendarDay(clampToRange(moves[event.key], range));
 }
 
 /** The "आज / Today" reset pill (03-ux §3 S1 "Success (other date)"). */
@@ -1293,14 +1408,14 @@ function refreshHighlight() {
 function syncTodayPill() {
   if (!state.location) return;
   const range = dateRange();
-  // The window re-bases across the location's own midnight, so refresh the native
-  // control's min/max (and its value) here too — a stale `min` would let the picker
-  // offer a day outside the ±10 window until the next full render. The value is left
-  // alone while the field is focused: never rewrite a date the user is editing.
-  if (document.activeElement !== dom.datePicker) {
-    if (dom.datePicker.min !== range.min) dom.datePicker.min = range.min;
-    if (dom.datePicker.max !== range.max) dom.datePicker.max = range.max;
-    if (dom.datePicker.value !== state.viewedDate) dom.datePicker.value = state.viewedDate;
+  // The window re-bases across the location's own midnight, so an OPEN calendar is
+  // rebuilt too — a stale grid would offer a day outside the ±10 window. The focused
+  // day is kept where it is (or clamped into the new window).
+  if (isCalendarOpen()) {
+    const focused = document.activeElement && document.activeElement.dataset
+      ? document.activeElement.dataset.date : null;
+    renderCalendar(focused ? clampToRange(focused, range) : null);
+    if (focused) focusCalendarDay(clampToRange(focused, range));
   }
   // Midnight can also push the viewed date out of the new window; snap to the edge and
   // repaint (schedule included) rather than showing a date the picker can no longer
@@ -1336,7 +1451,7 @@ function onDateShortcut(event) {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
   const target = event.target;
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-  if (state.ui.sheetOpen || !state.location) return;
+  if (state.ui.sheetOpen || !state.location || isCalendarOpen()) return;
 
   event.preventDefault();
   const previous = focusedSlot();
@@ -1498,10 +1613,13 @@ function applyDictionary() {
   dom.bH24.setAttribute('aria-pressed', String(state.hourCycle === 'h23'));
   dom.prev.setAttribute('aria-label', t('date.prev', lang));
   dom.next.setAttribute('aria-label', t('date.next', lang));
-  // CR4 — the native picker's a11y name (03-ux §3.10c): a screen reader hears
-  // "Choose a date, बुधवार, 14 अक्टूबर 2026" (aria-describedby → the visible label)
-  // and still gets the native date semantics from the control itself.
+  // CR4 — the picker's a11y name (03-ux §3.10c): a screen reader hears
+  // "Choose a date, बुधवार, 14 अक्टूबर 2026" (aria-describedby → the visible label).
+  // v2.3.2: the trigger is a button (aria-haspopup="dialog"); the popup and its grid
+  // share the same name.
   dom.datePicker.setAttribute('aria-label', t('date.picker.label', lang));
+  dom.calendar.setAttribute('aria-label', t('date.picker.label', lang));
+  dom.calGrid.setAttribute('aria-label', t('date.picker.label', lang));
   dom.locChip.setAttribute('aria-label', t('loc.change', lang));
   dom.locClear.setAttribute('aria-label', t('loc.clear', lang));
   dom.closeSheet.setAttribute('aria-label', t('city.close', lang));
@@ -1539,23 +1657,19 @@ function renderDateBar() {
     dom.next.disabled = true;
     dom.prev.setAttribute('aria-disabled', 'true');
     dom.next.setAttribute('aria-disabled', 'true');
+    closeCalendar(false);
     dom.datePicker.disabled = true;
-    dom.datePicker.value = '';
-    dom.datePicker.removeAttribute('min');
-    dom.datePicker.removeAttribute('max');
     dom.live.textContent = state.ui.loading
       ? t('geo.loading', state.lang)
       : t('empty.noLocation', state.lang);
     return;
   }
 
-  // min/max are always the LOCATION's civil date ∓10 (03-ux §3.10c) — recomputed on
-  // every render, so a location change re-bases the whole window; `value` mirrors the
-  // viewed date so the picker always opens on it.
-  dom.datePicker.min = range.min;
-  dom.datePicker.max = range.max;
-  dom.datePicker.value = state.viewedDate;
+  // The calendar's window is always the LOCATION's civil date ∓10 (03-ux §3.10c) and
+  // is rebuilt from dateRange() on every open, so a location change re-bases it; an
+  // already-open popup (a language switch) is re-rendered in place.
   dom.datePicker.disabled = false;
+  if (isCalendarOpen()) renderCalendar();
 
   // Edge clamping must be perceivable without trial: `disabled` + `aria-disabled`
   // + the muted dashed style (03-ux §3.10c "Edge clamping"; never colour-only).

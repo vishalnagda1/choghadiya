@@ -115,18 +115,20 @@ async function main() {
     // 4. off-today view: the neutral S9 prompt (no badge, hidden body) with the S8
     //    inauspicious-periods block visible and the date picker focused.
     await page.evaluate(`(() => {
-      const el = document.getElementById('datepicker');
-      el.value = '${OFF_TODAY}';
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('datepicker').click();
+      document.querySelector('#cal-body .cal-day[data-date="${OFF_TODAY}"]').click();
     })()`);
     await page.waitFor("document.getElementById('panel-prompt').hidden === false",
       { label: 'off-today panel prompt shows' });
     await page.evaluate("document.getElementById('datepicker').focus()");
     await scan('off-today — S8 periods block + S9 prompt, date picker focused');
+    // v2.3.2: the themed calendar popup itself, open (dialog + grid of day buttons).
+    await page.evaluate("document.getElementById('datepicker').click()");
+    await page.waitFor("document.getElementById('calendar').hidden === false",
+      { label: 'calendar popup opens' });
+    await scan('calendar popup open');
     await page.evaluate(`(() => {
-      const el = document.getElementById('datepicker');
-      el.value = '${MUMBAI_DATE}';
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#cal-body .cal-day[data-date="${MUMBAI_DATE}"]').click();
     })()`);
     await page.waitFor("document.querySelector(\"button.slot[aria-current='true']\") !== null",
       { label: 'fixture date restored' });
