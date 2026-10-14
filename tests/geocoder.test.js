@@ -20,6 +20,7 @@ import {
   GeocoderError,
   MAX_CACHE_ENTRIES,
   MAX_STRING_LENGTH,
+  CACHE_TTL_MS,
   buildGeocodeUrl,
   clearCache,
   createGeocoder,
@@ -27,6 +28,7 @@ import {
   isAbortError,
   validateQuery,
 } from '../geocoder.js';
+import * as sessionStore from '../session-store.js';
 
 // ---------------------------------------------------------------- helpers ---
 
@@ -638,4 +640,198 @@ test('SEC-12: the module default cache shares the same capped write helper', asy
   await geocodeCity('dcity64', { fetchImpl: impl });
   assert.equal(calls.length, filled + 1, 'newest default-cache key is still cached');
   clearCache();
+});
+
+// ------------------------------- persistent cacheStore (v2.3.0 item 7b, t_a46a447b) ---
+// geocoder.js gains an OPTIONAL `cacheStore` (the session-store.js shape: get/set/
+// remove). Default behaviour (no cacheStore) is unchanged — the in-memory Map path
+// above still holds. With a cacheStore, results are persisted with a 24 h TTL, a
+// cache hit survives a page reload (0 fetches), and persisted entries are capped at
+// MAX_CACHE_ENTRIES with FIFO eviction. Every probe injects `fetchImpl` (offline).
+
+/** A minimal Web Storage stand-in backed by a Map. */
+function fakeStorage(raw = new Map()) {
+  return {
+    get length() {
+      return raw.size;
+    },
+    key(i) {
+      return [...raw.keys()][i] ?? null;
+    },
+    getItem(k) {
+      return raw.has(k) ? raw.get(k) : null;
+    },
+    setItem(k, v) {
+      raw.set(k, String(v));
+    },
+    removeItem(k) {
+      raw.delete(k);
+    },
+    clear() {
+      raw.clear();
+    },
+  };
+}
+
+/** The physical key geocoder.js writes for a normalized query + language. */
+const persistedKey = (lang, q) => `choghadiya.geocache.entry.${lang}\u0000${q}`;
+
+test('cacheStore: 24 h TTL constant is pinned', () => {
+  assert.equal(CACHE_TTL_MS, 24 * 60 * 60 * 1000);
+});
+
+test('cacheStore: a query cached in one page session is a hit after a reload (0 fetches)', async () => {
+  const raw = new Map();
+  const original = globalThis.sessionStorage;
+  globalThis.sessionStorage = fakeStorage(raw);
+  const realNow = Date.now;
+  Date.now = () => 1_700_000_000_000;
+  try {
+    sessionStore.clear();
+
+    const first = mockFetch(results([MUMBAI_RAW]));
+    const g1 = createGeocoder({ fetchImpl: first.impl, cacheStore: sessionStore });
+    const out1 = await g1.searchNow('Mumbai');
+    assert.equal(first.calls.length, 1);
+    assert.deepEqual(out1, [MUMBAI]);
+    assert.ok(raw.has(persistedKey('en', 'mumbai')), 'the result was persisted to the session store');
+
+    // Reload: a brand-new backing instance over the SAME raw map (sessionStorage
+    // survives a reload) plus a fresh geocoder — the cached entry must still serve.
+    globalThis.sessionStorage = fakeStorage(raw);
+    const second = mockFetch(results([PUNE_RAW]));
+    const g2 = createGeocoder({ fetchImpl: second.impl, cacheStore: sessionStore });
+    const out2 = await g2.searchNow('  mumbai  ');
+    assert.equal(second.calls.length, 0, 'no fetch after reload — served from the session store');
+    assert.deepEqual(out2, [MUMBAI]);
+    assert.notEqual(out2, out1, 'the hit is a fresh array');
+  } finally {
+    Date.now = realNow;
+    globalThis.sessionStorage = original;
+  }
+});
+
+test('cacheStore: within the 24 h TTL is a hit; exactly at expiry refetches', async () => {
+  const raw = new Map();
+  const original = globalThis.sessionStorage;
+  globalThis.sessionStorage = fakeStorage(raw);
+  const realNow = Date.now;
+  let now = 1_700_000_000_000;
+  Date.now = () => now;
+  try {
+    sessionStore.clear();
+    const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+    const g = createGeocoder({ fetchImpl: impl, cacheStore: sessionStore });
+
+    await g.searchNow('Mumbai');
+    assert.equal(calls.length, 1);
+
+    now += CACHE_TTL_MS - 1; // 1 ms before expiry
+    await g.searchNow('Mumbai');
+    assert.equal(calls.length, 1, 'within TTL → hit, no request');
+
+    now += 1; // exactly at expiry
+    await g.searchNow('Mumbai');
+    assert.equal(calls.length, 2, 'expired → refetch');
+  } finally {
+    Date.now = realNow;
+    globalThis.sessionStorage = original;
+  }
+});
+
+test('cacheStore: cache keys normalise case/whitespace and are per language', async () => {
+  const raw = new Map();
+  const original = globalThis.sessionStorage;
+  globalThis.sessionStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+    const g = createGeocoder({ fetchImpl: impl, cacheStore: sessionStore });
+
+    await g.searchNow('Mumbai');
+    await g.searchNow('  mumbai  ');
+    await g.searchNow('MUMBAI');
+    assert.equal(calls.length, 1, 'case/whitespace-insensitive → one request');
+    assert.ok(raw.has(persistedKey('en', 'mumbai')));
+
+    await g.searchNow('Mumbai', { lang: 'hi' });
+    assert.equal(calls.length, 2, 'language is part of the key');
+    assert.ok(raw.has(persistedKey('hi', 'mumbai')));
+  } finally {
+    globalThis.sessionStorage = original;
+  }
+});
+
+test('cacheStore: persisted entries are capped at 64, FIFO eviction (SEC-12 consistency)', async () => {
+  const raw = new Map();
+  const original = globalThis.sessionStorage;
+  globalThis.sessionStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+    const g = createGeocoder({ fetchImpl: impl, cacheStore: sessionStore });
+
+    for (let i = 0; i < 65; i += 1) {
+      await g.searchNow(`city${i}`);
+    }
+    assert.equal(calls.length, 65, 'each distinct query is a fresh request');
+
+    const entries = [...raw.keys()].filter((k) => k.startsWith('choghadiya.geocache.entry.'));
+    assert.equal(entries.length, 64, 'the persisted cache never exceeds 64 entries');
+    assert.equal(raw.has(persistedKey('en', 'city0')), false, 'the oldest key was evicted first (FIFO)');
+    assert.equal(raw.has(persistedKey('en', 'city1')), true, 'the second-oldest survived');
+    assert.equal(raw.has(persistedKey('en', 'city64')), true, 'the newest key is kept');
+
+    await g.searchNow('city64');
+    assert.equal(calls.length, 65, 'a still-cached query is a hit (no request)');
+    await g.searchNow('city0');
+    assert.equal(calls.length, 66, 'the evicted key re-fetches (proves it was dropped)');
+  } finally {
+    globalThis.sessionStorage = original;
+  }
+});
+
+test('cacheStore: a throwing cacheStore degrades to a miss, never breaks geocoding', async () => {
+  const throwingStore = {
+    get() {
+      throw new Error('storage disabled');
+    },
+    set() {
+      throw new Error('storage disabled');
+    },
+    remove() {
+      throw new Error('storage disabled');
+    },
+  };
+  const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+  const g = createGeocoder({ fetchImpl: impl, cacheStore: throwingStore });
+
+  const out = await g.searchNow('Mumbai');
+  assert.deepEqual(out, [MUMBAI]);
+  assert.equal(calls.length, 1);
+  // A second identical query is still a fresh request (nothing was cached), and
+  // crucially the call never throws.
+  await g.searchNow('Mumbai');
+  assert.equal(calls.length, 2);
+});
+
+test('cacheStore: geocodeCity accepts a cacheStore directly and persists the result', async () => {
+  const raw = new Map();
+  const original = globalThis.sessionStorage;
+  globalThis.sessionStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    const { impl, calls } = mockFetch(results([PUNE_RAW]));
+    const out = await geocodeCity('Pune', { fetchImpl: impl, cacheStore: sessionStore });
+    assert.deepEqual(out, [PUNE]);
+    assert.equal(calls.length, 1);
+    assert.ok(raw.has(persistedKey('en', 'pune')));
+
+    const again = mockFetch(results([]));
+    const out2 = await geocodeCity('Pune', { fetchImpl: again.impl, cacheStore: sessionStore });
+    assert.equal(again.calls.length, 0, 'served from the cacheStore, no request');
+    assert.deepEqual(out2, [PUNE]);
+  } finally {
+    globalThis.sessionStorage = original;
+  }
 });

@@ -54,6 +54,12 @@ export const MAX_CACHE_ENTRIES = 64;
 /** Every third-party string is length-capped to this many chars (§6.3 SEC-11). */
 export const MAX_STRING_LENGTH = 200;
 
+/**
+ * Persistent (session) cache TTL for the optional `cacheStore` (v2.3.0 item 7b,
+ * CTO decision): a cached geocode result is served for 24 hours, then refetched.
+ */
+export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 /** Frozen mirror of the §7 constants (same shape as choghadiya.js CONFIG). */
 export const CONFIG = Object.freeze({
   DEBOUNCE_MS,
@@ -215,6 +221,62 @@ function setCapped(store, key, value) {
 /** Module-level default cache so the plain `geocodeCity` path caches too (§5.2). */
 const defaultCache = new Map();
 
+// ---------------------------------------- persistent cache store (v2.3.0 7b) ---
+//
+// Optional `cacheStore` — any object exposing the session-store.js shape
+// (`get(key)`, `set(key, value, {ttlMs})`, `remove(key)`). It is INJECTED (this
+// module never imports a storage backend and contains no storage tokens). With a
+// cacheStore the in-memory Map is bypassed so the 24 h TTL stays authoritative
+// (a Map entry has no expiry and would mask a stale persisted value).
+//
+// Layout inside the store:
+//   geocache.entry.<lang>\u0000<normalized query>  → GeocodeResult[]  (TTL 24 h)
+//   geocache.index                                 → string[] FIFO order, capped
+//                                                    at MAX_CACHE_ENTRIES (SEC-12)
+
+/** Reserved key holding the FIFO insertion order of persisted entries. */
+const PERSIST_INDEX_KEY = 'geocache.index';
+
+/** Prefix of every persisted entry key (the store applies its own namespace). */
+const PERSIST_ENTRY_PREFIX = 'geocache.entry.';
+
+/** Read a persisted entry; null on miss, expiry, corruption, or storage failure. */
+function persistGet(store, key) {
+  if (!store) return null;
+  let value;
+  try {
+    value = store.get(`${PERSIST_ENTRY_PREFIX}${key}`);
+  } catch {
+    return null; // a storage failure must never break geocoding
+  }
+  return Array.isArray(value) ? value : null;
+}
+
+/**
+ * Persist an entry with the 24 h TTL and enforce the FIFO-64 cap, mirroring
+ * `setCapped` for the in-memory Map (SEC-12). The index is written session-lifetime
+ * (no TTL) so ordering survives individual entry expiry; the oldest entry is
+ * evicted (removed) once MAX_CACHE_ENTRIES distinct keys are present.
+ */
+function persistSet(store, key, value) {
+  if (!store) return;
+  try {
+    let index = store.get(PERSIST_INDEX_KEY);
+    if (!Array.isArray(index)) index = [];
+    if (!index.includes(key)) {
+      while (index.length >= MAX_CACHE_ENTRIES) {
+        const oldest = index.shift();
+        store.remove(`${PERSIST_ENTRY_PREFIX}${oldest}`);
+      }
+      index.push(key);
+    }
+    store.set(`${PERSIST_ENTRY_PREFIX}${key}`, value, { ttlMs: CACHE_TTL_MS });
+    store.set(PERSIST_INDEX_KEY, index);
+  } catch {
+    // Quota exceeded / disabled storage: degrade to a cache miss, never throw.
+  }
+}
+
 /** Empty the module-level cache (tests; also handy if the UI ever wants a reset). */
 export function clearCache() {
   defaultCache.clear();
@@ -239,18 +301,39 @@ function resolveFetch(fetchImpl) {
  * @param {"hi"|"en"} [options.lang="en"]       `language` param — matches the UI language.
  * @param {Map} [options.cache=defaultCache]    Per-query in-memory cache; pass a fresh
  *                                              Map for isolated state.
+ * @param {object} [options.cacheStore=null]    Optional persistent cache (session-store
+ *                                              shape). When given, the in-memory Map is
+ *                                              bypassed and entries live in the store
+ *                                              with a CACHE_TTL_MS (24 h) TTL, capped at
+ *                                              MAX_CACHE_ENTRIES (v2.3.0 item 7b).
  * @returns {Promise<Array>} GeocodeResult[] — `[]` when the service has no match (§5.2).
  * @throws {GeocoderError} code "bad-query" (no request sent) | "network" | "http".
  * @throws {DOMException} name "AbortError" when `signal` aborts mid-flight.
  */
-export async function geocodeCity(query, { fetchImpl, signal, lang = 'en', cache = defaultCache } = {}) {
+export async function geocodeCity(query, {
+  fetchImpl,
+  signal,
+  lang = 'en',
+  cache = defaultCache,
+  cacheStore = null,
+} = {}) {
   const trimmed = validateQuery(query);
   const language = normalizeLanguage(lang);
   const fetchFn = resolveFetch(fetchImpl);
   throwIfAborted(signal);
 
-  const store = cache instanceof Map ? cache : null;
+  // With a persistent store it is the single source of truth (a Map entry has no
+  // expiry and would mask an expired persisted value); without one, the in-memory
+  // Map behaves exactly as before (v2.3.0 item 7b — default path unchanged).
+  const store = cacheStore ? null : (cache instanceof Map ? cache : null);
   const key = cacheKey(trimmed, language);
+
+  const persisted = persistGet(cacheStore, key);
+  if (persisted) {
+    // Cache hit: fresh array, no request sent, survives a page reload.
+    return persisted.slice();
+  }
+
   if (store && store.has(key)) {
     // Cache hit: same result object graph as a fresh call, no request sent.
     return store.get(key).slice();
@@ -291,6 +374,7 @@ export async function geocodeCity(query, { fetchImpl, signal, lang = 'en', cache
   if (!payload || !Array.isArray(payload.results)) return [];
   const results = payload.results.map(mapResult).filter((r) => r !== null);
   setCapped(store, key, results.slice());
+  persistSet(cacheStore, key, results.slice());
   return results;
 }
 
@@ -305,12 +389,16 @@ export async function geocodeCity(query, { fetchImpl, signal, lang = 'en', cache
  * @param {number} [options.debounceMs=DEBOUNCE_MS]
  * @param {"hi"|"en"} [options.lang="en"]
  * @param {Map} [options.cache]  Isolated cache; defaults to a fresh Map per geocoder.
+ * @param {object} [options.cacheStore=null]  Optional persistent cache store (v2.3.0
+ *                               item 7b); when given, results are cached there with a
+ *                               24 h TTL and survive a page reload, capped at 64.
  */
 export function createGeocoder({
   fetchImpl = globalThis.fetch,
   debounceMs = DEBOUNCE_MS,
   lang = 'en',
   cache = new Map(),
+  cacheStore = null,
 } = {}) {
   let timer = null;
   let controller = null;
@@ -337,7 +425,7 @@ export function createGeocoder({
     abortInFlight();
     const own = new AbortController();
     controller = own;
-    return geocodeCity(query, { fetchImpl, signal: own.signal, lang: language, cache }).then(
+    return geocodeCity(query, { fetchImpl, signal: own.signal, lang: language, cache, cacheStore }).then(
       (results) => {
         if (controller === own) controller = null;
         return results;
@@ -412,6 +500,9 @@ export function createGeocoder({
     cancel,
     get cache() {
       return cache;
+    },
+    get cacheStore() {
+      return cacheStore;
     },
     get inFlight() {
       return controller !== null;
