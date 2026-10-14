@@ -108,3 +108,10 @@ tag (semantic version bump from current package.json 2.1.0, e.g. v2.2.0).
      location) persist indefinitely with no expiry; API response cache expires on TTL.
      This relaxes the v2.2.0 "no storage ever" stance to "no server storage; local
      TTL-gated cache only" — update the privacy disclosure accordingly.
+  8. **v2.3.1 quick-fix (client, 2026-10-14)** — three copy removals + one bug:
+     (a) remove `privacy.line` (i18n.js:207 "Your searched city name is sent to
+     Open-Meteo… 24 hours") — the CC BY 4.0 credit `attribution.geocoding` stays;
+     (b) remove `footer.noTracking` (i18n.js:210 "No account · no tracking · no backend");
+     (c) remove `date.picker.range` (i18n.js:221 "You can pick from 10 days before…")
+     — and FIX the calendar: the date picker does not open (transparent native
+     `<input type=date>` overlay on the date label is not triggering the picker).
