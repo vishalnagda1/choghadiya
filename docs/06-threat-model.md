@@ -297,9 +297,9 @@ implements it (plan IDs; the CTO owns board-card creation).
 
 ### 6.7 Logging & security-event policy
 
-- [ ] **SEC-21** *(FE-02/FE-03/BE-02)* — Production code logs **no user-derived data**: no city
+- [ ] **SEC-21** *(FE-02/FE-03/FE-04/BE-02)* — Production code logs **no user-derived data**: no city
       names, coordinates, queries, or response bodies in `console.*`; unexpected errors surface
-      as the §8.1 UI states with bare error codes. There is no log pipeline and no third-party
+      as the §8.1 UI states (implemented by FE-04's degradation screens) with bare error codes. There is no log pipeline and no third-party
       error/analytics SDK (04 §8.2). Security-relevant events (CSP violations, geocode failures)
       are observable only as the user-visible S5/S6/S7 states.
 
