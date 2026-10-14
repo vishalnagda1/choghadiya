@@ -189,15 +189,18 @@ header.app {
 .brand-sub { display: none; font-size: var(--fs-xs); color: var(--text-muted) }
 @media (min-width: 360px) { .brand-sub { display: block } }
 
-/* Language toggle — .lang-toggle, each option min 44 × 44 (03-ux §4.5, NFR-A5). */
-.lang-toggle {
+/* Segmented settings control — language + time-format toggles (v2.3.0 CR1, 03-ux
+   §3.10a / §7.1: `.segmented`). Each option min 44 × 44 (NFR-A5); the active option
+   carries aria-pressed + the --brand fill (never colour alone — the pressed state is
+   also announced). Replaces the v1.0.1 `.lang-toggle` (same visual language). */
+.segmented {
   display: inline-flex;
   flex: 0 0 auto;
   border: 1px solid var(--border);
   border-radius: var(--r-full);
   overflow: hidden;
 }
-.lang-toggle button {
+.segmented button {
   min-width: 44px;
   min-height: 44px;
   padding: 0 var(--sp-3);
@@ -208,8 +211,8 @@ header.app {
   font-size: var(--fs-sm);
   cursor: pointer;
 }
-.lang-toggle button + button { border-left: 1px solid var(--border) }
-.lang-toggle button[aria-pressed="true"] {
+.segmented button + button { border-left: 1px solid var(--border) }
+.segmented button[aria-pressed="true"] {
   background: var(--brand);
   color: var(--brand-contrast);
   font-weight: 600;

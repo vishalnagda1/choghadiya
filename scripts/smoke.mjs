@@ -630,7 +630,7 @@ async function main() {
     r.check('night rows are the 8 fixture night slots in order (Udveg…Udveg)',
       latinOf(names.night).join(',') === expectedNight.join(','), latinOf(names.night).join(','));
 
-    // --- 4. row shape: name, 24h range, tier word, disclosure semantics ---
+    // --- 4. row shape: name, time range (active format), tier word, disclosure semantics ---
     const shape = JSON.parse(await page.evaluate(`JSON.stringify(
       [...document.querySelectorAll('button.slot')].map(b => ({
         name: b.dataset.name, time: b.dataset.time, tier: b.dataset.tier,
@@ -640,9 +640,13 @@ async function main() {
         text: b.textContent.trim(),
       }))
     )`));
-    r.check('every row has a Hindi+English name, a HH:MM – HH:MM range and a tier word',
+    // v2.3.0 CR1 (FE-1): the default cycle is 12-hour, so a row range is
+    // "hh:mm am – hh:mm am"; the widened alternative accepts the 24h "HH:MM – HH:MM"
+    // the toggle produces. Either form is a real clock range, never NaN.
+    const RANGE_RE = /^(?:\d{2}:\d{2}|\d{2}:\d{2} [ap]m) – (?:\d{2}:\d{2}|\d{2}:\d{2} [ap]m)$/;
+    r.check('every row has a Hindi+English name, a time range in the active format and a tier word',
       shape.length === 16 && shape.every((s) =>
-        /\S/.test(s.name || '') && /^\d{2}:\d{2} – \d{2}:\d{2}$/.test(s.time) && /\S/.test(s.tier || '')));
+        /\S/.test(s.name || '') && RANGE_RE.test(s.time) && /\S/.test(s.tier || '')));
     r.check('every row is a collapsed disclosure control (aria-expanded=false + aria-controls)',
       shape.every((s) => s.expanded === 'false' && s.controls && s.controls === s.meaningId));
 

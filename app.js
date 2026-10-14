@@ -27,10 +27,22 @@
 // The FE-03 failure seams (`onGeoUnavailable`, `setSheetError`) are now the real
 // S5/S6/S7 components; every degradation keeps the date bar and the language
 // toggle alive (03-ux §3 S3, §2 F3).
+//
+// FE-1 (t_8d2651f9, v2.3.0 items 1 + 7a): the 12h/24h time-format toggle, the 12-hour
+// default, and per-tab settings persistence. `state.hourCycle` ('h12' | 'h23') is
+// threaded explicitly into EVERY formatTime call site (slot ranges, boundary small
+// print, S2 result-row city times); the toggle re-renders in place like setLang, in
+// well under the 100 ms target. The three client settings — timeFormat, lang and
+// hydrate at init and write through session-store.js (the ONLY sanctioned storage
+// access point; this file names no web-storage global).
+// A stored location renders immediately and suppresses the auto geolocation prompt
+// (03-ux F7/F2, adr/009); `viewedDate` is deliberately NOT persisted and still resets
+// to today (CTO decision on the card).
 
 import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.2.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.2.0';
 import { createGeocoder, isAbortError } from './geocoder.js?v=2.2.0';
+import { get as storeGet, remove as storeRemove, set as storeSet } from './session-store.js?v=2.2.0';
 
 /**
  * Quality glyph per Slot.tier (03-ux §4.1: ✓✓ / ✓ / ○ / ✕). Always paired with the
@@ -72,6 +84,17 @@ const GEOLOCATION_WATCHDOG_MS = GEOLOCATION_OPTIONS.timeout + 2000;
 const SLOT_COUNT = 8;
 
 /**
+ * session-store.js keys for the three persisted settings (CTO decision, FE-1 card).
+ * session-store's nsKey() is idempotent, so the fully-qualified `choghadiya.*` form is
+ * used verbatim and is not double-prefixed.
+ */
+const SETTINGS_KEYS = Object.freeze({
+  timeFormat: 'choghadiya.settings.timeFormat', // '12h' | '24h'
+  lang: 'choghadiya.settings.lang', // 'hi' | 'en'
+  location: 'choghadiya.settings.location', // { lat, lon, timezone, label }
+});
+
+/**
  * Current-slot poll interval (US-14 AC4, PRD Q2 default = auto-update). 60 s is the
  * spec ceiling ("≤ 60 s"); a tick is a pure re-evaluation of the visible schedule and
  * writes to the DOM only when the current slot actually changed.
@@ -87,7 +110,8 @@ const SLOT_POLL_MS = 60000;
  * (FE-04, S6) can re-submit the same query.
  */
 const state = {
-  lang: DEFAULT_LANG, // "hi" — client default, 03-ux §2 F6
+  lang: DEFAULT_LANG, // "hi" — client default, 03-ux §2 F6; hydrated from session-store (FE-1)
+  hourCycle: 'h12', // 'h12' | 'h23' — 12-hour default (v2.3.0 CR1); hydrated from session-store (FE-1)
   location: null, // Location | null — set by geolocation or a selected city (FE-03)
   viewedDate: null, // "YYYY-MM-DD" at state.location.timezone
   schedule: null, // Schedule for viewedDate at state.location (04-arch §4.1)
@@ -125,9 +149,12 @@ let appliedCurrentKey;
 
 function init() {
   dom.html = document.documentElement;
-  dom.langGroup = document.querySelector('.lang-toggle');
+  dom.langGroup = document.getElementById('lang-toggle');
   dom.bHi = document.getElementById('b-hi');
   dom.bEn = document.getElementById('b-en');
+  dom.timeGroup = document.getElementById('time-toggle');
+  dom.bH12 = document.getElementById('b-h12');
+  dom.bH24 = document.getElementById('b-h24');
   dom.locChip = document.getElementById('loc-chip');
   dom.locName = document.getElementById('loc-name');
   dom.locClear = document.getElementById('loc-clear');
@@ -162,6 +189,9 @@ function init() {
 
   dom.bHi.addEventListener('click', () => setLang('hi'));
   dom.bEn.addEventListener('click', () => setLang('en'));
+  // --- FE-1: 12h/24h toggle (v2.3.0 CR1) ---------------------------------------
+  dom.bH12.addEventListener('click', () => setHourCycle('h12'));
+  dom.bH24.addEventListener('click', () => setHourCycle('h23'));
   dom.prev.addEventListener('click', () => stepDay(-1));
   dom.next.addEventListener('click', () => stepDay(1));
   dom.todayPill.addEventListener('click', goToToday);
@@ -199,8 +229,12 @@ function init() {
   document.addEventListener('keydown', onDateShortcut);
   startSlotPoll();
 
-  render(); // S4: shell + skeleton lists, no location yet (never blocking)
-  scheduleGeolocation(); // requested AFTER first paint (US-4 AC1)
+  hydrateSettings(); // FE-1: restore timeFormat / lang / location before the first render
+  render(); // S4: shell + skeleton lists (or the hydrated location), never blocking
+  // FE-1: only prompt for geolocation when no location was restored. A stored location
+  // renders immediately above and skips the prompt (03-ux F7 step 1 / F2; the S5
+  // notice's city button is the on-demand re-trigger).
+  if (!state.location) scheduleGeolocation(); // requested AFTER first paint (US-4 AC1)
 }
 
 /* ------------------------------------------------------------------ */
@@ -211,8 +245,110 @@ function init() {
 function setLang(lang) {
   if (lang === state.lang) return;
   state.lang = lang;
+  persistSettings.lang();
   render();
 }
+
+/**
+ * v2.3.0 CR1 / 03-ux F7 — flip the 12h/24h display cycle and re-render every visible
+ * time in one synchronous pass (both lists, the boundary small print, the S8/S9 ranges
+ * when those render, and the S2 result rows). No reload and no re-computation of the
+ * solar instants: only the display changes. Persisted per tab through session-store.
+ */
+function setHourCycle(hourCycle) {
+  if (hourCycle === state.hourCycle) return;
+  state.hourCycle = hourCycle;
+  persistSettings.timeFormat();
+  render();
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings persistence (FE-1, v2.3.0 item 7a)                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Restore the three persisted settings before the first render (CTO decisions on the
+ * card): timeFormat ('12h' default), lang ('hi' default) and location (none default).
+ * `viewedDate` is deliberately NOT persisted — it always resets to the location's today.
+ * Every read goes through session-store.js, whose in-memory fallback keeps this working
+ * in private mode / when storage is disabled.
+ */
+function hydrateSettings() {
+  const storedLang = storeGet(SETTINGS_KEYS.lang);
+  if (storedLang === 'hi' || storedLang === 'en') state.lang = storedLang;
+
+  const storedFormat = storeGet(SETTINGS_KEYS.timeFormat);
+  if (storedFormat === '12h' || storedFormat === '24h') {
+    state.hourCycle = storedFormat === '24h' ? 'h23' : 'h12';
+  }
+
+  const location = normaliseStoredLocation(storeGet(SETTINGS_KEYS.location));
+  if (location) {
+    state.location = location;
+    state.ui.loading = false;
+    state.ui.notice = null;
+    state.viewedDate = todayAtLocation(); // "today" is the restored location's civil date
+  }
+}
+
+/**
+ * Validate and adapt a stored `{ lat, lon, timezone, label }` record to an AppState
+ * Location. Anything malformed (missing/invalid coords, a non-string or unknown IANA
+ * zone) is rejected so a corrupt entry can never crash init or leak into buildSchedule.
+ * `source` is derived: a non-empty label means a chosen city, an empty one a device fix
+ * (matching onGeoSuccess/selectResult), so the chip re-renders correctly on reload.
+ */
+function normaliseStoredLocation(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const { lat, lon, timezone, label } = raw;
+  if (typeof lat !== 'number' || !Number.isFinite(lat)) return null;
+  if (typeof lon !== 'number' || !Number.isFinite(lon)) return null;
+  if (typeof timezone !== 'string' || !isValidTimeZone(timezone)) return null;
+  const cityLabel = typeof label === 'string' ? label : '';
+  return {
+    latitude: lat,
+    longitude: lon,
+    timezone,
+    label: cityLabel,
+    source: cityLabel ? 'city' : 'geolocation',
+  };
+}
+
+/** True when `timeZone` is an IANA zone the host Intl accepts (never throws). */
+function isValidTimeZone(timeZone) {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The three settings writers — each the only place its key is written, so a change to
+ * the persistence shape stays in one spot. session-store serialises and swallows any
+ * storage failure (its in-memory fallback keeps the app running).
+ */
+const persistSettings = Object.freeze({
+  timeFormat() {
+    storeSet(SETTINGS_KEYS.timeFormat, state.hourCycle === 'h23' ? '24h' : '12h');
+  },
+  lang() {
+    storeSet(SETTINGS_KEYS.lang, state.lang);
+  },
+  location() {
+    if (!state.location) {
+      storeRemove(SETTINGS_KEYS.location);
+      return;
+    }
+    storeSet(SETTINGS_KEYS.location, {
+      lat: state.location.latitude,
+      lon: state.location.longitude,
+      timezone: state.location.timezone,
+      label: state.location.label,
+    });
+  },
+});
 
 /** US-13 AC1/AC2 — step the viewed date by ±1 civil day and re-render both lists. */
 function stepDay(delta) {
@@ -301,6 +437,7 @@ function onGeoSuccess(position) {
   state.ui.loading = false;
   state.ui.notice = null;
   state.viewedDate = todayAtLocation();
+  persistSettings.location(); // FE-1: remember the device fix so a reload skips the prompt
   render();
 }
 
@@ -482,7 +619,7 @@ function renderResults(results) {
     const place = document.createElement('span');
     place.className = 'r2';
     const region = [result.admin1, result.country].filter(Boolean).join(', ');
-    const localTime = safeFormatTime(now, result.timezone, lang);
+    const localTime = safeFormatTime(now, result.timezone, lang, state.hourCycle);
     place.textContent = [region, localTime].filter(Boolean).join(' · ');
 
     button.append(name, place);
@@ -494,10 +631,10 @@ function renderResults(results) {
 }
 
 /** formatTime in a possibly-missing/unknown IANA zone — never NaN/Invalid (04-arch §8.1). */
-function safeFormatTime(instant, timeZone, lang) {
+function safeFormatTime(instant, timeZone, lang, hourCycle) {
   if (!timeZone) return '';
   try {
-    return formatTime(instant, timeZone, lang);
+    return formatTime(instant, timeZone, lang, { hourCycle });
   } catch {
     return '';
   }
@@ -523,6 +660,7 @@ function selectResult(result) {
   dom.cityInput.value = '';
   state.viewedDate = todayAtLocation();
   collapseSlots();
+  persistSettings.location(); // FE-1: a manual city choice overwrites the stored location
   render();
   dom.sheet.close(); // focus return happens in onSheetClose
 }
@@ -544,6 +682,7 @@ function clearLocation() {
   state.ui.loading = false;
   state.ui.notice = null;
   collapseSlots();
+  persistSettings.location(); // FE-1: forget the stored location (session-store remove)
   render();
   openSheet();
 }
@@ -775,6 +914,16 @@ function applyDictionary() {
   dom.bEn.textContent = t('lang.en', lang);
   dom.bHi.setAttribute('aria-pressed', String(lang === 'hi'));
   dom.bEn.setAttribute('aria-pressed', String(lang === 'en'));
+  // --- FE-1: the 12h/24h segmented toggle (v2.3.0 CR1, 03-ux §3.10a) --------------
+  // The visible "12h"/"24h" labels are byte-identical in HI and EN, so they never flip;
+  // only the group aria-label and the two spoken option aria-labels are re-localised.
+  dom.timeGroup.setAttribute('aria-label', t('time.toggle.label', lang));
+  dom.bH12.textContent = t('time.h12', lang);
+  dom.bH24.textContent = t('time.h24', lang);
+  dom.bH12.setAttribute('aria-label', t('time.h12.a11y', lang));
+  dom.bH24.setAttribute('aria-label', t('time.h24.a11y', lang));
+  dom.bH12.setAttribute('aria-pressed', String(state.hourCycle === 'h12'));
+  dom.bH24.setAttribute('aria-pressed', String(state.hourCycle === 'h23'));
   dom.prev.setAttribute('aria-label', t('date.prev', lang));
   dom.next.setAttribute('aria-label', t('date.next', lang));
   dom.locChip.setAttribute('aria-label', t('loc.change', lang));
@@ -919,13 +1068,14 @@ function clearBoundaries() {
 }
 
 /**
- * `"सूर्योदय 06:32"` — dictionary label + 24-hour time in the location's clock.
- * Returns '' (rather than `undefined`/`Invalid Date`) when the instant is unusable,
- * so a degraded schedule can never leak a broken time into the small print (US-9 AC2).
+ * `"सूर्योदय 06:32 am"` — dictionary label + the active time format (12h default) in the
+ * location's clock. Returns '' (rather than `undefined`/`Invalid Date`) when the instant
+ * is unusable, so a degraded schedule can never leak a broken time into the small print
+ * (US-9 AC2).
  */
 function boundary(key, instant, timeZone, lang) {
   if (!isRealInstant(instant)) return '';
-  const clock = safeFormatTime(instant, timeZone, lang);
+  const clock = safeFormatTime(instant, timeZone, lang, state.hourCycle);
   return clock ? `${t(key, lang)} ${clock}` : '';
 }
 
@@ -955,9 +1105,9 @@ function setRows(list, slots) {
 
 /**
  * One slot row: a single <button> (whole row is the tap/keyboard target, ≥ 56 px)
- * with the 03-ux §3 zones — name (both scripts in the active language), 24-hour
- * range, quality chip (tier word + glyph) — plus the FE-05 disclosure line. Built
- * with createElement/textContent only (NFR-S2).
+ * with the 03-ux §3 zones — name (both scripts in the active language), time range in
+ * the active format (12h default, v2.3.0 CR1), quality chip (tier word + glyph) — plus
+ * the FE-05 disclosure line. Built with createElement/textContent only (NFR-S2).
  *
  * The button carries `aria-expanded` + `aria-controls` for its `.meaning` line and
  * stages the accessible-name parts on `dataset`; `syncCurrentSlot()` completes the
@@ -966,9 +1116,9 @@ function setRows(list, slots) {
  */
 function slotRow(slot) {
   const { timezone } = state.location;
-  const { lang } = state;
-  const from = formatTime(slot.start, timezone, lang);
-  const to = formatTime(slot.end, timezone, lang);
+  const { lang, hourCycle } = state;
+  const from = formatTime(slot.start, timezone, lang, { hourCycle });
+  const to = formatTime(slot.end, timezone, lang, { hourCycle });
   const latinName = t(`quality.${slot.name}`, 'en');
   const localName = t(`quality.${slot.name}`, lang);
   const tierWord = t(`tier.${slot.tier}`, lang);
@@ -994,7 +1144,7 @@ function slotRow(slot) {
   name.className = 'slot-name';
   name.textContent = lang === 'hi' ? `${localName} · ${latinName}` : latinName;
 
-  // Zone 3 — 24-hour range in the viewed location's timezone (03-ux §8 note).
+  // Zone 3 — time range in the viewed location's timezone, active format (03-ux §8 note).
   const time = document.createElement('span');
   time.className = 'time';
   time.textContent = `${from} – ${to}`;

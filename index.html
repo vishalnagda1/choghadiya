@@ -30,9 +30,22 @@
         <h1 data-i18n="app.title">चौघड़िया</h1>
         <span class="brand-sub" data-i18n="app.subtitle">आज का शुभ मुहूर्त</span>
       </div>
-      <div class="lang-toggle" role="group" aria-label="भाषा">
+      <div class="segmented" id="lang-toggle" role="group" aria-label="भाषा">
         <button type="button" id="b-hi" aria-pressed="true">हिं</button>
         <button type="button" id="b-en" aria-pressed="false">EN</button>
+      </div>
+      <!-- Time-format toggle (v2.3.0 CR1, 03-ux §3.10a/F7): the same `.segmented`
+           component as the language toggle, adjacent to it, so the header reads as a
+           two-control settings cluster. 12h is the default on a first visit and the
+           choice is persisted per tab via session-store.js (choghadiya.settings.
+           timeFormat). Both options are word+glyph-free aria-pressed buttons; the
+           visible "12h"/"24h" labels are byte-identical in HI and EN (time.h12 /
+           time.h24), and each carries a spoken aria-label (time.h12.a11y /
+           time.h24.a11y) because "12h" alone is terse for a screen reader. Filled by
+           app.js applyDictionary() exactly like the language toggle above. -->
+      <div class="segmented" id="time-toggle" role="group" aria-label="समय प्रारूप">
+        <button type="button" id="b-h12" aria-pressed="true" aria-label="12 घंटे का प्रारूप">12h</button>
+        <button type="button" id="b-h24" aria-pressed="false" aria-label="24 घंटे का प्रारूप">24h</button>
       </div>
       <!-- Location field: the chip opens the sheet (S2); the trailing ✕ clears the
            chosen/geolocated location and re-opens the sheet (03-ux F2 step 7, US-5).
