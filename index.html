@@ -162,6 +162,24 @@
 
     </div>
 
+    <!-- ===== S8 inauspicious-periods block (v2.3.0 CR5, 03-ux §3.8) — FE-5.
+         A DATE-level fact, so it sits below both slot lists (page order §1.1) and
+         above S9. Rows are built by app.js renderPeriods() from the *Periods arrays
+         of computeInauspicious so every occurrence renders (Saturday legitimately has
+         two Kaal Velas and two Kaal Ratris, docs/01 §11.3) — never from the
+         first-occurrence scalars, which would silently drop the second window.
+         Placement/visibility: the whole section is `hidden` while there is no
+         location and while the schedule is not defined (S3 already says why), so the
+         heading can never appear alone. Nothing here is tappable (§3.8): the three
+         static nodes below are dictionary copy filled by applyDictionary(); their
+         fallback text is the `hi` value, pinned by tests/i18n.test.js. ===== -->
+    <section class="periods" id="periods" hidden aria-labelledby="periods-h">
+      <h2 id="periods-h" data-i18n="periods.heading">अशुभ काल</h2>
+      <div class="periods__list" id="period-rows"></div>
+      <p class="periods__note" data-i18n="periods.note">इन अशुभ कालों में शुभ या मांगलिक कार्य शुरू न करें; यदि कोई अशुभ काल किसी शुभ चौघड़िया पर पड़े तो उसे भी टालें।</p>
+      <p class="periods__disclaimer" data-i18n="periods.disclaimer">ये पारंपरिक मान्यताएँ हैं, खगोलीय तथ्य नहीं।</p>
+    </section>
+
     <!-- ===== S3 not-defined state — polar / no sunrise-sunset (03-ux §3 S3, US-9).
          Both languages are shown at once ON PURPOSE: a user at 70° N may be reading
          in a language they did not set, and a single hard-failure string is not worth

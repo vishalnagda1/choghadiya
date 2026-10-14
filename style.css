@@ -890,6 +890,101 @@ footer.app {
 footer.app p { margin: 0 }
 
 /* ==========================================================================
+   S8 inauspicious-periods block (v2.3.0 CR5, 03-ux §3.8, §4.9) — FE-5
+   One --surface panel, --r-lg, --sp-4 padding; an <h2> heading on the same type step
+   as दिन/रात; `.period` rows are --surface-2 cards with name + range on line 1 and
+   the explanation on line 2. At >=900 px the rows form a two-column grid (the rule
+   line and disclaimer below the grid stay full width). The block is ONE shared
+   "avoid" class — --qual-inauspicious text on --surface / --surface-2 — never
+   colour-coded per period, never animated, and nothing here is tappable (§3.8).
+   ========================================================================== */
+
+.periods {
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-4);
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+.periods > h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  font-weight: 600;
+  color: var(--qual-inauspicious-fg);
+}
+.periods__list {
+  display: grid;
+  gap: var(--sp-2);
+}
+.period {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+}
+.period__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+}
+.period__name {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--qual-inauspicious-fg);
+}
+.period__range,
+.period__na {
+  font-size: var(--fs-base);
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.period__na { font-size: var(--fs-sm) }
+.period__date {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text-muted);
+  text-align: end;
+}
+.period__desc {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.periods__note {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.periods__disclaimer {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text-muted);
+}
+
+/* >=900 px: the period rows become a two-column grid; the rule line and disclaimer
+   below the grid are full width, i.e. they span both columns (03-ux §3.8). */
+@media (min-width: 900px) {
+  .periods__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+}
+
+/* <=419 px (the same band as the slot-row two-zone collapse): the range wraps under
+   the name rather than competing for the row's width (03-ux §4.9). */
+@media (max-width: 419px) {
+  .period__head { grid-template-columns: minmax(0, 1fr) }
+  .period__range,
+  .period__na { white-space: normal }
+}
+
+/* ==========================================================================
    Motion — 03-ux §4.6: exactly two transitions, both opted in only when the user has
    not asked for reduced motion. Nothing animates that is required to understand state.
    ========================================================================== */

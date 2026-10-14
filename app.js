@@ -48,6 +48,7 @@
 // no new dependency; `i18n.js` already carries `date.picker.label` / `date.picker.range`.
 
 import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.2.0';
+import { computeInauspicious } from './inauspicious.js?v=2.2.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.2.0';
 import { createGeocoder, isAbortError } from './geocoder.js?v=2.2.0';
 import { get as storeGet, remove as storeRemove, set as storeSet } from './session-store.js?v=2.2.0';
@@ -92,6 +93,14 @@ const GEOLOCATION_WATCHDOG_MS = GEOLOCATION_OPTIONS.timeout + 2000;
 const SLOT_COUNT = 8;
 
 /**
+ * S8 (v2.3.0 CR5) — the three inauspicious periods in the engine's fixed reporting
+ * order (04-arch §16.2 / inauspicious.js PERIOD_NAMES). One row per occurrence per
+ * period; a period with no occurrence renders its `periods.notApplicable` state.
+ * The keys double as dictionary key parts: `periods.<name>` and `periods.<name>.desc`.
+ */
+const PERIOD_ORDER = Object.freeze(['vaarVela', 'kaalVela', 'kaalRatri']);
+
+/**
  * session-store.js keys for the three persisted settings (CTO decision, FE-1 card).
  * session-store's nsKey() is idempotent, so the fully-qualified `choghadiya.*` form is
  * used verbatim and is not double-prefixed.
@@ -123,6 +132,11 @@ const state = {
   location: null, // Location | null — set by geolocation or a selected city (FE-03)
   viewedDate: null, // "YYYY-MM-DD" at state.location.timezone
   schedule: null, // Schedule for viewedDate at state.location (04-arch §4.1)
+  // Inauspicious periods for viewedDate at state.location (04-arch §16.2), or null
+  // when there is no location / the schedule is not defined. Exposed in app state so
+  // FE-6's detail panel can call overlappingPeriod(slot, state.inauspicious) without
+  // recomputing (03-ux §3.9). Never carries a NaN/Invalid Date (§16.2 contract).
+  inauspicious: null,
   ui: {
     sheetOpen: false,
     loading: true, // S4 — geolocation resolution in progress
@@ -208,6 +222,8 @@ function init() {
   dom.nightEdge = document.getElementById('night-edge');
   dom.daySmallprint = document.getElementById('day-smallprint');
   dom.nightSmallprint = document.getElementById('night-smallprint');
+  dom.periods = document.getElementById('periods');
+  dom.periodRows = document.getElementById('period-rows');
   dom.closeSheet = document.getElementById('close-sheet');
 
   dom.bHi.addEventListener('click', () => setLang('hi'));
@@ -1102,6 +1118,16 @@ function render() {
     ? buildSchedule({ location: state.location, date: state.viewedDate })
     : null;
 
+  // S8 — inauspicious periods for the SAME date + location (03-ux §3.8, 04-arch
+  // §16.2). Computed here so `state.inauspicious` is always consistent with the
+  // schedule the lists just rendered (FE-6 consumes it via overlappingPeriod()).
+  // No location → null (the block is hidden anyway). A polar date returns
+  // {defined:false} rather than throwing; a throw is contained by
+  // safeInauspicious() so a bad solar input can never take the whole render down.
+  state.inauspicious = state.location
+    ? safeInauspicious(state.viewedDate, state.location)
+    : null;
+
   dom.html.lang = state.lang; // US-11 AC5 — <html lang> flips hi <-> en
   applyDictionary();
   renderNotDefined();
@@ -1110,6 +1136,7 @@ function render() {
   renderDateBar();
   renderNotice();
   renderSections();
+  renderPeriods(); // CR5 — S8 renders from the *Periods arrays (all occurrences)
   syncCurrentSlot(true); // rows are freshly built — (re)apply the current-slot marker
 }
 
@@ -1300,6 +1327,136 @@ function renderSections() {
   dom.daySmallprint.textContent = boundary('section.set', state.schedule.sunset, timezone, lang);
   dom.nightEdge.textContent = boundary('section.set', state.schedule.sunset, timezone, lang);
   dom.nightSmallprint.textContent = boundary('section.nextRise', state.schedule.nextSunrise, timezone, lang);
+}
+
+/* ------------------------------------------------------------------ */
+/* S8 — inauspicious periods (v2.3.0 CR5, 03-ux §3.8)                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * computeInauspicious for a render, contained: the engine already degrades to
+ * `{defined:false}` for polar input and never leaks a NaN/Invalid Date, but a
+ * malformed date or location would throw — return null then, so S8 hides instead of
+ * taking the page down (US-9 AC2).
+ */
+function safeInauspicious(dateISO, location) {
+  try {
+    return computeInauspicious(dateISO, location);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * S8 block. Rendered only when there is a resolved location AND a defined schedule —
+ * i.e. exactly when the day/night lists render (03-ux §3.8 "Not defined (polar)": the
+ * whole block is not rendered, and the heading must never appear alone). Rows come
+ * from the additive `*Periods` arrays (EVERY occurrence), so Saturday's two Kaal
+ * Velas and two Kaal Ratris both render; a period with no occurrence renders
+ * `periods.notApplicable` in the range's slot. Re-runs on every render(), so date
+ * navigation/picker, location change, language toggle and time-format toggle all
+ * repaint it with no reload.
+ */
+function renderPeriods() {
+  const info = state.inauspicious;
+  // Gated on the SCHEDULE being defined, not on Inauspicious.defined: 03-ux §3.8 gates
+  // the block on Schedule.defined (the "Partial" state is exactly "Schedule.defined
+  // === true but one period is null" → that row reads periods.notApplicable). Polar /
+  // undefined sun makes the schedule undefined too, so the block hides with S3 — the
+  // heading can never appear alone.
+  const ready = Boolean(state.location)
+    && isRenderableSchedule(state.schedule)
+    && Boolean(info);
+
+  if (!ready) {
+    dom.periods.hidden = true;
+    dom.periodRows.replaceChildren(); // never leave a stale row set behind the block
+    return;
+  }
+
+  const rows = [];
+  for (const name of PERIOD_ORDER) {
+    const periods = info[`${name}Periods`];
+    if (Array.isArray(periods) && periods.length > 0) {
+      for (const period of periods) rows.push(periodRow(name, period));
+    } else {
+      rows.push(periodRow(name, null));
+    }
+  }
+  dom.periodRows.replaceChildren(...rows);
+  dom.periods.hidden = false;
+}
+
+/**
+ * One S8 row (03-ux §3.8 row anatomy, §4.9 classes): period name + time range (the
+ * active 12h/24h format, viewed location's zone) on line 1, the dictionary
+ * explanation on line 2. A null/unusable period shows `periods.notApplicable` in the
+ * range's slot instead of an empty range. Kaal Ratri can end on the next civil date
+ * (the Vedic day is sunset→sunrise), so a `· <date>` suffix is added only then —
+ * without it "03:28 am – 05:00 am" reads as the wrong night. createElement /
+ * textContent only (NFR-S2); nothing here is tappable (§3.8).
+ */
+function periodRow(name, period) {
+  const { timezone } = state.location;
+  const { lang } = state;
+
+  const row = document.createElement('div');
+  row.className = 'period';
+
+  const head = document.createElement('div');
+  head.className = 'period__head';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'period__name';
+  nameEl.textContent = t(`periods.${name}`, lang);
+
+  const from = period ? safeFormatTime(period.start, timezone, lang, state.hourCycle) : '';
+  const to = period ? safeFormatTime(period.end, timezone, lang, state.hourCycle) : '';
+
+  const range = document.createElement('span');
+  if (from && to) {
+    range.className = 'period__range';
+    range.textContent = `${from} – ${to}`;
+  } else {
+    // No occurrence, or the instants were unusable — never an empty range, never NaN.
+    range.className = 'period__na';
+    range.textContent = t('periods.notApplicable', lang);
+  }
+  head.append(nameEl, range);
+  row.append(head);
+
+  // Civil-date suffix — only when the period ends on a LATER civil date than the one
+  // on screen (docs/01 §11.3: only Kaal Ratri can). Same exported formatDate the rest
+  // of the page uses, in --fs-xs after a `·`.
+  if (from && to) {
+    const endISO = safeCivilDate(timezone, period.end);
+    const suffixLabel = endISO && endISO > state.viewedDate
+      ? safeFormatDate(endISO, timezone, lang)
+      : '';
+    if (suffixLabel) {
+      const suffix = document.createElement('p');
+      suffix.className = 'period__date';
+      suffix.textContent = `· ${suffixLabel}`;
+      row.append(suffix);
+    }
+  }
+
+  const desc = document.createElement('p');
+  desc.className = 'period__desc';
+  desc.textContent = t(`periods.${name}.desc`, lang);
+  row.append(desc);
+
+  return row;
+}
+
+/** Civil "YYYY-MM-DD" of an instant in a zone, or '' — never a NaN / Invalid Date. */
+function safeCivilDate(timeZone, instant) {
+  if (!timeZone || !isRealInstant(instant)) return '';
+  try {
+    return todayIn(timeZone, instant);
+  } catch {
+    return '';
+  }
 }
 
 /**
