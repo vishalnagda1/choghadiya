@@ -10,6 +10,38 @@ written in English.
 
 ---
 
+## [2.3.3] — 2026-10-14
+
+Discoverability release: search-engine, social-sharing and LLM metadata, and a
+static explainer page. App behaviour is unchanged from v2.3.2.
+
+### Added
+
+- **Search and sharing metadata** on the app page: description, canonical URL,
+  Open Graph / Twitter card tags with a 1200×630 share image
+  (`assets/og-image.png`), and schema.org `WebApplication` structured data.
+- **`about.html` — "चौघड़िया क्या है? · What is Choghadiya?"** A static,
+  bilingual page that works without JavaScript: how Choghadiya is calculated, the
+  seven types and what each is good for, the inauspicious periods, and an FAQ
+  (with `FAQPage` structured data). Its copy comes from `i18n.js`. Linked from the
+  app footer.
+- **`robots.txt`, `sitemap.xml` and `llms.txt`** (a plain summary of the site for
+  AI assistants).
+
+### Changed
+
+- The page title carries both names — "चौघड़िया — आज का शुभ मुहूर्त ·
+  Choghadiya" (and the reverse in English).
+
+### Verification
+
+`make check` exit 0: tests 108/108, SEC-22 greps 0 hits / 4 gates (about.html
+added to the shipped set; the site's own origin and schema.org allow-listed),
+smoke 69/69, axe PASS; axe clean on about.html at 1280/390/320 px in light and
+dark. Shipped JS 59.9 KB gzip.
+
+---
+
 ## [2.3.2] — 2026-10-14
 
 Date-bar polish: a themed calendar and a stable › button. App behaviour is
@@ -322,6 +354,7 @@ awareness or language toggle. Kept here as the version baseline (`package.json`
 `2.1.0`) that `v2.2.0` bumps from; it predates this repository's history.
 
 [Unreleased]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.1...HEAD
+[2.3.3]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/vishalnagda1/choghadiya/compare/v2.2.0...v2.3.0

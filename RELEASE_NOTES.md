@@ -1,12 +1,49 @@
 # Release Notes — Choghadiya
 
-**Current release: v2.3.2 (2026-10-14).** Previous release: v2.3.1. This file
-describes the current release in full; the v2.3.1 and v2.3.0 notes are kept below (and in
+**Current release: v2.3.3 (2026-10-14).** Previous release: v2.3.2. This file
+describes the current release in full; the v2.3.2, v2.3.1 and v2.3.0 notes are kept below (and in
 full in git history and [CHANGELOG.md](CHANGELOG.md)).
 
 ---
 
-## v2.3.2 — 2026-10-14 (current)
+## v2.3.3 — 2026-10-14 (current)
+
+**Release:** v2.3.3 (semver *patch* on the v2.3.2 baseline)
+**Date:** 2026-10-14
+**Target:** GitHub Pages — <https://time.gitick.com/>
+**Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
+
+### What this release is
+
+Making Choghadiya easier to find and share. The app itself is **unchanged from
+v2.3.2**.
+
+### Added
+
+- **Better search results and link previews.** Search engines now get a clear
+  description of the app, and links shared on WhatsApp, Facebook or X show a
+  title, description and a preview image.
+- **A "What is Choghadiya?" page** (<https://time.gitick.com/about.html>), in
+  Hindi and English: how Choghadiya is calculated, what Amrit, Shubh, Labh, Char,
+  Udveg, Rog and Kaal mean and what each is good for, the inauspicious periods,
+  and common questions. It's linked from the bottom of the app.
+- **Help for AI assistants and crawlers:** `llms.txt`, `robots.txt` and
+  `sitemap.xml`.
+
+### Changed
+
+- The browser tab title now shows both names: "चौघड़िया — आज का शुभ मुहूर्त ·
+  Choghadiya".
+
+### Verification
+
+`make check` exit 0 — tests 108/108, security greps 0 hits, smoke 69/69, axe
+PASS; the new page is accessibility-clean in light and dark at desktop and phone
+widths. Shipped JS 59.9 KB gzip, under the 60 KB budget.
+
+---
+
+## v2.3.2 — 2026-10-14 (previous release)
 
 **Release:** v2.3.2 (semver *patch* on the v2.3.1 baseline)
 **Date:** 2026-10-14

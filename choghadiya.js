@@ -14,7 +14,7 @@
 // the shipped graph without one. The vendored library stays PINNED by its filename
 // plus the byte checksum asserted in tests/choghadiya.test.js (ADR-003); the `?v=`
 // token is the app's ASSET_VERSION and is swept by `make bump` like every other one.
-import { getTimes } from './vendor/suncalc-2.1.1.js?v=2.3.2';
+import { getTimes } from './vendor/suncalc-2.1.1.js?v=2.3.3';
 
 /** Frozen design-time constants (docs/04-architecture.md §7). */
 export const CONFIG = Object.freeze({
