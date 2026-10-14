@@ -727,3 +727,227 @@ Kalam.** If a night trikalam is ever wanted, that rule needs its own research pa
 - MySmartCoPilot — Rahu Kaal timings (Rashtriya Panchang sunrise rule; night Yamaganda/Gulika rule; "Rahu kalam is given for the daytime only") — https://mysmartcopilot.com/tools/rahu-kaal-timings/
 - Kartama — Rahu Kalam Calculator (formula + 7-weekday segment table) — https://kartama.com/app/rahu-kalam-calculator/
 - (Unreliable — do not cite) https://www.webjyotishi.com/vaar.jsp
+
+---
+
+## 12. v2.3.0 addendum — choghadiya meanings (EN/HI)
+
+Content for the current-choghadiya detail panel (brief change-request item 6). Research
+only — no code. Everything below is written to be transcribed **verbatim** into the UX
+copy deck (`docs/03-ux.md` §6.1) and then into `i18n.js`. Hindi is authored as natural
+Hindi UI prose (not a literal translation of the English) — see the caveat in §12.11.
+
+### 12.0 Executive summary
+
+- All **7 names × 4 fields** (meaning, goodFor, badFor, nuance) are complete in Hindi and English, in §12.2–§12.8.
+- The **quality tiers** match `docs/01` §5.1 and Drik Panchang: Amrit/Shubh/Labh are auspicious, **Char** is neutral-to-good (Drik counts it as the 4th *good* one), Rog/Kaal/Udveg are avoided. ✅
+- Each *avoided* name has a **traditional exception** — Udveg → government/administrative work; Rog → competition, debate and dispute settlement; Kaal → wealth accumulation, saving, repaying loans (Drik: "recommended for those activities which are performed to accumulate wealth"). All three are sourced, not invented.
+- **Day vs night: the seven names keep the same quality in both halves** — every live panchang checked labels the night slots with the same ✓/✗ as the day slots (Drik, muhuratchoghadiya, ganeshaspeaks). The genuine differences are (a) the night sequence, (b) the *overlay* periods (Vaar Vela/Kaal Vela/Rahu Kalam are daytime-only; **Kaal Ratri** is the night overlay — RS-1 §11.1–11.4), and (c) typical use: the night grid is consulted for night travel and night-shift beginnings, and the pre-dawn Amrit (Brahma Muhurta) is for meditation/sadhana.
+- Overlap precedence is **well attested**: an inauspicious overlay beats an auspicious choghadiya ("even an Amrit Choghadiya during Rahu Kaal should be treated with caution — the inauspicious overlay takes precedence"). The item-6 note copy in §12.9 encodes exactly that.
+- **Contextual-note copy** for the panel (current-marker, the three-tier quality notes, the overlap warning, the "select a slot" prompt) is in §12.9, including a parameterised `panel.note.overlay` key that takes the period name so the four overlap variants share one string.
+- **Proposed i18n keys** use `panel.<name>.<field>` (§12.1); ~40 new keys in total — the UX card merges them into §6.1 and FE-0 into the dictionary.
+- **Nothing here contradicts RS-1.** Item 5's period names are Vaar Vela / Kaal Vela / Kaal Ratri (+ optional Rahu Kaal); this section only *references* them in note copy.
+- Every claim carries a source cell; full URLs in §12.12. No unsourced claim ships.
+- **Residual risk (flagged):** the Hindi strings are a single author's idiomatic draft — they need one native-speaker proofread before release (they are UI copy, so a stylistic slip is cosmetic, but the i18n test locks strings byte-for-byte and re-editing them later costs a re-lock).
+
+### 12.1 The i18n key contract proposed here
+
+Convention (matches the existing §6 style — dotted, lower-camel):
+
+```
+panel.<name>.meaning    panel.<name>.goodFor    panel.<name>.badFor    panel.<name>.nuance
+```
+
+with `<name>` ∈ `amrit | shubh | labh | char | rog | kaal | udveg` (English slug, matching
+`quality.<name>` in §6). Labels/notes use `panel.label.*` and `panel.note.*`.
+
+Two implementation contracts the copy deck must carry:
+
+1. **`goodFor` / `badFor` are single strings** with items separated by ` · ` (space,
+   U+00B7 MIDDLE DOT, space). If the FE prefers an array, split on ` · ` — do not re-word
+   the items. One string per field keeps the i18n contract test simple (one key = one
+   verbatim value).
+2. **`panel.note.overlay` is parameterised** with `{period}` (interpolation already exists
+   in `t()`); `{period}` is filled with the *period-name* key (`period.vaarVela` etc.).
+   Four concrete fallback strings are provided in case the CTO prefers no interpolation.
+
+### 12.2 Amrit — अमृत (Moon, most auspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.amrit.meaning` | अमृत का अर्थ है अमृत यानी सर्वोत्तम — चंद्रमा का यह चौघड़िया सबसे शुभ माना जाता है, और इसमें शुरू किया गया काम अमृत जैसा मीठा व स्थायी फल देता है। | Amrit means "nectar" — ruled by the Moon, it is the most auspicious choghadiya, and a beginning made in it is said to give lasting, nectar-sweet results. | Drik tutorial "Amrit (Nectar) · Good · All type of works"; astronaad hi (सबसे शुभ, चंद्र स्वामी) |
+| `panel.amrit.goodFor` | कोई भी शुभ कार्य · यात्रा · व्यापार व हस्ताक्षर · दुकान या दफ़्तर का उद्घाटन · खरीदारी · पूजा-पाठ व मांगलिक कार्य · विवाह, सगाई व गृह प्रवेश | any auspicious work · travel · business and signing · opening a shop or office · purchases · worship and ceremonies · weddings, engagements and house-warming | Drik tutorial ("all type of works"); mpanchang 14-Oct-2026 slot labels (all works); muhuratchoghadiya hi (महत्वपूर्ण कार्य, यात्रा, पूजा-पाठ, विवाह); astronaad hi (यात्रा, हस्ताक्षर, खरीदारी, उद्घाटन, नया कार्य) |
+| `panel.amrit.badFor` | इसमें करने से बचने वाला कोई विशेष काम परंपरा में नहीं बताया गया; एकमात्र सावधानी यह है कि यदि इसी समय राहु काल, वार वेला, काल वेला या काल रात्रि पड़े तो शुभ कार्य टालें। | No activity is traditionally ruled out here; the one real caution is that an inauspicious overlay (Rahu Kaal, Vaar Vela, Kaal Vela or Kaal Ratri) cancels this window. | dekhopanchang (inauspicious overlay takes precedence); amrutkaal ("a Labh choghadiya can overlap Rahu Kaal, in which case most practitioners wait") |
+| `panel.amrit.nuance` | दिन और रात दोनों में अमृत शुभ माना जाता है। रात का अमृत ध्यान-साधना, शांति पाठ और मांगलिक चर्चा के लिए विशेष रूप से उत्तम कहा गया है; भोर का अमृत ब्रह्म मुहूर्त का समय है। | Amrit is auspicious in both halves. The night Amrit is singled out for meditation, sadhana, peace chanting and auspicious discussions, and the pre-dawn Amrit is the classic Brahma Muhurta hour. | srimandir hi (रात का अमृत: मांगलिक चर्चा, शांति पाठ, पूजा; तड़के 04:14–05:35 "ब्रह्म मुहूर्त का यह समय ध्यान और साधना के लिए सर्वोत्तम"); Drik (day and night both divided into eight) |
+
+### 12.3 Shubh — शुभ (Jupiter, auspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.shubh.meaning` | शुभ का अर्थ है मंगलकारी। गुरु (बृहस्पति) के स्वामित्व वाला यह चौघड़िया संस्कार, पूजा और शुभ अवसरों के लिए अत्यंत उपयुक्त माना जाता है। | Shubh means "auspicious" — ruled by Jupiter, it is held to be most suitable for sacraments, worship and fortunate occasions. | Drik tutorial "Shubh (Auspicious) · Good · Marriage, Religious activities"; bhaktilok hi; bhaktiarohan |
+| `panel.shubh.goodFor` | पूजा व धार्मिक अनुष्ठान · विवाह, सगाई व मुंडन · गृह प्रवेश व भूमि पूजन · विद्यारंभ और पढ़ाई · व्रत-उपवास का आरंभ · परिवार से जुड़े शुभ निर्णय | worship and religious rituals · weddings, engagements and mundan · house-warming and bhumi pujan · beginning education · starting vows or fasts · auspicious family decisions | Drik tutorial (marriage, religious); mpanchang (marriage, religious, education); bhaktilok hi (विवाह, धार्मिक अनुष्ठान, गृह प्रवेश, विद्यारंभ, यज्ञ) |
+| `panel.shubh.badFor` | कोई कठोर निषेध नहीं, पर व्यापार-लेन-देन के लिए लाभ और यात्रा के लिए चर या अमृत को प्राथमिकता दी जाती है; अशुभ काल से टकराव पर शुभ कार्य टालें। | No hard prohibition, but trade and transactions traditionally prefer Labh and travel prefers Char or Amrit; an inauspicious overlay still cancels it. | Drik tutorial (per-name recommended works differ); dekhopanchang (overlay precedence) |
+| `panel.shubh.nuance` | दोनों अर्धों में शुभ शुभ ही रहता है; रात के शुभ को आध्यात्मिक कार्य और अगले दिन की योजना बनाने के लिए अच्छा बताया गया है। | Shubh stays auspicious in both halves; the night Shubh is described as good for spiritual work and for planning the next day. | srimandir hi (तड़के का शुभ: "नए दिन की योजना या आध्यात्मिक कार्यों के लिए शुभ"); muhuratchoghadiya hi (रात्रि-कार्य: रात का अमृत व शुभ) |
+
+### 12.4 Labh — लाभ (Mercury, auspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.labh.meaning` | लाभ का अर्थ है प्राप्ति या मुनाफ़ा। बुध के स्वामित्व वाला यह चौघड़िया व्यापार, धन और विद्या से जुड़ी शुरुआतों के लिए शुभ माना जाता है। | Labh means "gain" — ruled by Mercury, it is the choghadiya of profit, trade and learning. | Drik tutorial "Labh (Profit) · Good · Start Business, Education, etc."; astromedha |
+| `panel.labh.goodFor` | नया व्यापार या उद्यम · नया खाता, निवेश या लेन-देन · नौकरी और साक्षात्कार · पढ़ाई या कोर्स का आरंभ · खरीद-बिक्री व अनुबंध · हिसाब-किताब और बिक्री | starting a business or venture · opening an account, investing, transactions · jobs and interviews · beginning study or a course · buying, selling and contracts · accounts and sales | mpanchang slot labels ("Start new business, Education"); Drik tutorial; muhuratchoghadiya hi (व्यापार, निवेश, धन-सम्बन्धी कार्य); srimandir hi (व्यापार, धन लाभ, व्यावसायिक बैठकें); bhaktilok hi (नया खाता खोलना, निवेश, क्रय-विक्रय) |
+| `panel.labh.badFor` | विवाह या पूजा जैसे मांगलिक कार्यों के लिए यह पहली पसंद नहीं माना जाता (उनके लिए अमृत या शुभ); राहु काल या काल वेला जैसे अशुभ काल से टकराव पर शुभ कार्य टालें। | Not the first choice for ceremonials such as weddings or worship (those prefer Amrit or Shubh); an inauspicious overlay (Rahu Kaal, Kaal Vela) still cancels it. | Drik tutorial (per-name mapping); dekhopanchang (overlay precedence) |
+| `panel.labh.nuance` | दोनों अर्धों में शुभ; रात के लाभ को व्यापारिक हिसाब-किताब और योजना बनाने के लिए अनुकूल बताया गया है। | Auspicious in both halves; the night Labh is described as favourable for business accounts and planning. | srimandir hi (रात का लाभ: "व्यापारिक हिसाब-किताब या योजना बनाने के लिए अनुकूल"); ganeshaspeaks hi (रात चौघड़िया: लाभ-उन्नति) |
+
+### 12.5 Char — चर (Venus, neutral-to-good)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.char.meaning` | चर का अर्थ है चलता हुआ यानी गतिशील। शुक्र के स्वामित्व वाला यह चौघड़िया यात्रा और गमन के लिए सर्वोत्तम है, और बाकी कामों के लिए सामान्य-से-अच्छा माना जाता है। | Char means "moving" — ruled by Venus, it is the classic window for travel and movement, and neutral-to-good for everything else. | Drik tutorial "Char (Moving) · Good · Travel"; astronaad hi (चर — तटस्थ, स्वामी शुक्र) |
+| `panel.char.goodFor` | यात्रा का आरंभ · वाहन खरीदना या चलाना · स्थान बदलना · बैठकें · नियमित रोज़मर्रा के काम · कला, संगीत और नृत्य | starting a journey · buying or running a vehicle · relocation · meetings · routine everyday work · art, music and dance | Drik tutorial (travel); mpanchang slot labels ("Travel, Beauty/Dance/Cultural activities"); srimandir hi (वाहन खरीदना, मशीनरी चालू करना); astronaad hi (दैनिक कार्य, बैठकें) |
+| `panel.char.badFor` | स्थायी या दीर्घकालीन कामों तथा विवाह व गृह प्रवेश जैसे मांगलिक कार्यों के लिए यह पहली पसंद नहीं है — उनके लिए अमृत या शुभ चुनें। | Not the first choice for permanent, long-term commitments or for ceremonies such as weddings and house-warming — those prefer Amrit or Shubh. | astronaad hi (चर का प्रबल उपयोग यात्रा/गमन; शेष काम सामान्य); Drik tutorial (mapping) |
+| `panel.char.nuance` | दिन का चर चार शुभ चौघड़ियों में गिना जाता है, और रात का चर भी यात्रा व गतिशील कामों के लिए उपयुक्त बताया जाता है — कुछ पंचांग इसे रात में सामान्य कहते हैं, वर्जित नहीं। | Day Char is counted among the four good windows, and night Char is also used for travel and movement — some panchangs call it neutral at night, never forbidden. | Drik choghadiya page ("There are four good Choghadiya, Amrit, Shubh, Labh and Char"); astronaad hi (रात चर = तटस्थ, यात्रा); srimandir hi (रात्रिकालीन यात्रा या गतिशीलता) |
+
+### 12.6 Rog — रोग (Mars, inauspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.rog.meaning` | रोग का अर्थ है बीमारी। मंगल के स्वामित्व वाला यह चौघड़िया अशुभ है; इसमें शुरू किया गया काम बीमारी, अड़चन या विवाद ला सकता है। | Rog means "disease" — ruled by Mars, it is inauspicious; work begun here is said to bring illness, obstruction or conflict. | Drik tutorial "Rog (Illness) · Bad"; srimandir hi (रोग काल में शुरू किए कार्य बीमारी, रुकावटें या विवाद) |
+| `panel.rog.goodFor` | शत्रु पर विजय और प्रतिस्पर्धा · वाद-विवाद, बहस और विवाद निपटाना · खेल या मुकाबले · (कुछ मत) युद्ध या आपात शल्य चिकित्सा | defeating enemies and competition · arguments, debate and dispute settlement · sports and contests · (some schools) warfare or emergency surgery | Drik tutorial ("Attack, War, Fights, Debate"); mpanchang slot labels ("Debate, Contest, Dispute Settlement"); dekhopanchang/astromangal (warfare, surgery, competitive activities); bhaktilok hi (शत्रु दमन, वाद-विवाद शांति कार्य) |
+| `panel.rog.badFor` | विवाह, पूजा, गृह प्रवेश, यात्रा, नया व्यापार या निवेश और हस्ताक्षर — किसी भी शुभ या मांगलिक कार्य की शुरुआत | weddings, worship, house-warming, travel, new business or investment and signing — any auspicious or ceremonial beginning | bhaktilok hi ("शुभ कार्य सर्वथा वर्जित"); muhuratchoghadiya hi; srimandir hi (बीमारी, रुकावटें या विवाद) |
+| `panel.rog.nuance` | दोनों अर्धों में अशुभ; रात के रोग में शारीरिक कष्ट और तनाव से बचकर आराम करने की सलाह है, और किसी भी पंचांग में इसकी अशुभता घटती नहीं बताई गई। | Inauspicious in both halves; the night Rog is described as a time to rest and avoid stress, and no source consulted lifts the ban on new beginnings. | srimandir hi (रात का रोग: "शारीरिक कष्ट और तनाव से बचने के लिए आराम करें"); muhuratchoghadiya hi (रात रोग = ✗ अशुभ) |
+
+### 12.7 Kaal — काल (Saturn, inauspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.kaal.meaning` | काल का अर्थ है समय या मृत्यु। शनि के स्वामित्व वाला यह चौघड़िया अशुभ है — देरी, हानि और बाधा का समय, जिसमें नए शुभ काम वर्जित माने जाते हैं। | Kaal means "time/death" — ruled by Saturn, it is inauspicious, associated with delay, loss and obstruction, so auspicious beginnings are avoided. | Drik tutorial "Kaal (Death) · Bad"; srimandir hi (धन हानि, दुर्घटना का भय) |
+| `panel.kaal.goodFor` | धन संचय, बचत और निवेश · उधार चुकाना और दीर्घकालीन योजना · पहले से चल रहे काम को आगे बढ़ाना · कुछ परंपराएँ इसे पितृ कार्य या श्राद्ध के लिए स्वीकार करती हैं | accumulating wealth — savings and investments · repaying loans and long-term planning · continuing work already underway · some traditions accept it for ancestor rites (pitru karma / shraddh) | Drik choghadiya page ("Kala Choghadiya is recommended for those activities which are performed to accumulate wealth"); muhuratchoghadiya hi (धन-संचय, निवेश, उधार चुकाना, दीर्घकालीन बचत); astronaad hi (कुछ परंपराएँ इसे पितृ कार्यों के लिए स्वीकार करती हैं); ganeshaspeaks hi (धनोपार्जन हेतु लाभदायक) |
+| `panel.kaal.badFor` | यात्रा · विवाह व अन्य मांगलिक कार्य · नया काम या उद्घाटन · हस्ताक्षर · जोखिम भरे निवेश के निर्णय | travel · weddings and other ceremonials · new ventures or openings · signing · risky investment decisions | muhuratchoghadiya hi (काल में नया शुभ कार्य, यात्रा या विवाह-सम्बन्धी कार्य टालें); bhaktilok hi; srimandir hi (जोखिम भरे कामों से बचें) |
+| `panel.kaal.nuance` | दोनों में अशुभ; रात के काल में नए समझौते या रात्रिकालीन शुरुआत से बचने की सलाह है, और दिन के काल में जोखिम भरे काम से धन हानि का भय बताया जाता है। | Inauspicious in both halves; the night Kaal is specifically flagged for not making new agreements or starting anything overnight, while the day Kaal carries the traditional fear of financial loss. | srimandir hi (रात का काल: "किसी भी प्रकार के नए समझौते या रात्रिकालीन शुरुआत से बचें"); srimandir hi (दिन का काल: धन हानि की आशंका) |
+
+### 12.8 Udveg — उद्वेग (Sun, inauspicious)
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.udveg.meaning` | उद्वेग का अर्थ है बेचैनी या घबराहट। सूर्य के स्वामित्व वाला यह चौघड़िया अशुभ है; कहा जाता है कि इस समय किए काम में मानसिक तनाव और अड़चनें बढ़ती हैं। | Udveg means "agitation" — ruled by the Sun, it is inauspicious; work done in it is said to increase mental stress and friction. | Drik tutorial "Udveg (Anxiety) · Bad"; astronaad hi (चिंता — घर्षण); srimandir hi (मानसिक तनाव और परेशानियां) |
+| `panel.udveg.goodFor` | सरकारी और प्रशासनिक काम · सरकारी दफ़्तर या अधिकारियों से भेंट · अधिकार या नियम-कायदे से जुड़े काम | government and administrative work · visiting government offices or officials · work that needs authority or official process | Drik tutorial ("Government related work"); mpanchang slot labels; muhuratchoghadiya hi (सरकारी कार्य व अधिकारियों से भेंट); bhaktilok hi (सरकारी कार्य को छोड़कर अन्य निजी मांगलिक कार्यों से बचें) |
+| `panel.udveg.badFor` | विवाह, पूजा और गृह प्रवेश जैसे मांगलिक कार्य · नया व्यापार या उद्घाटन · यात्रा और निवेश · घरेलू शुभ कार्य | ceremonials such as weddings, worship and house-warming · new business or openings · travel and investment · auspicious domestic work | bhaktilok hi; srimandir hi (नए काम से बचें); muhuratchoghadiya hi (उद्वेग में नए कार्य टालें) |
+| `panel.udveg.nuance` | दोनों में अशुभ; रात के उद्वेग में मानसिक तनाव और घरेलू विवादों से बचने तथा जल्दबाज़ी न करने की सलाह दी जाती है। | Avoided in both halves; the night Udveg is advised specifically for staying clear of mental tension and domestic disputes, and for not rushing anything. | srimandir hi (रात का उद्वेग: "मानसिक तनाव और घरेलू विवादों से दूर रहें"); aajtak hi (रात्रि उद्वेग: जल्दबाज़ी से बचें) |
+
+### 12.9 Panel labels, badges and contextual notes
+
+Labels (one key each; the badge reuses the existing §6 key rather than duplicating it):
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.heading` | चौघड़िया का विवरण | Choghadiya details | UX-1 prose (this card's deliverable; no external claim) |
+| `panel.label.meaning` | अर्थ | Meaning | UX-1 prose |
+| `panel.label.goodFor` | इसके लिए शुभ | Good for | UX-1 prose |
+| `panel.label.badFor` | इससे बचें | Avoid | UX-1 prose |
+| `panel.label.nuance` | दिन व रात | Day & night | UX-1 prose |
+| `panel.selectPrompt` | विवरण देखने के लिए कोई चौघड़िया चुनें | Select a choghadiya to see its details | item 6 off-today behaviour (brief §Change log 6) |
+| `panel.note.tapAgain` | उसी चौघड़िया को दोबारा टैप करने पर आप वर्तमान चौघड़िया पर लौट आएँगे | Tap the same choghadiya again to return to the current one | item 6 interaction rule (brief §Change log 6) |
+
+Quality notes (tier-driven, shown with every selection):
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.note.current` | यह चौघड़िया अभी चल रहा है। | This choghadiya is running now. | item 6 (default = current ongoing choghadiya) |
+| `panel.note.auspicious` | यह शुभ चौघड़िया है — नया या मांगलिक काम शुरू करने के लिए अच्छा समय है। | This is an auspicious choghadiya — a good time to begin new or ceremonial work. | Drik choghadiya page (four good / three bad); astronaad hi |
+| `panel.note.neutral` | यह सामान्य चौघड़िया है — यात्रा और रोज़मर्रा के कामों के लिए ठीक है। | This is a neutral choghadiya — fine for travel and routine work. | astronaad hi (चर — तटस्थ, यात्रा) |
+| `panel.note.inauspicious` | यह अशुभ चौघड़िया है — नए या मांगलिक काम की शुरुआत टालें; जो काम चल रहा है वह जारी रखा जा सकता है। | This is an inauspicious choghadiya — avoid beginning new or ceremonial work; work already underway may continue. | getmuhurta (routine work already underway does not need to stop); Drik choghadiya page |
+
+Overlap warnings (the item-6 "Rahu Kaal overlaps this otherwise-good choghadiya" note).
+**Recommended single parameterised key**, `{period}` filled with a period-name key
+(`period.vaarVela` / `period.kaalVela` / `period.kaalRatri` / `period.rahuKaal` — names
+owned by RS-1/UX-1):
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.note.overlay` | इस शुभ चौघड़िया के भीतर {period} पड़ रहा है — इस समय शुभ काम शुरू न करें। | {period} overlaps this otherwise-good choghadiya — do not begin auspicious work now. | Drik tutorial ("adverse time of Vaar Vela, Kaal Vela and Kaal Ratri should be rejected as these might overlap with auspicious Muhurat timings"); dekhopanchang ("the inauspicious overlay takes precedence"); bhavnagar.city ("if a good Choghadiya coincides with Vaar Vela, Kaal Vela or Kaal Ratri its auspicious effect is destroyed") |
+
+Day-only vs night-only overlays are **not** a language detail but a data detail — the
+copy should name the period that actually overlaps (RS-1 §11.1: Vaar Vela and Kaal Vela are
+daytime, Kaal Ratri is the night overlay, Rahu Kalam is daytime-only). If the CTO prefers
+no interpolation, use these four concrete strings verbatim:
+
+| field | hi | en | source |
+|-------|----|----|--------|
+| `panel.note.overlay.rahuKaal` | इस शुभ चौघड़िया के भीतर राहु काल पड़ रहा है — इस समय शुभ काम शुरू न करें। | Rahu Kaal overlaps this otherwise-good choghadiya — do not begin auspicious work now. | as `panel.note.overlay` |
+| `panel.note.overlay.vaarVela` | इस शुभ चौघड़िया के भीतर वार वेला पड़ रही है — इस समय शुभ काम शुरू न करें। | Vaar Vela falls inside this otherwise-good choghadiya — do not begin auspicious work now. | as `panel.note.overlay` |
+| `panel.note.overlay.kaalVela` | इस शुभ चौघड़िया के भीतर काल वेला पड़ रही है — इस समय शुभ काम शुरू न करें। | Kaal Vela falls inside this otherwise-good choghadiya — do not begin auspicious work now. | as `panel.note.overlay` |
+| `panel.note.overlay.kaalRatri` | इस रात के चौघड़िया के भीतर काल रात्रि पड़ रही है — इस समय शुभ काम शुरू न करें। | Kaal Ratri falls inside this night choghadiya — do not begin auspicious work now. | as `panel.note.overlay` |
+
+Key count for the UX card: **28 content keys** (7 names × 4 fields) + **7 labels/prompts** + **4 quality notes** + **1 parameterised overlay key** (or 4 concrete ones) ≈ **40** new keys.
+
+### 12.10 Day-half vs night-half — the honest answer
+
+Checked question: does the tradition treat the *day* instance and the *night* instance of
+the same name differently? Findings:
+
+1. **Quality is the same.** Drik divides both halves into eight parts and publishes the same
+   good/bad verdict per name; the live night tables of muhuratchoghadiya and ganeshaspeaks
+   mark night Amrit/Shubh/Labh/Char ✓ and night Rog/Kaal/Udveg ✗ exactly as the day.
+   **No source consulted states that a name changes its quality between day and night.**
+2. **The differences that do exist are real and worth surfacing in the panel (they are the
+   `nuance` strings in §12.2–§12.8):**
+   - **Sequence/start** — the night grid is generated from a different starting point, so the
+     same name lands in different slots (already implemented; `docs/01` §5.3).
+   - **Which overlay can hit it** — daytime good slots can be overlaid by Vaar Vela,
+     Kaal Vela or Rahu Kalam; a *night* good slot can only be overlaid by **Kaal Ratri**
+     (RS-1 §11.1–11.4). This is the single most useful day/night distinction for the panel.
+   - **Typical use** — the day grid governs business, travel, worship, purchases and
+     new starts; the night grid is consulted mainly for **night travel and night-shift
+     beginnings** (amrutkaal), and the late-night/pre-dawn Amrit is the **meditation /
+     sadhana / planning** window (srimandir: the 04:14–05:35 slot is called Brahma Muhurta).
+   - **Practical weight** — many families only ever look at the day half; a "bad" night
+     slot is rarely disruptive because ceremonial work is hardly ever scheduled at night
+     (ganeshaspeaks/muhuratchoghadiya list both halves, but their guidance is day-centric).
+3. **Recommendation:** keep one meaning/goodFor/badFor set per name (no day/night
+   duplication) and put the difference entirely in `panel.nuance` + the overlay note. This
+   keeps the copy deck small and the i18n contract honest.
+
+### 12.11 Confidence, disagreements, and residual risk
+
+| Claim | Confidence | Basis |
+|-------|-----------|-------|
+| Quality tiers per name (Amrit/Shubh/Labh good, Char neutral-but-counted-good, Rog/Kaal/Udveg avoided) | **High** | Drik choghadiya page + tutorial, mpanchang live labels, bhaktilok, muhuratchoghadiya, ganeshaspeaks, aajtak — all agree |
+| The three "exceptions" (Udveg→government, Rog→competition/debate/surgery, Kaal→wealth accumulation) | **High** | Drik tutorial + Drik choghadiya page for all three; four more sites independently repeat them |
+| Overlay precedence (inauspicious period beats an auspicious choghadiya) | **High** | Drik tutorial, dekhopanchang, bhavnagar.city, amrutkaal, vidhata — five sources, same rule |
+| Night instances judged by the same quality words | **High** | published night tables (Drik, muhuratchoghadiya, ganeshaspeaks, astroyogi) |
+| The specific night-use notes (night Amrit = sadhana/planning, night Rog = rest, night Kaal = no new agreements, night Udveg = tension/disputes, 04:14 slot = Brahma Muhurta) | **Medium** | one detailed editorial panchang (srimandir) plus aajtak; these are interpretive elaborations, not classical rules — they are written as "described as / advised", never as fact |
+| Kaal accepted for pitru karma / shraddh | **Medium–Low** | astronaad hi states "कुछ परंपराएँ इसे पितृ कार्यों के लिए स्वीकार करती हैं"; no second source found — the copy says "some traditions accept", which is exactly what the source claims |
+| Hindi wording itself | **Medium** | idiomatic draft by a single author; needs one native-speaker proofread before release (see §12.0 last bullet) |
+| Content-farm contamination | **Avoided** | `choghadiya-meaning`-type SEO pages were read for orientation only; every shipped claim traces to Drik (primary comparison bar), mpanchang, ganeshaspeaks, astroyogi, bhaktilok or srimandir, plus the classical-text trail already recorded in RS-1 §11.8. `vedhoroscope.com` (one of the trendiest search hits) was **excluded** — its deployment returned "temporarily paused" and it could not be read. |
+
+### 12.12 Sources for this addendum (all accessed 2026-10-14)
+
+**Primary / live panchang (comparison bar: Drik)**
+- Drik Panchang — Choghadiya Muhurat tutorial: definition, "Choghadiya Lord and suggested activities" table (Udveg→government; Amrit→all works; Rog→attack/war/fights/debate; Labh→business/education; Shubh→marriage/religious; Char→travel; Kaal→wealth accumulation) — https://www.drikpanchang.com/tutorials/muhurat/daily/choghadiya-muhurat.html
+- Drik Panchang — Choghadiya page ("There are four good Choghadiya, Amrit, Shubh, Labh and Char, to start an auspicious work. Three bad Choghadiya, Rog, Kaal and Udveg, should be avoided."; "Kala Choghadiya is recommended for those activities which are performed to accumulate wealth.") — https://www.drikpanchang.com/muhurat/choghadiya.html
+- mpanchang — Choghadiya, New Delhi 14 Oct 2026 (per-slot "Recommended Activity" labels; Kaal Vela / Vaar Vela badges) — https://www.mpanchang.com/muhurat/choghadiya/
+- Ganeshaspeaks (Hindi) — आज का चौघड़िया, New Delhi 14 Oct 2026 (day+night tables with quality words; "सरकारी कार्यों को किया जा सकता है"; "काल चौघड़िया … धनोपार्जन हेतु लाभदायक"; Vaar Vela/Kaal Vela day, Kaal Ratri night) — https://www.ganeshaspeaks.com/hindi/choghadiya/
+- Muhurat Choghadiya (Hindi) — आज का चौघड़िया / कल का चौघड़िया (per-name exceptions: रोग→प्रतिस्पर्धा, काल→धन संचय, उद्वेग→सरकारी कार्य; यात्रा guidance) — https://www.muhuratchoghadiya.com/hi/choghadiya ; https://www.muhuratchoghadiya.com/hi/kal-ka-choghadiya
+- MyPandit (Hindi) — आज का चौघड़िया (same exception trio; उद्वेग/काल notes) — https://www.mypandit.com/hindi/choghadiya/
+- AstroYogi (Hindi) — कल का चौघड़िया (यात्रा → चर; नए कार्य → शुभ/लाभ/अमृत) — https://hindi.astroyogi.com/panchang/kal-ka-choghadiya
+- Aaj Tak (Hindi) — Shirdi Choghadiya (night Udveg "जल्दबाज़ी से बचें"; day/night classification) — https://www.aajtak.in/astrology/choghadiya/maharashtra/shirdi-choghadiya-today
+- Srimandir (Hindi) — आज का चौघड़िया, 16 July 2026 (per-slot day+night "कार्य के लिए उपयुक्तता", incl. the night-use notes and the 04:14 brahma-muhurta Amrit) — https://www.srimandir.com/hi/articles/choghadiya/aaj-ka-choghadiya-16-july-2026
+- Bhakti Lok (Hindi) — आज का चौघड़िया (per-name "फल व उपयुक्त कार्य"; रोग "शुभ कार्य सर्वथा वर्जित"; उद्वेग "सरकारी कार्य को छोड़कर … बचें") — https://www.bhaktilok.in/pages/choghadiya
+
+**Interpretation / usage guidance**
+- Astronaad (Hindi) — चौघड़िया का अर्थ (7 types with "सर्वोत्तम:" lines; रात चर तटस्थ; काल — "कुछ परंपराएँ इसे पितृ कार्यों के लिए स्वीकार करती हैं"; रोग — चिकित्सा प्रक्रियाओं के लिए प्रयुक्त) — https://astronaad.com/hi/learn/what-is-choghadiya
+- Dekho Panchang — Choghadiya: Auspicious Time Periods (per-name usage, "an inauspicious overlay takes precedence"; Muhurta Chintamani / Brihat Samhita Ch. 97 named as the classical basis) — https://dekhopanchang.com/en/learn/choghadiya
+- Amrutkaal — Choghadiya: Meaning and How to Use It ("night choghadiya matters for late travel and night-shift beginnings"; Rahu Kaal stronger than a good choghadiya) — https://www.amrutkaal.com/choghadiya-meaning/
+- Bhakti Arohan — Choghadiya: Reading the Day's Good and Bad Hours (7 kinds; four good / three avoided; day+night tables) — https://www.bhaktiarohan.com/en/muhurat/choghadiya
+- AstroMedha — Choghadiya (three auspicious / three inauspicious / one movable; "shopkeepers and travellers") — https://astromedha.in/insights/muhurat/choghadiya
+- Getmuhurta — Kaal, Rog, Udveg: Choghadiya Windows to Plan Around (routine work already underway need not stop; Kaal ≠ Rahu Kaal) — https://www.getmuhurta.com/blog/kaal-rog-udveg-in-choghadiya-how-to-plan
+- Vidhata (Hindi) — चौघड़िया बनाम राहुकाल ("राहुकाल चौघड़िया से ऊपर है"; myth-vs-reality framing) — https://vidhata.app/hi/blog/choghadiya-vs-rahu-kaal-which-window
+- HinduTone (Hindi) — चौघड़िया मुहूर्त: दिन-रात की तालिका कैसे पढ़ें (standard classification table; "अलग-अलग पंचांग छोटी-छोटी टिप्पणियाँ जोड़ते हैं, जैसे कुछ उद्वेग को सरकारी कार्य के लिए स्वीकार्य मानते हैं") — https://hindi.hindutone.com/astrology/choghadiya-muhurat-explained-how-to-read/
+- Bhavnagar.city — Choghadiya Muhurat (Gujarati; "if a good Choghadiya coincides with Vaar Vela, Kaal Vela or Kaal Ratri its auspicious effect is destroyed") — https://bhavnagar.city/choghadiya-muhurat/
+
+**Classical-text trail**
+- Muhurta Chintamani (Hindi edition, Internet Archive) — named as the classical basis by Dekho Panchang; **not read** for this card (401 MB scan) — https://archive.org/details/muhurta-chintamani-hindi
+
+**Excluded / not usable**
+- vedhoroscope.com — Choghadiya: 8 Segments Explained — search hit, deployment "temporarily paused", page unreadable; **not cited** — https://www.vedhoroscope.com/articles/choghadiya-8-segments-explained
+- astrologydivine.com choghadiya guide — HTTP 403 — **not cited**
