@@ -30,7 +30,8 @@ timings are correct in every season and for every latitude. See
   (New in [v2.3.0](#what-changed-in-v230).)
 - **12-hour clock by default** — every time is shown as `06:32 am`; a **12h / 24h
   toggle** in the header switches the whole app (`06:32`) with no reload. The
-  choice is remembered for the tab. (New in [v2.3.0](#what-changed-in-v230).)
+  choice is remembered across browser restarts. (New in
+  [v2.3.0](#what-changed-in-v230).)
 - **Location-aware** — asks the browser Geolocation API first; if that is
   unavailable or denied, search any city by name.
 - **Use-my-current-location button** — an explicit button inside the location
@@ -61,12 +62,12 @@ timings are correct in every season and for every latitude. See
 - **Qualities legible without colour** — every row carries a quality *word* and a
   glyph (✓✓ Amrit / ✓ auspicious / ○ neutral / ✕ inauspicious), and selecting a
   row opens its detail panel.
-- **Remembers your settings (per tab)** — the time format, language and last
-  chosen location survive a **reload** (in-tab `sessionStorage`), and successful
-  city searches are cached for **24 hours**, so a reload or a repeat search does
-  not re-hit the geocoder. Nothing is written to a server, and the cache clears
-  when the tab closes. See [Privacy & data](#privacy--data). (New in
-  [v2.3.0](#what-changed-in-v230).)
+- **Remembers your settings (in this browser)** — the time format, language and
+  last chosen location survive a **reload and a full browser restart** (in
+  `localStorage`), and successful city searches are cached for **24 hours**, so a
+  reload or a repeat search does not re-hit the geocoder. Settings never expire;
+  cached searches do, after 24 h. Nothing is written to a server. See
+  [Privacy & data](#privacy--data). (New in [v2.3.0](#what-changed-in-v230).)
 - **Graceful degradations** — geolocation denied, geocoder failure (with Retry),
   no city found, and polar locations with no sunrise/sunset all show a clear
   message; the periods block hides when the sun data is undefined. The app never
@@ -170,25 +171,31 @@ fully static and keyless:
 - The **only outbound user-derived data** is the city name you type into the
   search sheet, which is sent to the **Open-Meteo Geocoding API** to resolve a
   location. Sunrise/sunset math itself is fully offline (vendored `suncalc`).
-- **No server storage — local session cache only.** Since v2.3.0 the app keeps a
-  small amount of data in the browser's **`sessionStorage`** under the
-  `choghadiya.*` namespace. Nothing is ever sent to us; there is no server to
-  send it to.
-  - **What is cached:** (1) your **settings** — time format (12h/24h), language,
+- **No server storage — local cache only.** Since v2.3.0 the app keeps a small
+  amount of data in the browser's **`localStorage`** under the `choghadiya.*`
+  namespace. Nothing is ever sent to us; there is no server to send it to.
+  - **What is stored:** (1) your **settings** — time format (12h/24h), language,
     and the last chosen location (coordinates + timezone + label); and (2) the
     **geocode responses** for city names you have searched.
+  - **Settings never expire** — the time format, language and last location
+    survive a **reload and a full browser restart**; `localStorage` is not
+    per-tab and is not cleared when the tab closes.
   - **Geocode cache TTL: 24 hours** — a cached search is reused for 24 h and then
     refetched; the cache holds at most 64 entries (oldest evicted first).
-  - **Cleared on tab close:** `sessionStorage` is per-tab and per-session, so the
-    settings and the geocode cache are gone when the tab (or browser) is closed.
-    They survive a **reload**, not a fresh visit.
   - The app degrades silently to an in-memory cache if the browser blocks or
     disables web storage, and every access is wrapped so nothing ever throws.
+  - Clearing this origin's site data (via your browser's storage settings) is what
+    removes it — these are not cookies, and there is no toggle for them in the app.
 - Grep-able in the UI: the footer and the search sheet both carry the disclosure
-  line — "Your searched city name is sent to Open-Meteo to find coordinates. No
-  server storage — settings and recent searches stay only in this browser tab." —
-  and the geocoder credit. The old v2.2.0 "location is never stored" wording was
-  retired in v2.3.0, because it was no longer true.
+  line, verbatim from `i18n.js`:
+
+  > Your searched city name is sent to Open-Meteo to find coordinates. No server
+  > storage — settings stay in this browser with no expiry; recent searches and
+  > cached results expire after 24 hours.
+
+  The same surfaces carry the geocoder credit — see
+  [Attribution & licence](#attribution--licence). The old v2.2.0 "location is
+  never stored" wording was retired in v2.3.0, because it was no longer true.
 
 See [docs/02-prd.md](docs/02-prd.md) §6.3 for the privacy requirements and
 [docs/adr/009-session-scoped-storage.md](docs/adr/009-session-scoped-storage.md)
@@ -232,8 +239,8 @@ accessibility notes are in [docs/03-ux.md](docs/03-ux.md) §7.
   `choghadiya.js` (pure solar/schedule math, Node-importable) +
   `inauspicious.js` (pure Vaar Vela / Kaal Vela / Kaal Ratri math) +
   `geocoder.js` (Open-Meteo client) + `session-store.js` (namespaced
-  `sessionStorage` wrapper) + `i18n.js` (dictionary + `t()`).
-- **Performance:** shipped JS is **177.8 KB raw / 55.8 KB gzip** (upper bound,
+  `localStorage` wrapper) + `i18n.js` (dictionary + `t()`).
+- **Performance:** shipped JS is **184.9 KB raw / 58.5 KB gzip** (upper bound,
   7 files), inside the 60 KB min+gzip budget (NFR-P3); the smoke test prints the
   measured figure.
 - **Dev-only tooling:** `axe-core@4.10.2` (MPL-2.0), pinned exact, used only by
@@ -255,7 +262,7 @@ choghadiya/                     # repo root — deployed verbatim to GitHub Page
 ├── choghadiya.js               # pure solar + schedule math (Node-importable, no DOM)
 ├── inauspicious.js             # pure Vaar Vela / Kaal Vela / Kaal Ratri engine
 ├── geocoder.js                 # Open-Meteo geocoding client (cache, debounce, abort)
-├── session-store.js            # namespaced, TTL-capable sessionStorage wrapper
+├── session-store.js            # namespaced, TTL-capable localStorage wrapper
 ├── i18n.js                     # 122-key Hindi/English dictionary + t()
 ├── vendor/
 │   └── suncalc-2.1.1.js        # vendored ESM build, checksum-pinned
@@ -281,7 +288,7 @@ All via the `Makefile` (equivalents exist as `npm run <name>` for
 |---------|--------------|
 | `make dev` | Serve the repo root at `http://localhost:8080` (`PORT=…` to override). |
 | `make test` | Run the Node built-in test runner over `tests/` (unit + contract suites; no install, no network). |
-| `make smoke` | Headless-Chromium render smoke: 16 rows from the deterministic Mumbai fixture, EN/HI toggle, the S8 periods block, the S9 detail panel, the ±10-day picker, the 12h/24h toggle + session persistence, no `NaN`, no horizontal scroll, cache-busting + perf budget. |
+| `make smoke` | Headless-Chromium render smoke: 16 rows from the deterministic Mumbai fixture, EN/HI toggle, the S8 periods block, the S9 detail panel, the ±10-day picker, the 12h/24h toggle + localStorage-backed persistence, the item-7b geocode cache (write / 0-network-after-reload / TTL expiry), no `NaN`, no horizontal scroll, cache-busting + perf budget. |
 | `make axe` | axe-core accessibility scan (fails on any critical/serious violation). |
 | `make greps` | SEC-05/03/14/STORAGE source gate: fails on any HTML sink, inline style/handler, non-allow-listed origin, or a web-storage token outside `session-store.js` (pure Node, no deps). |
 | `make check` | The full gate: `test` + `greps` + `smoke` + `axe` (needs `npm ci` once). |
@@ -316,8 +323,11 @@ Pages verification, post-deploy smoke + Lighthouse FCP gate, and rollback — is
   minimal visible credit line in the footer:
   "Location search by Open-Meteo · Data from GeoNames · CC BY 4.0". Attribution
   cannot be removed (the v2.2.0 two-line wording was reduced, not dropped, in
-  v2.3.0). The in-app credit is plain text in v2.3.0; the licence hyperlinks are
-  a deferred follow-up (adding them would extend the CSP origin allow-list).
+  v2.3.0). In the shipped v2.3.0 build the three key words are **real
+  hyperlinks**: `Open-Meteo` → open-meteo.com, `GeoNames` → geonames.org and
+  `CC BY 4.0` → the licence deed (`creativecommons.org/licenses/by/4.0/`), each
+  with `rel="noopener noreferrer" target="_blank"` and built with DOM APIs only —
+  never `innerHTML`.
 - **Project licence:** MIT (see `package.json`).
 
 ---
@@ -336,10 +346,13 @@ The v2.3.0 release adds features and relaxes the privacy stance:
 - A **choghadiya detail panel** showing each slot's meaning, what it is good for,
   what to avoid, and a contextual note — with an overlap warning naming the
   inauspicious period that falls inside the shown slot.
-- **Session persistence of settings** (time format, language, last location) and
-  a **24-hour geocode cache**, both per-tab `sessionStorage`.
+- **Browser-persistent settings** (time format, language, last location) and a
+  **24-hour geocode cache**, both in `localStorage` — settings survive a full
+  browser restart and **never expire**; cached searches expire after 24 h.
+- **Attribution credit now carries live licence links** — the footer credit's
+  three key words hyperlink to Open-Meteo, GeoNames and the CC BY 4.0 deed.
 - **Privacy stance updated:** from v2.2.0's "no storage ever" to **"no server
-  storage; local session cache only"** (see [Privacy & data](#privacy--data) and
+  storage; local TTL-gated cache only"** (see [Privacy & data](#privacy--data) and
   [ADR-009](docs/adr/009-session-scoped-storage.md), which supersedes ADR-007 in
   part).
 

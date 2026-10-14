@@ -53,25 +53,26 @@ describe what is on `main` for this release.
   same row again — or reloading — returns to the current slot. When an
   inauspicious period overlaps the shown slot, the panel warns and **names the
   period**.
-- **Per-tab settings persistence and a 24-hour geocode cache (item 7).** A new
+- **Browser-persistent settings and a 24-hour geocode cache (item 7).** A new
   `session-store.js` provides a namespaced (`choghadiya.*`), TTL-capable
-  `sessionStorage` wrapper. The time format, language and last chosen location
-  persist across a **reload**; successful geocode responses are cached with a
-  **24 h TTL** (FIFO, capped at 64 entries), so a repeat search or a reload does
-  not re-hit the geocoder. Settings carry **no expiry**; cached responses expire
-  on the TTL. The store degrades silently to an in-memory fallback if web storage
-  is unavailable or throws.
+  `localStorage` wrapper. The time format, language and last chosen location
+  persist across a **reload and a full browser restart**; successful geocode
+  responses are cached with a **24 h TTL** (FIFO, capped at 64 entries), so a
+  repeat search or a reload does not re-hit the geocoder. Settings carry **no
+  expiry**; cached responses expire on the TTL. The store degrades silently to an
+  in-memory fallback if web storage is unavailable or throws.
 - **New test and gate coverage.** `session-store.js` and `inauspicious.js` join
   the shipped set; `scripts/security-greps.mjs` gains a **SEC-STORAGE** gate
   (web-storage tokens allowed only in `session-store.js`); the smoke test covers
-  the periods block, the detail panel, the picker, the 12h/24h toggle and
-  session persistence; the axe scan covers the panel and picker states.
+  the periods block, the detail panel, the picker, the 12h/24h toggle,
+  `localStorage`-backed persistence and the item-7b geocode cache; the axe scan
+  covers the panel and picker states.
 
 ### Changed
 
 - **Default time format is now 12-hour.** This is a **behaviour change** from
   v2.2.0, which rendered 24-hour ranges only. Users who prefer 24-hour times can
-  switch with the new header toggle; the choice persists for the tab.
+  switch with the new header toggle; the choice persists across browser restarts.
 - **Date navigation** gained a calendar picker and a document range (±10 civil
   days); prev/next remains and shares the same clamp.
 - **Slot rows are now selection controls** (`aria-pressed` + `aria-controls`) that
@@ -83,17 +84,21 @@ describe what is on `main` for this release.
   Open-Meteo's CC BY 4.0 terms (which require a link next to displayed location
   data) and GeoNames' CC BY 4.0 credit requirement:
   - the footer keeps one minimal credit line,
-    `Location search by Open-Meteo · Data from GeoNames · CC BY 4.0`;
-  - `privacy.line` was rewritten to the new storage stance: "Your searched city
-    name is sent to Open-Meteo to find coordinates. **No server storage** —
-    settings and recent searches stay only in this browser tab."
-  The credit ships as **plain text** in v2.3.0; the licence hyperlinks are a
-  deferred follow-up (adding them would extend the CSP origin allow-list).
+    `Location search by Open-Meteo · Data from GeoNames · CC BY 4.0`, whose three
+    key words are **real hyperlinks** — `Open-Meteo` → open-meteo.com, `GeoNames`
+    → geonames.org, `CC BY 4.0` → `creativecommons.org/licenses/by/4.0/` — built
+    with DOM APIs only (`rel="noopener noreferrer" target="_blank"`; never
+    `innerHTML`);
+  - `privacy.line` was rewritten to the new storage stance, byte-equal to the
+    shipped `i18n.js` value: "Your searched city name is sent to Open-Meteo to
+    find coordinates. **No server storage** — settings stay in this browser with
+    no expiry; recent searches and cached results expire after 24 hours."
 - **Storage posture (ADR-007 → ADR-009).** The v2.2.0 "no web storage at all"
   stance is **relaxed**: [ADR-009](docs/adr/009-session-scoped-storage.md)
-  supersedes ADR-007 in part, adopting **"no server storage; local session cache
-  only"** (per-tab `sessionStorage`, cleared on tab close). The i18n contract
-  grew from 58 to **122 keys** to carry the new surfaces.
+  supersedes ADR-007 in part, adopting **"no server storage; local TTL-gated
+  cache only"** (`localStorage`; settings persist indefinitely, the geocode cache
+  keeps its 24 h TTL). The i18n contract grew from 58 to **122 keys** to carry
+  the new surfaces.
 
 ### Fixed
 
@@ -102,14 +107,42 @@ describe what is on `main` for this release.
   geocoder** by `app.js`, so repeat searches still refetched. The cache store is
   now injected, so the 24 h TTL applies to real searches — verified live (the
   cache survives a reload and the repeat query sends no request).
+- **Item-7 persistence scope — `localStorage` (fix wave; client-confirmed).** The
+  client confirmed mid-gate that item 7 means **`localStorage`** (settings
+  surviving full browser restarts), not per-tab `sessionStorage`.
+  `session-store.js` `STORAGE_SCOPE` flipped `'session'` → `'local'`; the `{t,v}`
+  envelope, the `choghadiya.*` namespace, no-expiry settings and the 24 h geocode
+  TTL are unchanged. `privacy.line` and the ADR/doc wording were corrected in the
+  same wave so the disclosure stays truthful.
+- **Geocode-cache read path re-validates persisted entries (F10).** A tampered or
+  legacy stored entry (invalid IANA timezone / non-finite coordinates) could reach
+  the renderer and blank the page. `geocoder.js` now re-validates every persisted
+  record on read (`mapPersisted`) — bad records are dropped, a wholly-invalid
+  entry is a cache miss that refetches, and `app.js` `selectResult` guards the
+  timezone before it reaches `Intl.DateTimeFormat`.
+- **Every internal module specifier carries `?v=` (F12).** `inauspicious.js` →
+  `choghadiya.js` and `choghadiya.js` → `./vendor/suncalc-2.1.1.js` now carry the
+  asset-version token, so no edge of the module graph is a second, unversioned
+  fetch; the smoke gate asserts that every internal specifier has one.
+- **Overlap-warning copy is tier-neutral (F3).** `panel.note.overlay.vaarVela` /
+  `.kaalVela` no longer call the overlapped slot "auspicious / otherwise-good" —
+  the warning fires for any slot tier. (Key names unchanged; value-only copy fix.)
+- **Architecture doc corrected (F5).** `docs/04-architecture.md` §16.2/§16.3 now
+  document the shipped geocode-cache key layout
+  (`choghadiya.geocache.entry.<lang>\u0000<query>` + `choghadiya.geocache.index`),
+  the five-option `createGeocoder` signature and the shipped `localStorage` scope.
 
 ### Security
 
-- The CSP `script-src 'self'` posture is unchanged; the session cache adds **no
-  new network origin** and never sends stored data anywhere.
+- The CSP `script-src 'self'` posture is unchanged; the local cache adds **no new
+  network origin** and never sends stored data anywhere.
 - A new **SEC-STORAGE** source grep fails the gate if `localStorage` /
   `sessionStorage` ever appears outside `session-store.js`, keeping every storage
   access behind one audited module.
+- The **attribution licence links** extend the SEC-14 origin allow-list with
+  exactly three **link-only** hosts (`open-meteo.com`, `geonames.org`,
+  `creativecommons.org`); the gate fails if any of them is used in a non-`href`
+  context (`fetch` / `import` / `src`), so the network posture is unchanged.
 
 ---
 
