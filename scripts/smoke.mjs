@@ -30,7 +30,10 @@
 //   - the clock is pinned to 2026-10-14T03:00:00Z (08:30 IST) by an init script,
 //     so "today" is always the fixture date and the current-slot highlight is
 //     reproducible (the page's own `resolveCurrentSlot(…, now)` path is unchanged);
-//   - nothing in this script or the page performs a network request.
+//   - no LIVE network request is ever made. The only call the app can make is the
+//     Open-Meteo geocoding search (exercised by the item-7b checks below): a CDP
+//     `Fetch` interceptor pauses that request and fulfills it locally with a fixed
+//     payload — see installGeocodeInterceptor() and GEO_FIXTURE_RESULTS below.
 //
 // Exit codes are CI-honest: 0 = all checks pass, 1 = a check failed,
 // 2 = the harness could not start (no Chrome/Node WebSocket). `make check`
