@@ -256,6 +256,10 @@ function init() {
   dom.periods = document.getElementById('periods');
   dom.periodRows = document.getElementById('period-rows');
   dom.closeSheet = document.getElementById('close-sheet');
+  // F8 (FE-FIX, t_7069b58a): the footer attribution credit. It is NOT filled by the
+  // generic `[data-i18n]` loop like every other node — applyDictionary() routes it to
+  // renderAttribution(), which rebuilds its three licence hyperlinks (03-ux §6.1e).
+  dom.footerCredit = document.getElementById('footer-credit');
 
   // --- FE-6: the S9 choghadiya detail panel (v2.3.0 CR6, 03-ux §3.9) --------------
   // Every node here is filled by renderPanel() (values) or applyDictionary() (static
@@ -1372,17 +1376,66 @@ function renderNotice() {
 }
 
 /**
+ * F8 (03-ux §6.1e) — the licence-mandatory attribution credit. The three provider /
+ * licence words must be real hyperlinks (RS-3 §13.6 B1: Open-Meteo's terms require a
+ * link next to displayed location data, CC BY 4.0 §3(a) requires the licence URI), but
+ * SEC-05 bans every HTML sink and SEC-1 requires dictionary content to reach the DOM as
+ * text only. So the visible string stays the single source of truth in i18n.js and the
+ * node's children are built with DOM APIs: split the translated value on the three link
+ * words IN ORDER, emit each intervening run as a text node and each link word as an
+ * `<a>` whose textContent is that word. The three words are Latin in both dictionaries
+ * (§6.1e), so one rule serves `hi` and `en`, and the node's concatenated textContent
+ * stays byte-equal to `t('attribution.geocoding', lang)` — which is the regression the
+ * smoke/S-I18N gates assert.
+ */
+const ATTRIBUTION_LINKS = Object.freeze([
+  { text: 'Open-Meteo', href: 'https://open-meteo.com/' },
+  { text: 'GeoNames', href: 'https://www.geonames.org/' },
+  { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/' },
+]);
+
+function renderAttribution(el, lang) {
+  const s = t('attribution.geocoding', lang);
+  const frag = document.createDocumentFragment();
+  let cursor = 0;
+  for (const { text, href } of ATTRIBUTION_LINKS) {
+    const at = s.indexOf(text, cursor);
+    if (at < 0) {
+      // A dictionary edit that splits or renames a link word: fail loudly at the point
+      // of use (same contract as t()) rather than render a credit with dead text.
+      throw new TypeError(`attribution render: link word ${JSON.stringify(text)} missing from attribution.geocoding`);
+    }
+    if (at > cursor) frag.append(document.createTextNode(s.slice(cursor, at)));
+    const a = document.createElement('a');
+    a.textContent = text; // textContent, never innerHTML (SEC-05)
+    a.setAttribute('href', href);
+    a.setAttribute('rel', 'noopener noreferrer');
+    a.setAttribute('target', '_blank');
+    frag.append(a);
+    cursor = at + text.length;
+  }
+  if (cursor < s.length) frag.append(document.createTextNode(s.slice(cursor)));
+  el.replaceChildren(frag);
+}
+
+/**
  * US-11 AC3 — every string on the page comes from i18n.js. `data-i18n` /
  * `data-i18n-ph` nodes are re-filled from the dictionary, plus the few shell
  * attributes FE-01 left as literals (the CSS/HTML surface has no dictionary hook),
  * and the <title>, composed from two existing keys (no new copy).
+ *
+ * `attribution.geocoding` is the one exception: it carries three hyperlinks, so it
+ * goes through renderAttribution() instead of the plain-text loop below (§6.1e).
  */
 function applyDictionary() {
   const { lang } = state;
 
   for (const el of document.querySelectorAll('[data-i18n]')) {
-    el.textContent = t(el.getAttribute('data-i18n'), lang);
+    const key = el.getAttribute('data-i18n');
+    if (key === 'attribution.geocoding') continue; // DOM-built links, see below
+    el.textContent = t(key, lang);
   }
+  renderAttribution(dom.footerCredit, lang);
   for (const el of document.querySelectorAll('[data-i18n-ph]')) {
     el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'), lang));
   }
