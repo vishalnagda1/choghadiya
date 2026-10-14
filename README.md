@@ -242,9 +242,11 @@ The app is a static site deployed to **GitHub Pages** at
 <https://time.gitick.com/> (custom domain via [`CNAME`](CNAME)). Delivery is
 "push the files": CI runs `make test` on every push/PR, and each release is cut
 with a semantic-version bump and a git tag (see
-[Configuration](#configuration) for the `make bump` procedure). Release
-packaging and the deploy runbook are owned by the release tooling, not this
-README.
+[Configuration](#configuration) for the `make bump` procedure).
+
+The **deploy runbook** — pre-flight gate, release bump/tag/push commands,
+Pages verification, post-deploy smoke + Lighthouse FCP gate, and rollback — is
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ---
 
