@@ -95,13 +95,14 @@
           </table>
         </div>
       </div>
-      <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
-      <!-- Today pill LAST in the DOM so the tab order is exactly the documented
-           ‹ → picker → › → Today (03-ux §3.10c). CSS grid puts it on its own centred
-           row below 600 px and inline at the bar's end ≥600 px.
+      <!-- Today pill BEFORE › (v2.3.2): ≥600 px it sits inline between the date and ›,
+           so › stays pinned at the bar's right edge when the pill appears (it used to
+           sit after › and push it left). Tab order follows: ‹ → picker → Today → ›.
+           Below 600 px CSS grid puts it on its own centred row.
            [hidden] reset (03-ux §10 fix 2) is exercised by this element: it carries
            leaf-class display rules AND a JS-driven hidden toggle. -->
       <button type="button" class="today-pill" id="today-pill" hidden data-i18n="date.today">आज</button>
+      <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
     </div>
 
     <!-- ===== S5 geolocation-denied / unavailable notice — 03-ux §3 S5, US-8.

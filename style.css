@@ -313,10 +313,10 @@ header.app {
   cursor: pointer;
 }
 .datebar .label { min-width: 0; text-align: center }
-/* Grid placement (03-ux §3.10c). DOM order is the focus order — ‹ → picker → › →
-   Today — so the pill is the 4th child; below 600 px it sits on its own centred row
-   (2), at ≥600 px inline at the bar's end. Items are placed explicitly: the two navs
-   and the label share row 1 (auto column order = DOM order), the pill is pinned. */
+/* Grid placement (03-ux §3.10c). DOM order is the focus order — ‹ → picker → Today →
+   › (v2.3.2: Today moved before ›). Below 600 px the pill sits on its own centred row
+   (2); at ≥600 px it is inline in column 3, BETWEEN the date and ›, so › keeps its
+   place at the bar's right edge when the pill appears. Items are placed explicitly. */
 .datebar .nav,
 .datebar .label { grid-row: 1 }
 .datebar .today-pill {
@@ -327,7 +327,8 @@ header.app {
 }
 @media (min-width: 600px) {
   .datebar { grid-template-columns: auto 1fr auto auto }
-  .datebar .today-pill { grid-row: 1; grid-column: 4; justify-self: end }
+  .datebar .today-pill { grid-row: 1; grid-column: 3; justify-self: end }
+  .datebar #next-day { grid-column: 4 }
 }
 .datebar .d {
   margin: 0;
