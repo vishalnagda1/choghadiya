@@ -222,6 +222,27 @@ test('with no web storage available (Node default) the in-memory fallback is the
   }
 });
 
+test('the namespace is idempotent: a fully-qualified key is not double-prefixed', () => {
+  const raw = new Map();
+  const restore = installStorage(fakeStorage(raw));
+  try {
+    clear();
+    // FE-1's CTO-decided settings keys already carry the namespace; passing them
+    // verbatim must not yield `choghadiya.choghadiya.…`.
+    set('choghadiya.settings.timeFormat', '24h');
+    assert.equal(get('choghadiya.settings.timeFormat'), '24h');
+    assert.equal(get('settings.timeFormat'), '24h', 'short and qualified keys are the same entry');
+    assert.ok(raw.has('choghadiya.settings.timeFormat'));
+    assert.equal(
+      [...raw.keys()].some((k) => k.startsWith('choghadiya.choghadiya.')),
+      false,
+      'no double prefix',
+    );
+  } finally {
+    restore();
+  }
+});
+
 test('persistence round-trip: a new backing instance over the same raw map serves the value (reload)', () => {
   const raw = new Map();
   const restore = installStorage(fakeStorage(raw));

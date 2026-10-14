@@ -76,9 +76,15 @@ function currentBacking() {
   }
 }
 
-/** Physical key for a logical key. */
+/**
+ * Physical key for a logical key. Idempotent: a key that already carries the
+ * namespace (e.g. the CTO-decided settings keys `choghadiya.settings.timeFormat`)
+ * is used verbatim, so callers may pass either `settings.timeFormat` or the fully
+ * qualified form and get the same physical key.
+ */
 function nsKey(key) {
-  return `${NAMESPACE}${String(key)}`;
+  const logical = String(key);
+  return logical.startsWith(NAMESPACE) ? logical : `${NAMESPACE}${logical}`;
 }
 
 /** Read a raw (still-encoded) value: backing store first, then the memory shadow. */
