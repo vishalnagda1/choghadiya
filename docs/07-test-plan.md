@@ -557,3 +557,23 @@ cases still apply). Verdict and evidence in `docs/08-test-report.md` §14.
 | `QA230-R7` | **F12 cache-busting**: every internal module specifier in the shipped graph carries `?v=`, and every `?v=` token equals `2.3.0` (incl. `inauspicious.js` → `./choghadiya.js`) | F12; US-19 AC3 | L3 smoke check 10b + L4 static graph |
 | `QA230-R8` | **v2.2.0 regression bar holds** on the post-wave tree: S3 polar / S5 denied / S6 unreachable / S7 no-city, `aria-current` exclusivity, night-after-midnight list bounds, 320 px no-scroll | §5, §13.4 | L3 smoke + L4 live |
 | `QA230-R9` | **Quality gate**: `make test` and `make check` (tests + greps + smoke + axe) exit 0; exact counts recorded | §4; M7/M8 | L1/L3 (`make check`) |
+
+### 12.13 v2.3.1 quick-fix re-test addendum — `QA231-*` (card `t_26039420`)
+
+The v2.3.1 quick-fix (brief `docs/00-brief.md` change-log item 8) removes three copy keys
+(`privacy.line` — both render sites, `footer.noTracking`, `date.picker.range`) and fixes the
+date picker not opening. The i18n contract shrinks 122→119 (assertions 244→238). These cases
+extend §12 (base and v2.3.0 cases still apply); verdict and evidence in
+`docs/08-test-report.md` §15.
+
+| ID | Case | Expected (traced) | Level |
+|----|------|-------------------|-------|
+| `QA231-1` | **Removed copy gone** in shipped files **and** live DOM, `hi`+`en`, and the JS-disabled static fallback: `privacy.line` at **both** former sites (footer `<p>` and `.sheet-privacy` disclosure), `footer.noTracking`, `date.picker.range` | item 8a/8b; `03-ux` §6 | L1 grep + L4 live DOM (both langs + `setScriptExecutionDisabled`) |
+| `QA231-2` | **Attribution intact (no F8 regression)**: `#footer-credit` = 3 real `<a>` (`open-meteo.com` / `geonames.org` / `creativecommons.org/licenses/by/4.0/`), each `rel="noopener noreferrer" target="_blank"`, DOM-built; concatenated `textContent` byte-equal to `t('attribution.geocoding', lang)` in `hi` and `en` | F8; `03-ux` §6.1e | L4 live DOM + SEC-05 grep |
+| `QA231-3` | **Picker opens**: a trusted click/tap anywhere in `.picker-field` calls `showPicker()` **inside the user gesture** (no-location → inert, 0 calls; focus() fallback present for engines without the API) | item 8 bug; `03-ux` §3.10c | L4 live (real Chromium, `showPicker` instrumented) |
+| `QA231-4` | **Picking a date updates the view**: the commit re-renders the slot lists, the date label **and** the S8 periods block + S9 panel | item 8 bug; US-12/US-13 | L4 live (real `change` event) |
+| `QA231-5` | **±10-day clamp**: `min`/`max` = location today ∓10; an out-of-range commit snaps back to the viewed date; edge `‹`/`›` disabled at the bounds | item 8; `03-ux` §3.10c | L3 smoke + L4 live |
+| `QA231-6` | **Nav + keyboard unchanged**: `‹ / › / Alt-arrow` step a day; "Today" resets + hides; `Tab` from `#prev-day` reaches `#datepicker`; the relocated focus ring (`#date-label` outline, input `outline:none`) survives | item 8; `03-ux` §7.3/§10 | L4 live (keyboard) |
+| `QA231-7` | **Regression bar** (v2.2.0/v2.3.0): S3 polar, S5 denied, S7 no-city, `aria-current` exclusivity, 320 px no-scroll, i18n toggle parity, 12h/24h persistence, `?v=` cache-busting | §5, §13.4 | L3 smoke + L4 live |
+| `QA231-8` | **Docs consistency**: README/CHANGELOG/RELEASE_NOTES present no removed line as current UI; `docs/03-ux.md` §6 key **table** = 119 keys matching `i18n.js` (hi+en 119) and `tests/i18n.test.js` (119/238) | item 8; M4 | L1 parse + L1 count test |
+| `QA231-9` | **Quality gate**: `make test` and `make check` (tests + greps + smoke + axe) exit 0; exact (post-shrink) counts recorded — never the baseline | §4; M7/M8 | L1/L3 (`make check`) |

@@ -682,3 +682,205 @@ node "$HOME/.hermes/profiles/qa-engineer/cache/scratch/qa2_regression.mjs"  # QA
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v2.3.0 QA-2 | 2026-10-14 | qa-engineer | Executed `docs/07-test-plan.md` §12.12 (`QA230-R*`) on the post-wave tree `5706752`: `make test` 108/108, `make check` exit 0 (greps 0/4 · smoke 67/67 · axe 5 states), plus 67 live checks across three probes — full browser-process-restart persistence (12/12), privacy/attribution/F3/F10/F12 surfaces (42/42), v2.2.0 bar S3/S5/S6/S7 + `aria-current` + 320 px (13/13). Verdict **PASS** — no open Critical/High/Medium; QA-1 F2/F3/F4/F5 and SEC F8/F9/F10/F12 closed. Informational residuals F13/F14/F15 + F11 carried (CTO-routed). No fix cards filed. |
+
+---
+
+# v2.3.1 section (appended — the v2.2.0/v2.3.0 reports above are preserved unchanged)
+
+## 15. v2.3.1 quick-fix re-test (QA, card `t_26039420`)
+
+## VERDICT: PASS-WITH-KNOWN-ISSUES
+
+The v2.3.1 quick-fix (brief `docs/00-brief.md` change-log item 8: three copy removals + one
+date-picker bug) verified on the FE-FIX + doc-sync tree `6cfcdb2` (parent handoffs
+`t_b9bb50be` FE-FIX and `t_f9a4c2b2` TW). **No open Critical/High/Medium defect.** Every
+v2.3.1 acceptance criterion A–F passes. One **Low** residual: stale `122` prose in
+`docs/03-ux.md` §6.1/header/revision-log while the §6 key **table** is correctly 119
+(AC-F is about the key list, which is 119 — see §15.6). The baseline counts drop exactly
+where the i18n contract shrank; the ACTUAL numbers are reported below.
+
+### 15.1 Environment
+
+| Item | Value |
+|------|-------|
+| Candidate tree | `6cfcdb2` (`fix(fe): v2.3.1 copy removals + datepicker open fix [t_b9bb50be]`), parent `77bcce7` (TW doc sync), `2d116f6` (CTO decomposition) |
+| Package version on the tested tree | `2.3.0` (the `2.3.1` bump is the next card `t_2c7e7dea`; the `?v=` tokens and `package.json` still agree, so the smoke version assertion is green) |
+| Node / runner | `node --test "tests/**/*.test.js"` (Node ≥22) |
+| Browser (live) | **Chrome/155.0.8059.79** (headless Chromium via CDP, browser-use harness) |
+| Served under test | `python3 -m http.server 8080` on the repo root; live checks against `http://localhost:8080/index.html` |
+| axe-core | 4.10.2 (devDependency) |
+
+### 15.2 Acceptance criterion A — `make check` EXIT 0 (ACTUAL counts)
+
+`make check` → **EXIT 0** on `6cfcdb2`.
+
+| Gate | Actual result | v2.3.0 baseline | Delta |
+|------|---------------|-----------------|-------|
+| `make test` | **108 tests, 108 pass, 0 fail** | 108/108 | test-case count unchanged |
+| S-I18N contract | **119 keys × 2 languages = 238 assertions** (this is the shrinking assertion: 244 → 238) | 122 × 2 = 244 | **−3 keys / −6 assertions** |
+| SEC-22 greps | **PASS — 0 hits across 4 gates** (SEC-05, SEC-03, SEC-14, SEC-STORAGE) | 0 hits / 4 gates | unchanged |
+| Smoke (`scripts/smoke.mjs`) | **SMOKE RESULT: 67 passed, 0 failed** | 67/67 | unchanged |
+| axe-core | **AXE RESULT: PASS — 5 states** (base@1024, dialog, slot-selected, off-today, base@320); 0 critical/serious | PASS 5 states | unchanged |
+| Perf budget | shipped JS 7 files, raw 186.1 KB, gzip 59.0 KB (NFR-P3 budget 60 KB) | under budget | unchanged |
+
+Note: the *testcase* count stays 108 (removing 3 keys removed **assertions** inside
+`tests/i18n.test.js`, not test cases); the i18n **key/assertion** count is the number
+that moved (122→119, 244→238), matching the FE-FIX handoff.
+
+### 15.3 Acceptance criterion B — removed copy GONE (shipped files + live DOM, hi+en + JS-off)
+
+Static source (shipped files `index.html`, `app.js`, `i18n.js`, `style.css`):
+
+- `privacy.line` — **no render site remains.** The footer `<p>` and the `.sheet-privacy`
+  disclosure are both gone; the only `privacy.line` string left in the tree is inside an
+  accurate historical HTML comment (`index.html:288`, "…were later removed by the client
+  at v2.3.1"). No `data-i18n="privacy.line"` node exists.
+- `footer.noTracking` — gone (no key, no node, no copy).
+- `date.picker.range` — gone (no key, no `#date-range-hint`, no `aria-describedby`
+  token — `aria-describedby="date-label"` only).
+- Dead CSS removed too: `.range-hint` and `.sheet-privacy` selectors are absent from
+  `style.css`.
+
+Live DOM (real Chromium), **both languages**, scanning `document.body.innerText` for
+`No account / no tracking / no backend / Your searched city name / 10 days before` and the
+Hindi equivalents (`कोई खाता / ट्रैकिंग / खोजा गया शहर नाम / 10 दिन पहले`):
+
+| Language | Removed-copy hits in live DOM |
+|----------|-------------------------------|
+| `hi` | **[] (none)** |
+| `en` | **[] (none)** |
+
+JS-disabled static fallback (`Emulation.setScriptExecutionDisabled` + reload): body text
+contains **none** of the removed strings; the footer renders exactly the credit +
+`convention.note`; the city-search sheet carries **no** privacy disclosure. So the removed
+lines are absent with and without JavaScript.
+
+### 15.4 Acceptance criterion C — attribution intact (SEC F8, no regression)
+
+`#footer-credit` renders the CC BY 4.0 credit as **three real hyperlinks**, built with DOM
+APIs (no `innerHTML`/`data-i18n-html` — SEC-05 grep stays 0 hits):
+
+| Anchor text | `href` | `rel` | `target` |
+|-------------|--------|-------|----------|
+| `Open-Meteo` | `https://open-meteo.com/` | `noopener noreferrer` | `_blank` |
+| `GeoNames` | `https://www.geonames.org/` | `noopener noreferrer` | `_blank` |
+| `CC BY 4.0` | `https://creativecommons.org/licenses/by/4.0/` | `noopener noreferrer` | `_blank` |
+
+Concatenated `textContent` is **byte-equal to `t('attribution.geocoding', lang)`** in both
+languages:
+
+- `hi`: `स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0`
+- `en`: `Location search by Open-Meteo · Data from GeoNames · CC BY 4.0` (live value ==
+  `t('attribution.geocoding','en')` imported at runtime)
+
+### 15.5 Acceptance criterion D — picker fix verified in real Chromium (Chrome 155.0.8059.79)
+
+Steps + evidence (local server, Mumbai set via the live city search so the picker is enabled):
+
+1. **Trusted click / tap on the date label opens the picker.** With
+   `HTMLInputElement.prototype.showPicker` instrumented to record `ok` on success, a trusted
+   CDP mouse press+release at the `.picker-field` centre fired the app's `pointerdown`
+   handler → **`showPicker()` called, `ok:true`** (twice across two runs). `ok:true` proves a
+   live user activation was present during the handler, which is the precondition Chrome
+   requires to open the native calendar — the original bug was that the lone focus of the
+   transparent overlay input never reached this call.
+2. **Picking a date updates the view.** Committing `2026-10-15` via a real `change` event
+   (what the native picker emits) moved the label to `गुरुवार, 15 अक्टूबर 2026`, reordered
+   the day list (first slot `लाभ · Labh` → `शुभ · Shubh`), kept 16 slot rows, and surfaced the
+   "Today" pill (off-today). A second commit re-rendered the **S8 periods block** (3 rows:
+   Vaar Vela / Kaal Vela / Kaal Ratri with ranges) and the **S9 panel**.
+3. **±10-day clamp enforced at both ends.** `min`/`max` = `2026-10-04` / `2026-10-24`
+   (= viewed-location today ∓10). Committing an out-of-range `2026-10-30` snapped back to the
+   previously viewed date (`2026-10-15`); the picker does not accept dates outside the range.
+4. **`‹ / ›` nav unchanged.** `›` → `2026-10-16` (`शुक्रवार…`), `‹` → `2026-10-15`; the
+   "Today" pill resets to `2026-10-14` and hides itself.
+5. **No-location state still inert.** After clearing the location the input is `disabled`,
+   the empty-state shows, and a trusted click on `.picker-field` fires **0** `showPicker`
+   calls (the handler early-returns).
+6. **Keyboard focus path + focus ring relocation survived.** From `#prev-day`, one `Tab`
+   lands on `#datepicker`; the relocated focus ring is live — `#date-label` computed style is
+   `outline: solid 2px rgb(143,180,255)` while the input itself has `outline: none`
+   (`style.css` `.picker-field:has(.picker-input:focus-visible) .d`).
+
+**Carried caveats (from the FE-FIX handoff, not re-verifiable here):** the *day-cell click
+inside Chrome's native calendar popup* cannot be automated (a renderer popup, not in the
+DOM), so the committed-value path was verified with the real `change` event and the popup
+itself is confirmed only via `showPicker() ok:true`; the popup was **not capturable in this
+headless harness's page screenshot**. **Firefox and Safari were not exercised** — both need a
+live user activation for `showPicker()` and the `focus()` fallback (API missing/refused) was
+not run in a non-Chromium engine.
+
+### 15.6 Acceptance criterion E — live regression spot-check (v2.2.0/v2.3.0 bar)
+
+| Check | Result |
+|-------|--------|
+| S3 polar day (Alert, Nunavut, 2026-10-14) | **PASS** — "चौघड़िया उपलब्ध नहीं / Choghadiya is not defined at this location/date — no sunrise/sunset occurs here"; ‹/› nav present; no `NaN` / `Invalid Date` |
+| S5 geolocation denied (CDP `Browser.setPermission` geolocation=denied) | **PASS** — the sheet-local denial line shows: "ℹ Location permission denied — type a city or allow it in your browser"; the typed-city path stays usable |
+| S7 no-city (search `zzqqxxvv`) | **PASS** — sheet stays open, 0 results, S7 message "No city found — check the spelling" |
+| `aria-current` exclusivity | **PASS** — exactly 1 element carries `aria-current` (`aria-current="true"` count = 1) |
+| 320 px no horizontal scroll | **PASS** — `documentElement.scrollWidth === clientWidth === 320`; smoke also asserts 320/390/430/1024 all clean |
+| i18n toggle parity | **PASS** — `hi`→`en`→`hi` flips `<html lang>`; smoke asserts all 28 dictionary nodes re-translate |
+| 12h/24h toggle persistence | **PASS** — smoke: 24h re-renders all ranges; 12h restores; the format persists across a reload (localStorage) |
+| `?v=` cache-busting | **PASS** — every internal specifier + asset token equals the package version (smoke check 10/10b) |
+
+### 15.7 Acceptance criterion F — docs consistency
+
+- **README / CHANGELOG / RELEASE_NOTES**: none present the removed lines as *current* UI.
+  All references are either inside a "removed in v2.3.1" entry or an accurate
+  historical/"what changed" note (`CHANGELOG.md` v2.3.1 section + "later removed" markers on
+  the v2.3.0/v2.2.0 rows; `RELEASE_NOTES.md` v2.3.1 "removed" bullets + demoted v2.3.0
+  section; `README.md` "What changed in v2.3.1"). **PASS.**
+- **`docs/03-ux.md` §6 key list**: the §6 **table parses to exactly 119 keys, 119 unique**
+  (independently re-counted), matching `i18n.js` `hi`+`en` (119 each) and `tests/i18n.test.js`
+  (119/238). **PASS.**
+
+### 15.8 Findings (no fix cards filed; CTO routes)
+
+| ID | Severity | Finding | Owner |
+|----|----------|---------|-------|
+| `QA231-F1` | **Low (doc)** | `docs/03-ux.md` still says **"122 keys"** in its §6 header (line 7), §6.1 status prose (line 1119), the §6.1 count table (lines 1158–1159), §6.1e (1163), §9 (1241), the audit table (1281) and the revision log (1303–1305); one revision-log entry also says "122/244". The §6 **table** is correctly 119 and `i18n.js`/tests are 119/238, so this is stale prose only — but it contradicts the count the tests now lock. Already flagged by the FE-FIX handoff as outside the FE card's §6-table ownership. | ux-designer (or CTO) |
+| `QA231-O1` | Observation (no action) | `README.md:169` carries a general privacy bullet, "No accounts, no cookies, no analytics, no trackers, no backend." It is **not** the removed footer UI line and remains architecturally true (no accounts/cookies/analytics/trackers/backend); the removed footer key was specifically `footer.noTracking`. Left as-is. | — |
+
+No open Critical/High/Medium defect was found.
+
+### 15.9 Quality-gate scoreboard (v2.3.1)
+
+| Gate | Baseline v2.3.0 | v2.3.1 (`6cfcdb2`) |
+|------|-----------------|--------------------|
+| `make test` | 108/108 | **108/108** |
+| i18n contract | 122 keys / 244 assertions | **119 keys / 238 assertions** |
+| SEC-22 greps | 0 hits / 4 gates | **0 hits / 4 gates** |
+| Smoke | 67/67 | **67/67** |
+| axe | PASS 5 states | **PASS 5 states** |
+| `make check` | EXIT 0 | **EXIT 0** |
+
+### 15.10 Honest gaps (not executed / not fully verified here)
+
+| Gap | Why | Risk |
+|-----|-----|------|
+| Native calendar **popup pixels** | The date popup is a renderer popup, not in the DOM, and was not capturable in this headless harness's page screenshot; the open path is proven by `showPicker() ok:true` under a live user activation. | Low — the FE-FIX card confirmed the composited calendar visually; the committed-value path is verified end-to-end here. |
+| Firefox / Safari | Not available in this harness; both need a user activation for `showPicker()`, and the `focus()` fallback path was not run in a non-Chromium engine. | Low–Medium (carried, product-level) — the focused input still accepts typing + keyboard stepping, so the degraded path is functional, not broken. |
+| Deployed-URL re-check | This card verifies the source tree before the `2.3.1` bump/tag; the publish card (`t_ac3060ad`) re-verifies on the deployed build. | Low. |
+| M6 Lighthouse FCP | No perf-affecting change in the quick-fix; the v2.3.0 publish measurement (max 1496 ms < 1500 ms) stands. | Low. |
+
+### 15.11 Reproducible commands
+
+```
+make check                                   # EXIT 0: tests 108/108 + greps 0/4 + SMOKE 67/67 + AXE PASS (5 states)
+node --test "tests/**/*.test.js"             # 108 pass / 0 fail (S-I18N: 119 keys, 238 assertions)
+node scripts/security-greps.mjs              # PASS — 0 hits across 4 gates
+node scripts/smoke.mjs                       # SMOKE RESULT: 67 passed, 0 failed
+node scripts/axe-check.mjs                   # AXE RESULT: PASS (5 states)
+
+# live checks: python3 -m http.server 8080 (repo root) + headless Chromium (Chrome/155.0.8059.79) via CDP
+#   - removed-copy scan (hi/en + JS-off): 0 hits
+#   - attribution: 3 anchors (open-meteo/geonames/CC BY 4.0), rel=noopener noreferrer target=_blank, textContent byte-equal
+#   - picker: trusted click -> showPicker() ok:true; change 2026-10-15 re-renders slots+S8+S9; 2026-10-30 clamps back; ‹/› + Today OK; no-location inert; Tab focus ring on #date-label
+#   - bar: S3 Alert-Nunavut polar, S5 denied, S7 no-city, aria-current==1, 320px no-scroll
+```
+
+### 15.12 v2.3.1 re-test revision log
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| v2.3.1 QA | 2026-10-14 | qa-engineer | Smoke re-run on `6cfcdb2`: `make check` **EXIT 0** (tests 108/108, i18n 119 keys/238 assertions, greps 0/4, smoke 67/67, axe PASS 5 states). AC-A–F pass; AC-D verified in real Chromium (Chrome/155.0.8059.79) — trusted date-label click fires `showPicker() ok:true`, date commit re-renders slots + S8 + S9, ±10 clamp holds, ‹/› + Today OK, no-location inert, keyboard focus ring relocation survived. Removed copy absent in live DOM (hi+en) and JS-off; attribution credit + 3 links byte-equal. Verdict **PASS-WITH-KNOWN-ISSUES** — one Low doc finding (`QA231-F1`: stale "122" prose in `docs/03-ux.md` §6.1 while the §6 table is 119). No fix cards filed; CTO routes. |
