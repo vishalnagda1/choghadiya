@@ -752,7 +752,17 @@ function renderUseCurrent() {
 /* ------------------------------------------------------------------ */
 
 function getGeocoder() {
-  if (!geocoder) geocoder = createGeocoder({ lang: state.lang });
+  // v2.3.0 item 7b: hand the session store to the geocoder so the 24 h geocode
+  // cache survives a page reload (docs/04-architecture.md §16.2/§16.3). The
+  // geocoder only ever calls get/set/remove, so expose exactly those — `clear`
+  // stays out of its reach — and keep every storage access behind
+  // session-store.js (SEC-STORAGE gate).
+  if (!geocoder) {
+    geocoder = createGeocoder({
+      lang: state.lang,
+      cacheStore: { get: storeGet, set: storeSet, remove: storeRemove },
+    });
+  }
   return geocoder;
 }
 
