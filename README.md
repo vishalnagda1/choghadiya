@@ -85,19 +85,21 @@ so `make test` needs **no install**.
 make test           # unit + contract suites (Node's built-in runner)
 ```
 
-The full pre-release gate adds a headless-Chromium render smoke test and an
-axe-core accessibility scan. These need dev-only tooling (`axe-core` is pinned
-in `package.json` and is **never shipped** — the deployed page keeps
-`script-src 'self'`):
+The full pre-release gate adds the SEC-05/03/14 source greps, a
+headless-Chromium render smoke test and an axe-core accessibility scan. The
+smoke/axe steps need dev-only tooling (`axe-core` is pinned in `package.json`
+and is **never shipped** — the deployed page keeps `script-src 'self'`); the
+greps step is pure Node with no dependencies:
 
 ```bash
 npm ci              # once — installs the dev-only axe-core
-make check          # = make test + headless smoke + axe-core scan
+make check          # = make test + security greps + headless smoke + axe-core scan
 ```
 
-Exit codes are CI-honest: **0** green, **1** a real failure (red test, failed
-smoke assertion, or a critical/serious axe violation), **2** the harness could
-not run (no Chrome / axe-core missing) — never a silent pass.
+Exit codes are CI-honest: **0** green, **1** a real failure (red test, a failed
+grep assertion, a failed smoke assertion, or a critical/serious axe violation),
+**2** the harness could not run (no Chrome / axe-core missing) — never a silent
+pass.
 
 Individual targets and how to run a single suite are listed under
 [Scripts](#scripts). The test plan (levels, environments, expected results and
@@ -208,7 +210,7 @@ choghadiya/                     # repo root — deployed verbatim to GitHub Page
 ├── Makefile                    # dev / test / smoke / axe / check / bump
 ├── .github/workflows/ci.yml    # CI: `make test` on every push and PR
 ├── tests/                      # unit + contract suites (fixtures, sequences, i18n)
-├── scripts/                    # smoke.mjs, axe-check.mjs (dev-only tooling)
+├── scripts/                    # smoke.mjs, axe-check.mjs, security-greps.mjs (dev-only tooling)
 └── docs/                       # brief, research, PRD, UX, architecture, ADRs, plan,
                                 # test plan, threat model, STATUS log
 ```
@@ -226,7 +228,8 @@ All via the `Makefile` (equivalents exist as `npm run <name>` for
 | `make test` | Run the Node built-in test runner over `tests/` (unit + contract suites; no install, no network). |
 | `make smoke` | Headless-Chromium render smoke: 16 rows from the deterministic Mumbai fixture, EN/HI toggle, no `NaN`, no horizontal scroll, cache-busting + perf budget. |
 | `make axe` | axe-core accessibility scan (fails on any critical/serious violation). |
-| `make check` | The full gate: `test` + `smoke` + `axe` (needs `npm ci` once). |
+| `make greps` | SEC-05/03/14 source gate: fails on any HTML sink, inline style/handler, or non-allow-listed origin in shipped code (pure Node, no deps). |
+| `make check` | The full gate: `test` + `greps` + `smoke` + `axe` (needs `npm ci` once). |
 | `make bump VERSION=x.y.z` | Set `ASSET_VERSION` in `package.json` and every `?v=` in `index.html`/`app.js`. |
 | `make help` | List targets. |
 | `node --test tests/<file>` | Run one suite (e.g. `tests/geocoder.test.js`) during a fix. |

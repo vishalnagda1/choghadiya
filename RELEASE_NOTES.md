@@ -3,7 +3,7 @@
 **Release:** v2.2.0 (semver minor, bumping the `package.json` baseline `2.1.0`)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** prepared for client release approval (GATE 2)
+**Status:** approved for release — GATE 2 client sign-off received 2026-10-14
 
 > **Versioning note.** The package baseline is `2.1.0`; this release is cut as
 > **`v2.2.0`** by the release step, which bumps `package.json` to `2.2.0`, updates
@@ -64,37 +64,76 @@ correct for any city and season, and the whole UI is available in **Hindi
 
 ## Known issues & limitations
 
-Honest state as of these notes. The QA release report (`docs/08-test-report.md`)
-and security audit (`docs/09-security-audit.md`) are produced by their own cards
-and were still pending when this document was written; the items below come from
-the milestone reviews and upstream handoffs.
+Honest state as of these notes, reconciled with the **published** QA report
+([docs/08-test-report.md](docs/08-test-report.md), verdict **PASS-WITH-KNOWN-ISSUES**)
+and security audit ([docs/09-security-audit.md](docs/09-security-audit.md), verdict
+**PASS-with-accepted-risks**), and with the **CTO dispositions approved at GATE 2**
+(client approved 2026-10-14, no feedback). Items 1–4 are carried as **known issues, not
+defects** — every MVP acceptance criterion (US-1…US-19) passes, there is **no open
+Critical/High/Medium defect**, and there is **no open High/Critical security finding**.
 
-1. **Real-browser manual checks still to be signed off by QA:** text-zoom pass,
-   screen-reader pass, the ±2-minute panchang comparison, Lighthouse mobile
-   First Contentful Paint (< 1.5 s gate), and real-device geolocation. Automated
-   coverage (unit, headless smoke, axe) is green; these are the human gates.
-2. **City-sheet polish not shipped.** The UX spec's "loading" state for a submit
-   and the "3 recent cities" empty state are not implemented (they were outside
-   the milestone ticket scope and are pending a scope decision). Searching shows
-   results/errors correctly; there is just no inline spinner and no recent-cities
-   shortcut.
-3. **`<dialog>` close-event edge case.** In a browser build that does **not** fire
-   the native `close` event on the city sheet (reproduced in the headless test
-   browser; spec-correct browsers are unaffected), the app's internal
-   sheet-open flag can remain set, which leaves the `Alt` + `←`/`→` day
-   shortcuts disabled until reload. Routed as a follow-up hardening item; not
-   observed in the reviewed evergreen browsers.
-4. **Geocoder defense-in-depth.** The geocoder now validates and drops bad
-   coordinates/timezones at its boundary (closing the crash path); a redundant
-   guard at the app's day-aggregation call site was intentionally left out to
-   avoid a code collision and remains a low-priority follow-up.
+1. **Real-browser manual checks.** QA executed the human gates in
+   [docs/08-test-report.md](docs/08-test-report.md) §5–§7: panchang accuracy **max Δ 1 min**
+   vs Drik Panchang across 5 city-date combos (gate ±2 min), mobile **FCP 1.13 s**
+   (gate < 1.5 s), contrast ≥ 6.26:1 light / 7.43:1 dark, 200 % zoom and reduced-motion
+   clean, and a full network/privacy inspection. Two items remain **unexecuted** and are
+   declared honestly in docs/08 §8: the real-device geolocation *grant* path (MAN-03) and
+   a live screen-reader pass (MAN-05 — an accessibility-tree proxy was used instead). Both
+   are post-release verification items, not defects.
+2. **City-sheet polish — cut from v2.2.0 (GATE 2 disposition).** The UX spec's city-sheet
+   *loading* submit state (`aria-busy` + spinner) and *"3 recent cities"* empty state
+   (`docs/03-ux.md` §S2) are **not implemented**. **Formally CUT from v2.2.0 and deferred
+   to the post-release backlog** — neither has a PRD acceptance criterion behind it
+   (outside US-1…US-19), "3 recent cities" has no key in the 58-key copy deck (so
+   implementing it needs a coordinated copy-deck change), and search itself works
+   correctly (results / no-results / error + Retry all verified). There is no inline
+   spinner and no recent-cities shortcut; that is the whole gap.
+3. **`<dialog>` close-event edge case — deferred post-release hardening (accepted residual
+   risk).** In a browser build that does **not** fire the native `close` event on the city
+   sheet (reproduced only in the headless test browser; spec-correct browsers are
+   unaffected), the app's internal sheet-open flag can remain set, which leaves the `Alt` +
+   `←`/`→` day shortcuts disabled until reload. Not observed in any reviewed evergreen
+   browser; routed as a post-release hardening item.
+4. **Geocoder defense-in-depth — deferred post-release hardening (accepted residual risk).**
+   The geocoder validates and drops bad coordinates/timezones at its boundary (the crash
+   path is closed and covered by tests); a redundant guard at the app's day-aggregation
+   call site was intentionally left out to avoid a code collision and remains a low-priority
+   post-release item.
 5. **±1–2 min vs a printed panchang.** Expected and disclosed in the UI footer;
    suncalc uses the upper-limb + refraction convention.
+6. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg / Shubh` are
+   deliberately shorter than Drik Panchang's long forms (`Labha / Amrita / Kala / …`) — a
+   product decision fixed by `docs/02-prd.md` US-2 AC5 / US-11 AC4 and `docs/03-ux.md` §6.
 
 Deferred by design (not defects) in this release: countdown to the next slot,
 shareable URLs, favourites, PWA/offline, notifications, panchang detail, Rahu
 Kaal, and languages beyond Hindi/English. See
 [docs/02-prd.md](docs/02-prd.md) §4.2 and [docs/05-plan.md](docs/05-plan.md) §6.
+
+---
+
+## Security
+
+Pre-release audit: [docs/09-security-audit.md](docs/09-security-audit.md) —
+**PASS-with-accepted-risks (0 Critical · 0 High · 1 Medium · 2 Low)** at the release
+commit; **no open High/Critical finding** (the audit's FAIL trigger). All three fix
+cards **landed before the release** (HEAD `d9a7b89`):
+
+- **F1 (Medium)** — GitHub Actions pinned to full commit SHAs instead of mutable tags
+  in `.github/workflows/ci.yml` (SEC-18 / RK10) — **landed** (`t_899c4547`).
+- **F2 (Low)** — the city input's `name` attribute removed (SEC-07 DOM-clobbering
+  hygiene; the form is JS-only) — **landed** (`t_9ec675d1`).
+- **F3 (Low)** — the SEC-05/03/14 source greps are now a persistent failing gate
+  (`scripts/security-greps.mjs`, wired into `make check` as `make greps`) — **landed**
+  (`t_899c4547`).
+
+Accepted residuals, documented in docs/09 §7–§8: **F4** the privacy one-liner
+under-describes the request's fixed `count`/`language` params (a copy-deck item, no
+user-identifying data), plus informational **F5** (SVG namespace identifier), **F6**
+(dev-only `axe-core` is MPL-2.0, never shipped) and **F7** (release-push ops notes —
+remote config + branch-protection recommendation). CSP is byte-exact with a provably
+enforcing `script-src 'self'`, all dynamic text renders via `textContent`, the core
+calculation is network-free, and the only outbound call is the user-initiated geocode.
 
 ---
 
@@ -107,14 +146,17 @@ Measured on `main` (pre-bump) — every command below was executed and passed:
 | Unit + contract suites | `make test` | **64 tests / 64 pass / 0 fail** (≈0.6 s) |
 | Headless render smoke | `make smoke` | **31 / 31 checks pass** (16 rows from the Mumbai fixture, EN/HI toggle, no `NaN`/`Invalid Date`, no horizontal scroll at 320/390/430/1024 px, favicon 200, cache-busting) |
 | Accessibility gate | `make axe` | **0 critical/serious** and **0 moderate/minor** across base @1024 px, city dialog open, slot row expanded, base @320 px (axe-core 4.10.2) |
-| Full gate | `make check` | **exit 0** (test + smoke + axe) |
+| Full gate | `make check` | **exit 0** (test + greps + smoke + axe) |
 | Perf budget | (printed by smoke) | shipped JS **98.4 KB raw / 32.3 KB gzip** upper bound < 60 KB min+gzip (NFR-P3) |
 | Cache-busting | (asserted by smoke) | every `?v=` token == `package.json` version |
 | Local serve | `make dev` | `index.html`, `style.css`, `app.js`, `favicon.svg`, `i18n.js`, `choghadiya.js`, `geocoder.js` all served **200** |
 
 Milestone reviews REV-M1, REV-M2 and REV-M3 all returned **PASS** (REV-M2 with a
 required geocoder fix that has since landed and is covered by the green
-integrated run above).
+integrated run above). The QA execution ([docs/08-test-report.md](docs/08-test-report.md))
+and the pre-release security audit ([docs/09-security-audit.md](docs/09-security-audit.md))
+were both re-verified green at HEAD `d9a7b89` (QA: tests 64/64, smoke 31/31, axe clean;
+security: 0 Critical / 0 High, all F1–F3 fixes landed).
 
 ---
 
