@@ -5,14 +5,17 @@
 # ADR-001/ADR-002). `make dev` serves the repo root with python3's stdlib HTTP
 # server; `make test` runs the Node test runner. Neither needs `npm install`.
 #
-# `make check` (DO-02, t_e96f9d7a) is the M7 quality gate: unit/contract tests +
-# headless-Chromium smoke + axe-core accessibility scan. It is the ONLY target
-# that needs dev dependencies (axe-core, pinned exact in package.json as a
+# `make check` (DO-02, t_e96f9d7a; SEC-22 greps added t_899c4547) is the M7 quality
+# gate: unit/contract tests + SEC-22 source greps (SEC-05/03/14) + headless-Chromium
+# smoke + axe-core accessibility scan. The smoke/axe steps are the only ones that
+# need dev dependencies (axe-core, pinned exact in package.json as a
 # devDependency and never shipped — the deployed site keeps `script-src 'self'`).
-# Install them once with `npm ci`; the shipped site itself stays dependency-free.
+# The greps step is pure Node, no deps. Install dev deps once with `npm ci`; the
+# shipped site itself stays dependency-free.
 # `make check` exit codes are CI-honest: 0 green, 1 a real failure (a red test, a
-# failed smoke assertion, or a critical/serious axe violation), 2 the harness
-# could not run (no Chrome, axe-core not installed) — never a silent pass.
+# failed grep assertion, a failed smoke assertion, or a critical/serious axe
+# violation), 2 the harness could not run (no Chrome, axe-core not installed, a
+# shipped file missing) — never a silent pass.
 #
 # ---- Cache-busting / ASSET_VERSION (US-19 AC3, research R7) -----------------
 # ASSET_VERSION is the `version` field of package.json (baseline 2.1.0). It must
@@ -32,7 +35,7 @@ PYTHON ?= python3
 NODE   ?= node
 PORT   ?= 8080
 
-.PHONY: all dev test smoke axe check bump help
+.PHONY: all dev test smoke axe greps check bump help
 
 all: test
 
@@ -52,8 +55,13 @@ smoke:
 axe:
 	$(NODE) scripts/axe-check.mjs
 
-## check: the M7 quality gate — test + smoke + axe (needs `npm ci` once for axe-core)
+## greps: SEC-22 source gate — fails on any HTML sink / inline style-handler / non-allow-listed origin in shipped code
+greps:
+	$(NODE) scripts/security-greps.mjs
+
+## check: the M7 quality gate — test + greps + smoke + axe (needs `npm ci` once for axe-core)
 check: test
+	$(NODE) scripts/security-greps.mjs
 	$(NODE) scripts/smoke.mjs
 	$(NODE) scripts/axe-check.mjs
 

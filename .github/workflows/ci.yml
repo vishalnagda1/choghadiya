@@ -14,11 +14,16 @@ jobs:
     name: make test
     runs-on: ubuntu-latest
     steps:
+      # SEC-18 / RK10 (docs/06-threat-model.md §6.5): third-party actions are pinned
+      # to a full 40-char commit SHA, never a mutable tag — a moved tag could
+      # silently run new code in this workflow. The release version stays as a
+      # trailing comment for humans; `make check`/scripts/security-greps.mjs is
+      # not applicable to YAML, so keep these pins current by hand on upgrade.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node.js 22 (LTS)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 
