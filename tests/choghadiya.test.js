@@ -85,6 +85,42 @@ test('the 8 day slots sum to exactly sunset − sunrise (US-1 AC4)', () => {
   }
 });
 
+test('day-slot length tracks the real solar day, ≈82 min mid-Dec and ≈98 min mid-Jun (US-1 AC1/AC2/AC3)', () => {
+  // Mumbai mid-December: day ≈ 11 h -> slot ≈ 11h/8 ≈ 82 min (NOT the legacy 90 min).
+  const december = buildSchedule({ location: MUMBAI, date: '2026-12-15' });
+  assert.equal(december.defined, true);
+  const decDayMs = december.sunset.getTime() - december.sunrise.getTime();
+  assert.ok(Math.abs(decDayMs / 3_600_000 - 11) <= 0.5, `mid-Dec day ≈ 11 h, got ${(decDayMs / 3_600_000).toFixed(2)} h`);
+  const decSlotMin = (december.daySlots[0].end.getTime() - december.daySlots[0].start.getTime()) / 60_000;
+  assert.ok(Math.abs(decSlotMin - decDayMs / 8 / 60_000) < 0.001, 'day slot length is the day span / 8');
+  assert.equal(december.daySlots[7].end.getTime() - december.daySlots[0].start.getTime(), decDayMs, 'the 8 day slots span exactly sunrise→sunset');
+  assert.ok(decSlotMin >= 75 && decSlotMin <= 90, `mid-Dec slot ≈ 82 min, got ${decSlotMin.toFixed(1)}`);
+  assert.notEqual(decSlotMin, 90, 'the legacy fixed 90 min slot must be gone');
+
+  // Mumbai mid-June: day ≈ 13 h -> slot ≈ 13h/8 ≈ 98 min.
+  const june = buildSchedule({ location: MUMBAI, date: '2026-06-15' });
+  assert.equal(june.defined, true);
+  const junDayMs = june.sunset.getTime() - june.sunrise.getTime();
+  assert.ok(Math.abs(junDayMs / 3_600_000 - 13) <= 0.5, `mid-Jun day ≈ 13 h, got ${(junDayMs / 3_600_000).toFixed(2)} h`);
+  const junSlotMin = (june.daySlots[0].end.getTime() - june.daySlots[0].start.getTime()) / 60_000;
+  assert.ok(Math.abs(junSlotMin - junDayMs / 8 / 60_000) < 0.001, 'day slot length is the day span / 8');
+  assert.equal(june.daySlots[7].end.getTime() - june.daySlots[0].start.getTime(), junDayMs, 'the 8 day slots span exactly sunrise→sunset');
+  assert.ok(junSlotMin >= 92 && junSlotMin <= 105, `mid-Jun slot ≈ 98 min, got ${junSlotMin.toFixed(1)}`);
+});
+
+test('no fixed 06:00/18:00 boundary values exist in the calculation path (US-1 AC5)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../choghadiya.js', import.meta.url), 'utf8');
+  assert.ok(!/0?6:00/.test(source), 'choghadiya.js must not hardcode a 06:00 boundary');
+  assert.ok(!/0?18:00/.test(source), 'choghadiya.js must not hardcode an 18:00 boundary');
+  // Behavioural cross-check: two longitudes 90° apart cannot share a sunrise, so
+  // the times are genuinely derived from suncalc, not from clock constants.
+  const east = buildSchedule({ location: { ...MUMBAI, latitude: 19.076, longitude: 117.8777 }, date: MUMBAI_DATE });
+  const west = buildSchedule({ location: { ...MUMBAI, latitude: 19.076, longitude: 27.8777 }, date: MUMBAI_DATE });
+  const gapHours = Math.abs(east.sunrise.getTime() - west.sunrise.getTime()) / 3_600_000;
+  assert.ok(gapHours > 4 && gapHours < 8, `90° of longitude ≈ 6 h of sunrise (got ${gapHours.toFixed(1)} h)`);
+});
+
 test('night half crossing midnight is attributed to its start date, Wednesday (US-3 AC1)', () => {
   const schedule = buildSchedule({ location: MUMBAI, date: MUMBAI_DATE });
   // Slots 3..7 of the night half run after midnight into 2026-10-15 IST but
@@ -334,4 +370,26 @@ test('resolveCurrentSlot returns null for stale/out-of-span/malformed input, nev
   assert.equal(resolveCurrentSlot(null, new Date()), null);
   assert.equal(resolveCurrentSlot(undefined, new Date()), null);
   assert.equal(resolveCurrentSlot({ defined: false }, new Date()), null);
+});
+
+// --- Vendored dependency integrity (BE-04, requested by BE-01) ----------------
+// DO-01 vendored suncalc@2.1.1 byte-for-byte (ADR-003) and the security model
+// relies on that pin (SEC-13). BE-04 owns the release gate, so the check lives
+// here: the shipped bytes must still match the recorded checksum and expose the
+// API choghadiya.js actually calls, so a silent vendor swap fails CI.
+test('vendored suncalc 2.1.1 is byte-identical to the pinned checksum and exposes getTimes', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const { fileURLToPath } = await import('node:url');
+  const vendorUrl = new URL('../vendor/suncalc-2.1.1.js', import.meta.url);
+  const bytes = readFileSync(fileURLToPath(vendorUrl));
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(
+    sha256,
+    'f5e86948d59268d23496fa919a4a32ed99e1e25c465c7b978a1bd5945e4a197f',
+    'vendored suncalc bytes changed — re-record the checksum (ADR-003) deliberately',
+  );
+  const suncalc = await import(vendorUrl.href);
+  assert.equal(typeof suncalc.getTimes, 'function');
+  assert.equal(typeof suncalc.getPosition, 'function');
 });
