@@ -328,6 +328,10 @@ failed on SEC-08/11/12.
 
 **VERDICT: PASS-with-accepted-risks (0 Critical · 0 High · 2 Medium · 1 Low · 1 Informational)**
 
+*Superseded in part by the fix-wave delta sign-off (§10.12, 2026-10-14): the GATE-2
+conditions F8/F9 are **closed**, F10/F12 are **fixed** — the §10.12 verdict is the
+current one. The paragraph below is preserved as the SEC-1 point-in-time record.*
+
 *SEC-1 card `t_174049d9`, security-engineer, 2026-10-14. This addendum audits the
 v2.3.0 delta (docs/00-brief.md change-log items 1–7) on top of the v2.2.0 audit above.
 Findings are numbered F8–F12, continuing this document's F-sequence. **Two GATE 2
@@ -541,11 +545,11 @@ type" holds.
 
 | ID | Severity | Finding | Location | Fix | Disposition |
 |----|----------|---------|----------|-----|-------------|
-| F8 | **Medium** | Attribution credit ships WITHOUT the hyperlinks RS-3 §13.6 B1 requires ("the licence requires links, not just text"); Open-Meteo's terms require a link next to displayed location data and CC BY 4.0 §3(a) requires the licence URI/hyperlink. The SEC-14 deferral is a self-imposed grep gate — CSP does not block navigation links | `index.html:298-300`, `i18n.js:84,208`, `scripts/security-greps.mjs:72-75` | Add 3 `<a rel="noopener noreferrer" target="_blank">` links (open-meteo.com / geonames.org / creativecommons.org/by/4.0) to `attribution.geocoding`; extend `ALLOWED_ORIGINS` with exactly those 3 link-only hosts (RS-3 explicitly sanctions this) | **GATE 2 condition**: land the links OR record the client's explicit acceptance of an attribution-terms breach. Fix cards: frontend-dev (links) + devops-engineer (gate allow-list) |
-| F9 | **Medium** | Disclosure-vs-storage truthfulness is time-bombed: (a) `privacy.line` does not disclose the 24 h cache TTL/expiry; (b) the client-confirmed localStorage flip (uncommitted `docs/00-brief.md` edit) would make "this browser tab" **false** and extends settings-at-rest lifetime to indefinite (shared-device exposure) | `i18n.js:83,207`, `index.html:299,336`, `session-store.js:38` | If the flip lands, same commit must reword `privacy.line` ("this browser tab"→"this browser", add "TTL-gated cache" wording per the brief), update ADR-009 + docs/06 §11.4, and re-run this delta. Consider adding the TTL to the copy regardless | **GATE 2 sequencing item** (matches TL-1 F2). Owner: CTO routes (copy = UX/tech-writer + one-line scope flip) |
-| F10 | **Low** | Geocache read path returns stored arrays without re-validating records (mapResult runs only on network data): a tampered/legacy entry with an invalid IANA tz or non-finite coords reaches `selectResult`, throws uncaught `RangeError`, and blanks the render (live-proven). TextContent rendering prevents any XSS (verified) | `geocoder.js:244-253` (`persistGet`), `app.js:937-955` (`selectResult`) | Run persisted entries through the same validation as `mapResult` (drop bad records on read), or guard `selectResult`'s `timezone` with the existing `isValidTimeZone` fallback to `deviceTimeZone()` | Fix card → backend-dev (geocoder.js read path) — CTO routes |
-| F11 | *(informational, carried)* | The v2.2.0 F4 nuance stands: `privacy.line` names only the typed city name; the request also carries fixed `count=8` and the UI `language` | `i18n.js:83,207` | optionally widen copy (coordinated UX + i18n-gate change) | Accepted, unchanged |
-| F12 | *(informational)* | `inauspicious.js:24` imports `./choghadiya.js` with no `?v=` token → the module is fetched twice (versioned + bare) and the bare specifier bypasses cache-busting (version-skew risk on redeploy; US-19 AC3 letter). Smoke's assetVersions() checks token *values*, not token *presence* | `inauspicious.js:24` | add `?v=${ASSET_VERSION}`-style token to the import (and extend smoke to assert every internal specifier carries one) | Flag to CTO → fix card candidates (BE lane for the import, DO lane for the smoke assertion) |
+| F8 | **Medium** | Attribution credit ships WITHOUT the hyperlinks RS-3 §13.6 B1 requires ("the licence requires links, not just text"); Open-Meteo's terms require a link next to displayed location data and CC BY 4.0 §3(a) requires the licence URI/hyperlink. The SEC-14 deferral is a self-imposed grep gate — CSP does not block navigation links | `index.html:298-300`, `i18n.js:84,208`, `scripts/security-greps.mjs:72-75` | Add 3 `<a rel="noopener noreferrer" target="_blank">` links (open-meteo.com / geonames.org / creativecommons.org/by/4.0) to `attribution.geocoding`; extend `ALLOWED_ORIGINS` with exactly those 3 link-only hosts (RS-3 explicitly sanctions this) | **CLOSED — v2.3.0 fix wave.** FE-FIX `0cc4144` shipped the three anchors (DOM-API `renderAttribution()`); DO-FIX `c7fc4ad` extended `ALLOWED_ORIGINS` with exactly these 3 hosts + a `LINK_ONLY_ORIGINS` href-context guard. Live re-verified (§10.12) |
+| F9 | **Medium** | Disclosure-vs-storage truthfulness is time-bombed: (a) `privacy.line` does not disclose the 24 h cache TTL/expiry; (b) the client-confirmed localStorage flip (uncommitted `docs/00-brief.md` edit) would make "this browser tab" **false** and extends settings-at-rest lifetime to indefinite (shared-device exposure) | `i18n.js:83,207`, `index.html:299,336`, `session-store.js:38` | If the flip lands, same commit must reword `privacy.line` ("this browser tab"→"this browser", add "TTL-gated cache" wording per the brief), update ADR-009 + docs/06 §11.4, and re-run this delta. Consider adding the TTL to the copy regardless | **CLOSED — v2.3.0 fix wave.** BE-FIX-1 `20fe1c1` flipped `STORAGE_SCOPE` to `'local'`; FE-FIX `0cc4144` rewrote `privacy.line` EN+HI (tab claim dropped, settings-no-expiry + 24 h cache TTL disclosed) + `index.html` fallbacks; docs/06 §11.4 updated to the landed posture (this delta). Verified truthful live (§10.12) |
+| F10 | **Low** | Geocache read path returns stored arrays without re-validating records (mapResult runs only on network data): a tampered/legacy entry with an invalid IANA tz or non-finite coords reaches `selectResult`, throws uncaught `RangeError`, and blanks the render (live-proven). TextContent rendering prevents any XSS (verified) | `geocoder.js:244-253` (`persistGet`), `app.js:937-955` (`selectResult`) | Run persisted entries through the same validation as `mapResult` (drop bad records on read), or guard `selectResult`'s `timezone` with the existing `isValidTimeZone` fallback to `deviceTimeZone()` | **FIXED — BE-FIX-2 `d8b5cdc`:** `persistGet` re-validates every at-rest record (`mapPersisted` → `mapResult` rules, stricter on coordinates than the network path); wholly invalid entry degrades to a cache miss and self-heals on the next fetch. Re-verified (§10.12) |
+| F11 | *(informational, carried)* | The v2.2.0 F4 nuance stands: `privacy.line` names only the typed city name; the request also carries fixed `count=8` and the UI `language` | `i18n.js:83,207` | optionally widen copy (coordinated UX + i18n-gate change) | Accepted, unchanged — carried into the fix-wave sign-off as the sole accepted informational (§10.12) |
+| F12 | *(informational)* | `inauspicious.js:24` imports `./choghadiya.js` with no `?v=` token → the module is fetched twice (versioned + bare) and the bare specifier bypasses cache-busting (version-skew risk on redeploy; US-19 AC3 letter). Smoke's assetVersions() checks token *values*, not token *presence* | `inauspicious.js:24` | add `?v=${ASSET_VERSION}`-style token to the import (and extend smoke to assert every internal specifier carries one) | **FIXED — BE-FIX-2 `d8b5cdc`:** `inauspicious.js:27` now imports `./choghadiya.js?v=2.3.0`; DO-FIX `c7fc4ad` added the smoke presence check (every internal specifier carries `?v=` — 7 specifiers, green) |
 
 ## 10.10 Residual risk (post v2.3.0 delta)
 
@@ -578,3 +582,144 @@ links — fix or explicitly accept) and F9 (storage-scope/disclosure sequencing)
 F10–F12 are Low/informational and non-blocking. No finding here is being softened:
 had the FE-FIX cache wiring not landed (`068681c`) or the disclosure been left
 over-claiming, item 7 would have failed this audit.
+
+---
+
+## 10.12 v2.3.0 fix-wave delta sign-off (2026-10-14, `t_7b42e0d0`)
+
+**VERDICT: PASS-with-accepted-risks (0 Critical · 0 High · 0 Medium · 1 Low · 3 Informational)** — the two GATE-2 conditions (F8, F9) are satisfied and **closed**.
+
+*SEC-FIX card `t_7b42e0d0`, security-engineer, 2026-10-14. Small delta re-audit of
+the v2.3.0 fix wave — NOT a full re-audit; §10.1–§10.11 remain the baseline record.
+Audited tree: `main` @ `61282a8`, working tree clean. Fix wave under sign-off:
+BE-FIX-1 `20fe1c1` (storage flip), FE-FIX `0cc4144`+`f14bc80` (F9/F8/F3 copy + the 3
+attribution links), DO-FIX `c7fc4ad`+`61282a8` (SEC-14 allow-list + smoke/a11y gates),
+BE-FIX-2 `d8b5cdc` (geocache read validation + versioned import). Scope: docs/09 +
+docs/06 only — no code was changed by this card; new findings are filed for the CTO.*
+
+### 10.12.1 Gate runs at the sign-off tree (real output)
+
+| Gate | Command | Result |
+|---|---|---|
+| unit/contract tests | `make test` | **108 pass / 0 fail** |
+| SEC-22 source greps | `make greps` | **PASS — 0 hits across 4 gates** (SEC-05, SEC-03, SEC-14, SEC-STORAGE) |
+| browser smoke | `node scripts/smoke.mjs` | **67 passed / 0 failed** (incl. the migrated item-7a/7b localStorage pins + the new `?v=`-presence check, 7 specifiers) |
+| axe accessibility | `node scripts/axe-check.mjs` | **PASS**, 0 critical/serious (1 incomplete rule: color-contrast — pre-existing) |
+| dependency audit | `npm audit` | **found 0 vulnerabilities** |
+| secret scan | `gitleaks detect --source .` | **no leaks found** (102 commits, ~1.44 MB) |
+
+### 10.12.2 GATE-2 condition closure — verified on the post-wave tree (live)
+
+Live Chromium probe on a locally served build of the committed tree (real network):
+load → toggle EN → real search `Jaipur` (real Open-Meteo request) → select the first
+result → dump storage + the full resource list.
+
+**F8 — attribution links (CLOSED).**
+
+- Exactly **3** anchors on the entire page, all in `#footer-credit`, carrying the
+  RS-3 B1 targets in order and nothing else:
+  `https://open-meteo.com/` · `https://www.geonames.org/` ·
+  `https://creativecommons.org/licenses/by/4.0/` — each `rel="noopener noreferrer"`
+  `target="_blank"`, no other attributes (verified attribute-by-attribute).
+- Built with DOM APIs only (`app.js:1397-1419` `createElement`/`createTextNode`/
+  `replaceChildren`; child nodes are `#text,A,#text,A,#text,A`). `index.html` ships a
+  plain-text fallback (`index.html:302`), so the anchors exist only after `app.js`
+  runs — no HTML sink anywhere (SEC-05 gate 0 hits).
+- `credit.textContent` is **byte-equal** to `DICT[lang]['attribution.geocoding']` in
+  both HI and EN — compared in-page against the real `i18n.js` module (dynamic
+  import), not by eye.
+- `ALLOWED_ORIGINS` grew by **exactly** the 3 sanctioned hosts versus the audited
+  tree (`git diff c68d00a..HEAD -- scripts/security-greps.mjs`: no other origin
+  added anywhere). Each of the three is additionally in `LINK_ONLY_ORIGINS`, so a
+  `fetch`/`import`/`src` use of any of them **fails** SEC-14 despite the allow-list
+  (DO-FIX negative control NC1 proved the guard fires). In shipped code the three
+  origins appear **only** as the href literals `app.js:1392-1394` (plus the gate
+  script's two lists and README/doc prose) — nowhere as a request.
+
+**F9 — storage/disclosure truthfulness (CLOSED).**
+
+- `STORAGE_SCOPE = 'local'` (`session-store.js:40`). After the full flow,
+  `sessionStorage` is **empty** and `localStorage` holds exactly 4 namespaced keys —
+  `settings.lang`, `settings.location`, `geocache.index`,
+  `geocache.entry.en\u0000jaipur` — no key creep beyond the client-specified fields.
+- Settings envelopes carry **`t:null` (no expiry)** → "settings stay in this browser
+  with no expiry" is truthful. The geocache envelope carries `t` = write-time +
+  **86,400,000 ms** (`CACHE_TTL_MS` = 24 h exactly) → "expire after 24 hours" is
+  truthful (the smoke 20c renewal pin asserts the same ≈24 h envelope). With
+  `localStorage` as the backing store, at-rest lifetime now spans browser restarts:
+  settings indefinitely, the cache inside its 24 h TTL. docs/06 §11.4 is rewritten to
+  this landed posture (shared-device exposure + controls recorded).
+- `privacy.line` rendered in the footer AND the location sheet is **byte-equal** to
+  `DICT[lang]` in HI and EN (in-page comparison against the real module; footer ==
+  sheet). "No server storage" holds: the only thing that crosses the wire is the
+  typed query (below). The brief's stance — "no server storage; local TTL-gated cache
+  only" — is satisfied as written, with the disclosed exception that settings (the
+  user's own choices + chosen location) carry no TTL, exactly as item 7 specifies.
+
+**US-17 no-egress invariant (holds).** After search + selection (stored location
+`26.91962 / 75.78781`), the complete performance-resource list contains exactly one
+external URL:
+`https://geocoding-api.open-meteo.com/v1/search?name=Jaipur&count=8&language=en`
+— no `lat`/`lon` parameter and **no coordinate value appears in any URL** (string
+scan of every resource entry). The 3 licence links are **never fetched**: they are
+user-initiated navigation only and show up in no request. All 9 self-origin resources
+carry `?v=2.3.0`.
+
+**F10/F12 (FIXED by BE-FIX-2 `d8b5cdc`).** `geocoder.js` `persistGet` re-validates
+every at-rest record (`mapPersisted` → the `mapResult` rules, stricter on coordinates
+than the network path — real finite numbers required) and degrades a wholly invalid
+entry to a cache miss that self-heals on the next fetch;
+`inauspicious.js:27` now imports `./choghadiya.js?v=2.3.0`. Source-verified; both
+behaviours green inside the 67/67 smoke run.
+
+**QA-1 F2 (docs/08 §13) — CLOSED.** The QA re-audit's "client-confirmed localStorage
+vs shipped sessionStorage" mismatch is resolved by the same wave: flip (`20fe1c1`) +
+disclosure rewrite (`0cc4144`) + smoke pin migration (`c7fc4ad`).
+
+### 10.12.3 Findings-table dispositions after this delta (§10.9 updated in place)
+
+| ID | Severity | Disposition after the fix wave |
+|----|----------|-------------------------------|
+| F8 | Medium | **CLOSED** — FE-FIX `0cc4144` + DO-FIX `c7fc4ad`, live-verified above |
+| F9 | Medium | **CLOSED** — BE-FIX-1 `20fe1c1` + FE-FIX `0cc4144` + docs/06 §11.4 (this delta), live-verified above |
+| F10 | Low | **FIXED** — BE-FIX-2 `d8b5cdc` (read-path re-validation) |
+| F11 | Informational | **Accepted, carried** — unchanged (v2.2.0 F4 nuance) |
+| F12 | Informational | **FIXED** — BE-FIX-2 `d8b5cdc` + smoke presence check (`c7fc4ad`) |
+| QA-1 F2 (docs/08) | Medium | **CLOSED** — same wave |
+
+Where §10.7's SEC-04/SEC-14/SEC-15 "with note" cells or §10.10's residual list
+conflict with this section, this section governs (they are preserved as the SEC-1
+point-in-time record).
+
+### 10.12.4 New delta findings (found during this sign-off — for the CTO to route)
+
+| ID | Severity | Finding | Location | Fix |
+|----|----------|---------|----------|-----|
+| F13 | **Low** | The axe gate does not pin `prefers-color-scheme`, so its verdict depends on the host theme — the wave's own anchor-contrast defect was only visible in dark mode (DO-FIX caught it; a light-mode host would have passed it silently). No security impact; the a11y gate can hide theme-scoped regressions | `scripts/axe-check.mjs` | emulate + scan both light and dark themes (DO follow-up candidate) |
+| F14 | *(informational)* | The dark-theme link-contrast fix (`style.css:920` `footer.app a { color: inherit }`, `61282a8`) is an out-of-lane product change shipped inside the DO-FIX card. Security-wise sound (it closed an a11y defect), but UX has not blessed the token choice | `style.css:920` | UX/CTO bless or replace with a design-system `--link` token (isolated commit, trivially supersedable) |
+| F15 | *(informational)* | The smoke item-7a pin "12h/24h persists across a reload" asserts DOM state only and would also pass under `sessionStorage` — the language-key and geocache-key pins are the real session-vs-local discriminators. QA-2 also still owes the direct browser-relaunch persistence test | `scripts/smoke.mjs` (§19) | QA-2 (`t_087f8775`) may tighten; not a product defect |
+
+### 10.12.5 Residual risk & honest limits (post sign-off)
+
+1. **F11** (informational, accepted): `privacy.line` names only the typed city name
+   while the request also carries fixed `count=8` + the UI `language` — unchanged
+   client-scoped copy decision.
+2. **QA-2 (`t_087f8775`, open child) still owes two regression pins**: the
+   `credit.textContent === t('attribution.geocoding', lang)` smoke assertion and a
+   true browser-process-relaunch persistence test. This sign-off verified both
+   behaviours directly (in-page byte-compare; `localStorage` + `t:null` semantics +
+   the suite's same-tab reload persistence), but they are not yet pinned in the
+   suite — a future regression could pass `make check` until QA-2 lands.
+3. **F13** stands until the axe gate is theme-deterministic.
+4. **Shared-device exposure** — settings.location (indefinite) and recent queries
+   (≤24 h) are readable by anyone with access to the browser profile. Inherent to the
+   client-confirmed item 7, now truthfully disclosed; no server copy exists and
+   extensions/devtools users are inside TB5's trust rule.
+5. **F14** is product polish pending UX sign-off, listed here only so the delta is
+   complete.
+
+**Bottom line:** both GATE-2 conditions are discharged with live evidence, the two
+Medium and one Low finding from §10.9 are closed/fixed, and what remains is one
+accepted informational (F11) plus one Low gate-hardening item (F13) and two
+informationals (F14, F15). No Critical/High exists, so no fix cards are required
+from this delta; F13–F15 are filed above for ordinary CTO routing.
