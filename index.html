@@ -65,15 +65,32 @@
       <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
     </div>
 
+    <!-- ===== S5 geolocation-denied / unavailable notice — 03-ux §3 S5, US-8.
+         role="status" (polite), NOT role="alert": it is informative, not urgent, and
+         must not interrupt a screen reader mid-sentence (03-ux §7.3). Colour is never
+         the only cue — glyph ℹ + text. The action button opens the city sheet, so the
+         city field is directly reachable and the app never dead-ends (03-ux F3 step 3).
+         FE-04 owns this block; FE-03 sets state.ui.notice and re-renders into it. ===== -->
+    <p class="notice" id="geo-notice" role="status" hidden>
+      <span aria-hidden="true">ℹ</span>
+      <span data-i18n="geo.denied">लोकेशन उपलब्ध नहीं — शहर लिखें</span>
+      <button type="button" id="geo-notice-action" data-i18n="loc.choose">शहर चुनें</button>
+    </p>
+
     <!-- Live region for loading.status (03-ux §7.3). -->
     <p class="sr" role="status" id="live" data-i18n="loading.status">लोड हो रहा है</p>
+
+    <!-- ===== S1 empty state — no location has ever been chosen (03-ux §3 S1 "Empty",
+         US-8 AC1). The date bar and the S5 notice + its city field above stay in
+         place; only the two lists are replaced by this one calm line. ===== -->
+    <p class="empty-state" id="empty-state" hidden data-i18n="empty.noLocation">आज का चौघड़िया देखने के लिए शहर चुनें</p>
 
     <!-- ===== S1 Today view — day + night sections. Static markup renders S4 (skeleton):
          header + date bar are live, both lists are skeleton blocks with aria-busy="true"
          (03-ux §3 S1 "Loading", §3 S4). FE-02 replaces the list contents with the 16 real
          rows; the empty dynamic nodes below (date label, section edges, small print) are
          filled by FE-02 from the dictionary / schedule. ===== -->
-    <div class="panes">
+    <div class="panes" id="panes">
 
       <section class="pane day" aria-labelledby="day-h">
         <h2 id="day-h">
@@ -112,6 +129,33 @@
       </section>
 
     </div>
+
+    <!-- ===== S3 not-defined state — polar / no sunrise-sunset (03-ux §3 S3, US-9).
+         Both languages are shown at once ON PURPOSE: a user at 70° N may be reading
+         in a language they did not set, and a single hard-failure string is not worth
+         a bug report (03-ux §3 S3). The copy still comes from the dictionary for both
+         languages (no hardcoded string) — app.js fills [data-i18n-lang] nodes with the
+         language named in their `lang` attribute, while the escape-hatch buttons use
+         the active language like every other control. The date bar above stays live,
+         so the user can step to an adjacent date where the sun does rise (US-9 AC1).
+         Nothing here can render a slot row, NaN or Invalid Date (US-9 AC2). ===== -->
+    <section class="not-defined" id="not-defined" hidden aria-labelledby="nd-h">
+      <p class="nd-glyph" aria-hidden="true">ⓘ</p>
+      <h2 class="nd-title" id="nd-h" lang="hi" data-i18n-lang="undefined.polar"></h2>
+      <p class="nd-reason" lang="hi" data-i18n-lang="undefined.reason"></p>
+      <p class="nd-title" lang="en" data-i18n-lang="undefined.polar"></p>
+      <p class="nd-reason" lang="en" data-i18n-lang="undefined.reason"></p>
+      <p class="nd-actions">
+        <button type="button" class="nd-nav" id="nd-prev">
+          <span aria-hidden="true">‹</span>
+          <span data-i18n="undefined.tryAdjacent">पिछला दिन</span>
+        </button>
+        <button type="button" class="nd-nav" id="nd-next">
+          <span data-i18n="date.next">अगला दिन</span>
+          <span aria-hidden="true">›</span>
+        </button>
+      </p>
+    </section>
   </main>
 
   <!-- ===== Footer (contentinfo landmark) — 03-ux §1.1, US-6/US-17 ===== -->
@@ -147,9 +191,17 @@
              placeholder="जैसे: लंदन, जयपुर" data-i18n-ph="city.placeholder">
       <button type="submit" data-i18n="city.submit">खोजें</button>
     </form>
-    <!-- FE-03: visible inline message (city.required / city.noResults / city.error).
-         FE-04 upgrades this to the S6 component (role="alert" + दोबारा/Retry). -->
-    <p class="error" id="sheet-msg" hidden></p>
+    <!-- FE-04: inline message inside the sheet — S6 / S7 / field validation.
+         S6 (geocode failure) is `role="alert"` because the user just acted and expects
+         a result (03-ux §7.3) and carries a दोबारा/Retry button that re-submits the
+         same query (US-10 AC1); S7 (no results) keeps the field's value and the sheet
+         open (US-5 AC5); field validation shows city.required. The last successful
+         location stays rendered behind the sheet — nothing here touches it. -->
+    <p class="error" id="sheet-error" role="alert" hidden>
+      <span class="err-glyph" id="sheet-error-glyph" aria-hidden="true"></span>
+      <span id="sheet-msg"></span>
+      <button type="button" class="retry" id="retry-search" hidden data-i18n="city.retry">दोबारा</button>
+    </p>
     <!-- FE-03/FE-05: polite live region for city.resultsCount after a search. -->
     <p class="sr" id="sheet-status" role="status"></p>
     <ul class="results" id="results"></ul>

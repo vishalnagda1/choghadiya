@@ -518,7 +518,83 @@ header.app {
   font-size: var(--fs-sm);
   cursor: pointer;
 }
-.error { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--danger) }
+/* Inline error inside the sheet — S6 (geocode failure, role="alert" + Retry) and
+   S7 (no results). The glyph + text carry the message, so state is never colour-only
+   (03-ux §7.4); the Retry button is a ≥ 44 px target (NFR-A5). */
+.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--danger);
+}
+.err-glyph { flex: 0 0 auto; font-size: var(--fs-sm); line-height: 1 }
+.error .retry {
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Block-level degradation states
+   ========================================================================== */
+
+/* S1 empty state — no location has ever been chosen (03-ux §3 S1 "Empty", US-8 AC1).
+   The date bar and the S5 notice + city field above stay in place; only the two
+   lists are replaced by this one calm line. */
+.empty-state {
+  margin: var(--sp-6) 0;
+  padding: var(--sp-6) var(--sp-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-base);
+  text-align: center;
+}
+
+/* S3 not-defined (polar / no sunrise-sunset) — replaces both lists, the date bar above
+   stays live so the user can step to an adjacent date (03-ux §3 S3, US-9). Both
+   languages are shown at once here on purpose. */
+.not-defined {
+  margin: var(--sp-4) 0;
+  padding: var(--sp-6) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  text-align: center;
+}
+.not-defined .nd-glyph { margin: 0 0 var(--sp-2); font-size: var(--fs-xl); line-height: 1; color: var(--text-muted) }
+.not-defined .nd-title { margin: 0; font-size: var(--fs-lg); font-weight: 600; color: var(--text) }
+.not-defined .nd-reason { margin: var(--sp-1) 0 0; font-size: var(--fs-sm); color: var(--text-muted) }
+.not-defined p[lang="en"].nd-title { margin-top: var(--sp-4) }
+.nd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 0;
+}
+.nd-nav {
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
 
 /* ==========================================================================
    Loading skeleton — .skeleton: 56 px, --surface-2, animated only when the user has

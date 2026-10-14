@@ -3,6 +3,11 @@
 // FE-02 (t_f0568729): bilingual render, i18n wiring, ‹ › date navigation.
 // FE-03 (t_9312a3f6): geolocation flow, city-search sheet, location chip — it
 // EXTENDS this file; it does not fork it (file-ownership rule, docs/05-plan.md §3.2).
+// FE-04 (t_d22cd295): the degradation states — S3 not-defined, S5 geolocation
+// unavailable notice, S6 geocoder error + Retry, S7 no-results, and the S1 empty
+// state. It replaces the FE-03 placeholder hooks (`onGeoUnavailable`, `setSheetError`)
+// with the real components and adds the render guard that keeps NaN / Invalid Date /
+// undefined / empty rows out of the DOM (US-9 AC2, 04-arch §8.1).
 //
 // Contract: docs/04-architecture.md §2.3 (module responsibilities), §4.1 (AppState),
 // §5.1 (geocoder client), §8.1 (error taxonomy, "never NaN / Invalid Date /
@@ -16,11 +21,11 @@
 // FE-04/FE-05 extend this file sequentially, they do not fork it.
 //
 // Deliberate scope boundary (owned by later cards — see the completion summary):
-//   - current-slot highlight, "अभी / Now" badge, ≤ 60 s poll, row disclosure → FE-05;
-//   - S3 polar / S5 denied notice / S6 geocoder error+Retry / S7 / empty → FE-04.
-// The failure paths below are deliberately routed through named hooks
-// (`onGeoUnavailable`, `setSheetError`) instead of inline try/catch swallowing, so
-// FE-04 can replace their bodies with the full S5/S6/S7 components.
+//   - current-slot highlight, "अभी / Now" badge, ≤ 60 s poll, row disclosure,
+//     Alt+←/→ date shortcuts, remaining live-region semantics → FE-05.
+// The FE-03 failure seams (`onGeoUnavailable`, `setSheetError`) are now the real
+// S5/S6/S7 components; every degradation keeps the date bar and the language
+// toggle alive (03-ux §3 S3, §2 F3).
 
 import { addDays, buildSchedule, formatDate, formatTime, todayIn } from './choghadiya.js?v=2.1.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.1.0';
@@ -48,6 +53,19 @@ const GEOLOCATION_OPTIONS = Object.freeze({
   maximumAge: 60000,
   timeout: 10000,
 });
+
+/**
+ * Hard ceiling on how long the S4 skeleton may wait for a geolocation callback.
+ *
+ * `GEOLOCATION_OPTIONS.timeout` asks the browser to call back within 10 s, but a
+ * browser whose geolocation service is unavailable can ignore it and invoke NEITHER
+ * callback (reproduced in headless Chrome over CDP: `getCurrentPosition` never settles,
+ * so the app sat on the skeleton indefinitely). The watchdog guarantees the US-8
+ * degradation is reached: after this bound the app shows the S5 notice and the empty
+ * state instead of a permanent skeleton. A genuinely late success still wins — it
+ * clears `notice` and re-renders (onGeoSuccess).
+ */
+const GEOLOCATION_WATCHDOG_MS = GEOLOCATION_OPTIONS.timeout + 2000;
 
 /** Slots per half — mirrors choghadiya.js CONFIG.SLOT_COUNT for the skeleton rows. */
 const SLOT_COUNT = 8;
@@ -81,6 +99,9 @@ const dom = {};
 /** Lazily-created rate-disciplined geocoder (BE-02); never constructed at import time. */
 let geocoder = null;
 
+/** Pending geolocation watchdog timer id (see GEOLOCATION_WATCHDOG_MS). */
+let geoWatchdog = null;
+
 /* ------------------------------------------------------------------ */
 /* Lifecycle                                                           */
 /* ------------------------------------------------------------------ */
@@ -96,7 +117,10 @@ function init() {
   dom.sheet = document.getElementById('sheet');
   dom.sheetForm = document.getElementById('city-form');
   dom.cityInput = document.getElementById('city');
+  dom.sheetError = document.getElementById('sheet-error');
+  dom.sheetErrorGlyph = document.getElementById('sheet-error-glyph');
   dom.sheetMsg = document.getElementById('sheet-msg');
+  dom.retrySearch = document.getElementById('retry-search');
   dom.sheetStatus = document.getElementById('sheet-status');
   dom.results = document.getElementById('results');
   dom.dateLabel = document.getElementById('date-label');
@@ -104,6 +128,13 @@ function init() {
   dom.next = document.getElementById('next-day');
   dom.todayPill = document.getElementById('today-pill');
   dom.live = document.getElementById('live');
+  dom.geoNotice = document.getElementById('geo-notice');
+  dom.geoNoticeAction = document.getElementById('geo-notice-action');
+  dom.emptyState = document.getElementById('empty-state');
+  dom.panes = document.getElementById('panes');
+  dom.notDefined = document.getElementById('not-defined');
+  dom.ndPrev = document.getElementById('nd-prev');
+  dom.ndNext = document.getElementById('nd-next');
   dom.dayList = document.getElementById('day-list');
   dom.nightList = document.getElementById('night-list');
   dom.dayEdge = document.getElementById('day-edge');
@@ -117,6 +148,17 @@ function init() {
   dom.prev.addEventListener('click', () => stepDay(-1));
   dom.next.addEventListener('click', () => stepDay(1));
   dom.todayPill.addEventListener('click', goToToday);
+
+  // --- FE-04: degradation surfaces ----------------------------------------------
+  // S5's action button opens the sheet, so the city field is directly reachable
+  // without an error wall (03-ux §2 F3 step 3).
+  dom.geoNoticeAction.addEventListener('click', openSheet);
+  // S3's adjacent-date escape hatch (03-ux §3 S3) — the same date step as the
+  // date bar, so a polar user can reach a date where the sun does rise.
+  dom.ndPrev.addEventListener('click', () => stepDay(-1));
+  dom.ndNext.addEventListener('click', () => stepDay(1));
+  // S6's Retry re-submits the SAME query (US-10 AC1) — never a new fetch path.
+  dom.retrySearch.addEventListener('click', retrySearch);
 
   // --- FE-03: location surfaces -------------------------------------------------
   dom.locChip.addEventListener('click', openSheet);
@@ -190,16 +232,37 @@ function scheduleGeolocation() {
 function requestDeviceLocation() {
   const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
   // No geolocation at all (insecure context / unsupported browser) → S5 fallback,
-  // never a throw (US-8 AC2). FE-04 renders the notice from state.ui.notice.
+  // never a throw (US-8 AC2).
   if (!geo || typeof geo.getCurrentPosition !== 'function') {
     onGeoUnavailable('geo-unavailable');
     return;
   }
+  armGeoWatchdog();
   geo.getCurrentPosition(onGeoSuccess, onGeoError, GEOLOCATION_OPTIONS);
+}
+
+/**
+ * Guarantee the S4 skeleton is never permanent: if the browser invokes neither
+ * callback (it can ignore our `timeout`), S5 + the empty state take over. The
+ * condition also makes the timer a no-op when a location has already resolved.
+ */
+function armGeoWatchdog() {
+  clearGeoWatchdog();
+  if (typeof window === 'undefined') return;
+  geoWatchdog = window.setTimeout(() => {
+    geoWatchdog = null;
+    if (!state.location && state.ui.loading) onGeoUnavailable('geo-unavailable');
+  }, GEOLOCATION_WATCHDOG_MS);
+}
+
+function clearGeoWatchdog() {
+  if (geoWatchdog !== null && typeof window !== 'undefined') window.clearTimeout(geoWatchdog);
+  geoWatchdog = null;
 }
 
 /** Granted: slots render for the device coords with the device's IANA zone (US-4 AC1/AC3). */
 function onGeoSuccess(position) {
+  clearGeoWatchdog();
   const { latitude, longitude } = position.coords;
   state.location = {
     latitude,
@@ -223,11 +286,14 @@ function onGeoError(error) {
 }
 
 /**
- * FE-04 HOOK — geolocation is unavailable. Sets the AppState fields its S5 banner and
- * empty state read, and re-renders so the shell leaves the S4 skeleton. FE-04 replaces
- * the body with the notice/S5 + empty message; FE-03 never swallows the failure.
+ * S5 — geolocation is denied, timed out, or unavailable (insecure context / no API).
+ * Sets the AppState fields the S5 notice and the S1 empty state read, then re-renders:
+ * the shell leaves the S4 skeleton, `renderNotice()` shows the `role="status"` banner
+ * with its Choose-city button, and (with no location) `renderSections()` replaces the
+ * lists with `empty.noLocation`. Never an error wall, never a dead end (US-8 AC1/AC2).
  */
 function onGeoUnavailable(reason) {
+  clearGeoWatchdog();
   state.ui.loading = false;
   state.ui.notice = reason === 'geo-unavailable' ? 'geo-denied' : reason;
   render();
@@ -262,7 +328,18 @@ function openSheet() {
   dom.cityInput.focus(); // showModal autofocuses the close button; the spec wants the field
 }
 
-/** Focus returns to the location chip on EVERY close path (US-18 AC2, 03-ux §7.2). */
+/**
+ * Focus returns to the location chip on EVERY close path (US-18 AC2, 03-ux §7.2) —
+ * reached via the ✕ button, Esc, a selected result or a backdrop click.
+ *
+ * Handover note (FE-04, verified to the limit of the harness): this handler hangs off
+ * `<dialog>`'s `close` event, and the harness browser (HeadlessChrome/155 over CDP)
+ * never dispatches that event — a same-task programmatic `close()` leaves `.open`
+ * false, while a control click listener fires normally, so the miss is the browser's,
+ * not the app's. `openSheet()` re-clears results and the inline message on every open,
+ * so the user never sees stale output even if this teardown is skipped; the focus-return
+ * half still needs a check in a real browser (tech-lead M2 review item).
+ */
 function onSheetClose() {
   state.ui.sheetOpen = false;
   if (geocoder) geocoder.cancel(); // abort any superseded in-flight request
@@ -275,9 +352,24 @@ function onSheetClose() {
  * Explicit submit (Enter / the खोजें button) → exactly ONE Open-Meteo request through
  * BE-02's rate-disciplined `searchNow` (US-5 AC1/AC4). Keystrokes never reach here.
  */
-async function onSubmitCity(event) {
+function onSubmitCity(event) {
   event.preventDefault();
-  const query = dom.cityInput.value;
+  runSearch(dom.cityInput.value);
+}
+
+/** S6 — Retry re-submits the SAME query the user last sent (US-10 AC1). */
+function retrySearch() {
+  dom.cityInput.value = state.ui.query; // show what is being retried
+  runSearch(state.ui.query);
+}
+
+/**
+ * The single search path — shared by the submit handler and S6's Retry so both issue
+ * exactly one request through BE-02 (no second fetch path, US-5 AC4, ADR-004).
+ * The field's value is left untouched on every failure, so S7 "keeps its value" and
+ * the sheet stays open and usable (US-5 AC5).
+ */
+async function runSearch(query) {
   state.ui.query = query;
   setSheetError(null);
   dom.results.replaceChildren();
@@ -286,7 +378,7 @@ async function onSubmitCity(event) {
     const results = await getGeocoder().searchNow(query, { lang: state.lang });
     if (results === null) return; // superseded / sheet closed — not a failure
     if (results.length === 0) {
-      setSheetError('geocode-empty'); // S7 (US-5 AC5) — FE-04 owns the final component
+      setSheetError('geocode-empty'); // S7 (US-5 AC5)
       return;
     }
     renderResults(results);
@@ -297,7 +389,7 @@ async function onSubmitCity(event) {
 }
 
 /**
- * FE-04 HOOK — map BE-02's GeocoderError taxonomy (04-arch §8.1) to an AppState code.
+ * Map BE-02's GeocoderError taxonomy (04-arch §8.1) to an AppState code.
  * Aborts are control flow (a newer request superseded this one), never a failure.
  */
 function onGeocodeError(error) {
@@ -309,16 +401,20 @@ function onGeocodeError(error) {
 }
 
 /**
- * FE-04 HOOK — the single seam for S6/S7/validation messages. FE-03 renders the
- * minimal inline line from the dictionary (never a silent failure); FE-04 upgrades it
- * to the S6 `role="alert"` + दोबारा/Retry component and the S7 field-keeps-value rule.
+ * The single seam for S6 / S7 / field-validation messages (04-arch §8.1):
+ *   - `geocode-network` / `geocode-http` → S6: `role="alert"` + ⚠ glyph + Retry;
+ *   - `geocode-empty` → S7: "No city found — check the spelling", sheet stays open;
+ *   - `query-required` → inline `city.required`, focus returns to the field.
+ * Every visible string is a dictionary key (03-ux §6) — no hardcoded copy anywhere.
  */
 function setSheetError(kind) {
   state.ui.sheetError = kind;
-  if (!dom.sheetMsg) return;
   const key = SHEET_ERROR_KEY[kind];
+  const retryable = RETRYABLE.has(kind);
   dom.sheetMsg.textContent = key ? t(key, state.lang) : '';
-  dom.sheetMsg.hidden = !key;
+  dom.sheetErrorGlyph.textContent = retryable ? '⚠' : '';
+  dom.retrySearch.hidden = !retryable;
+  dom.sheetError.hidden = !key;
   if (kind === 'query-required') dom.cityInput.focus(); // 03-ux S1 validation
 }
 
@@ -329,6 +425,9 @@ const SHEET_ERROR_KEY = Object.freeze({
   'geocode-network': 'city.error',
   'geocode-http': 'city.error',
 });
+
+/** S6 codes: the request failed, so Retry re-submits the same query (US-10 AC1). */
+const RETRYABLE = Object.freeze(new Set(['geocode-network', 'geocode-http']));
 
 /** Polite live region for the result count (03-ux §6 city.resultsCount). */
 function announceSheet(text) {
@@ -382,6 +481,7 @@ function safeFormatTime(instant, timeZone, lang) {
  * (US-5 AC2/AC3, US-7 AC1/AC2, 03-ux F2 steps 5-7).
  */
 function selectResult(result) {
+  clearGeoWatchdog();
   state.location = {
     latitude: result.latitude,
     longitude: result.longitude,
@@ -430,9 +530,33 @@ function render() {
 
   dom.html.lang = state.lang; // US-11 AC5 — <html lang> flips hi <-> en
   applyDictionary();
+  renderNotDefined();
   renderChip();
   renderDateBar();
+  renderNotice();
   renderSections();
+}
+
+/**
+ * S3's copy is the one place the app shows BOTH languages at once (03-ux §3 S3), so
+ * these nodes are filled from the dictionary explicitly per `lang` attribute rather
+ * than from the active language. Still no hardcoded copy (US-11 AC3).
+ */
+function renderNotDefined() {
+  for (const el of dom.notDefined.querySelectorAll('[data-i18n-lang]')) {
+    el.textContent = t(el.getAttribute('data-i18n-lang'), el.getAttribute('lang'));
+  }
+}
+
+/**
+ * S5 — the geolocation notice shows only while there is no location and the request
+ * has settled (denied / timed out / insecure context). Being informative rather than
+ * urgent it is `role="status"` (03-ux §7.3), and its copy is a `data-i18n` node so the
+ * language toggle re-translates it in place (03-ux F4 step 4).
+ */
+function renderNotice() {
+  const show = !state.location && Boolean(state.ui.notice);
+  dom.geoNotice.hidden = !show;
 }
 
 /**
@@ -484,59 +608,112 @@ function renderChip() {
 function renderDateBar() {
   if (!state.location) {
     // S4 / no-location: the date bar can't format a date without a zone, so it stays
-    // inert and the polite region announces the S4 status (03-ux §6 geo.loading).
+    // inert and the polite region announces the S4 status, then the empty-state line
+    // once geolocation has settled (03-ux §6 geo.loading / empty.noLocation). The bar
+    // itself stays present in every degradation (03-ux §3 S1 "Empty").
     dom.dateLabel.textContent = '';
     dom.todayPill.hidden = true;
     dom.prev.disabled = true;
     dom.next.disabled = true;
-    dom.live.textContent = state.ui.loading ? t('geo.loading', state.lang) : '';
+    dom.live.textContent = state.ui.loading
+      ? t('geo.loading', state.lang)
+      : t('empty.noLocation', state.lang);
     return;
   }
 
   dom.prev.disabled = false;
   dom.next.disabled = false;
-  const label = formatDate(state.viewedDate, state.location.timezone, state.lang);
+  const label = safeFormatDate(state.viewedDate, state.location.timezone, state.lang);
   dom.dateLabel.textContent = label;
   dom.todayPill.hidden = state.viewedDate === todayAtLocation();
   dom.live.textContent = label;
 }
 
-/** Both slot lists, their boundary prints, and the aria-busy transition out of S4. */
+/**
+ * S3-safe date formatting: a bad date or unknown zone yields no text at all rather
+ * than an `Invalid Date` / `NaN` on screen (US-9 AC2, 04-arch §8.1).
+ */
+function safeFormatDate(dateISO, timeZone, lang) {
+  try {
+    return formatDate(dateISO, timeZone, lang);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Both slot lists, their boundary prints, and the block-level degradation states:
+ *   - no location + still resolving → S4 skeleton inside the panes;
+ *   - no location + settled         → panes hidden, `empty.noLocation` shown (S1 empty);
+ *   - location + `defined:false`    → panes hidden, S3 not-defined panel shown (US-9);
+ *   - location + valid schedule     → the 16 rows and their boundary small print.
+ * The date bar and the language toggle stay live in all four (03-ux §2 F4 step 4).
+ */
 function renderSections() {
   if (!state.location) {
-    // No location yet. While geolocation resolves we show S4 (skeleton, aria-busy);
-    // once it has failed/been denied the lists go empty and FE-04 renders S5 + the
-    // S1-empty message from state.ui.notice. Never a row, never NaN (US-9 AC2).
     for (const list of [dom.dayList, dom.nightList]) {
       if (state.ui.loading) showSkeleton(list);
       else clearList(list);
     }
     clearBoundaries();
+    dom.panes.hidden = !state.ui.loading; // skeleton needs the panes; empty state does not
+    dom.emptyState.hidden = state.ui.loading;
+    dom.notDefined.hidden = true;
     return;
   }
 
-  const schedule = state.schedule;
-  const ready = Boolean(schedule && schedule.defined);
-
-  const daySlots = ready ? schedule.daySlots : [];
-  const nightSlots = ready ? schedule.nightSlots : [];
-  setRows(dom.dayList, daySlots);
-  setRows(dom.nightList, nightSlots);
+  dom.emptyState.hidden = true;
+  const ready = isRenderableSchedule(state.schedule);
 
   if (!ready) {
-    // S3's message block is FE-04's; FE-03 must not invent copy, so it simply emits
-    // no row and no boundary text — never NaN / Invalid Date (US-9 AC2, 04-arch §8.1).
+    // S3: no row, no boundary text, never NaN / Invalid Date / undefined (US-9 AC2).
+    clearList(dom.dayList);
+    clearList(dom.nightList);
     clearBoundaries();
+    dom.panes.hidden = true;
+    dom.notDefined.hidden = false;
     return;
   }
+
+  dom.panes.hidden = false;
+  dom.notDefined.hidden = true;
+  setRows(dom.dayList, state.schedule.daySlots);
+  setRows(dom.nightList, state.schedule.nightSlots);
 
   const { timezone } = state.location;
   const { lang } = state;
   // 03-ux §3 S1: heading edge = the half's own boundary, small print = the far edge.
-  dom.dayEdge.textContent = boundary('section.rise', schedule.sunrise, timezone, lang);
-  dom.daySmallprint.textContent = boundary('section.set', schedule.sunset, timezone, lang);
-  dom.nightEdge.textContent = boundary('section.set', schedule.sunset, timezone, lang);
-  dom.nightSmallprint.textContent = boundary('section.nextRise', schedule.nextSunrise, timezone, lang);
+  dom.dayEdge.textContent = boundary('section.rise', state.schedule.sunrise, timezone, lang);
+  dom.daySmallprint.textContent = boundary('section.set', state.schedule.sunset, timezone, lang);
+  dom.nightEdge.textContent = boundary('section.set', state.schedule.sunset, timezone, lang);
+  dom.nightSmallprint.textContent = boundary('section.nextRise', state.schedule.nextSunrise, timezone, lang);
+}
+
+/**
+ * The render guard of 04-arch §8.1: only a schedule whose two halves are complete and
+ * whose every instant is a real, finite `Date` may reach the DOM. `buildSchedule`
+ * already returns `defined:false` for polar input; this is the belt-and-braces check
+ * that makes an empty/partial slot row impossible even if a future edit regresses it.
+ */
+function isRenderableSchedule(schedule) {
+  return Boolean(
+    schedule
+    && schedule.defined
+    && Array.isArray(schedule.daySlots) && schedule.daySlots.length === SLOT_COUNT
+    && Array.isArray(schedule.nightSlots) && schedule.nightSlots.length === SLOT_COUNT
+    && schedule.daySlots.every(isCompleteSlot)
+    && schedule.nightSlots.every(isCompleteSlot),
+  );
+}
+
+/** A slot is renderable only when both ends are real instants (never NaN/Invalid Date). */
+function isCompleteSlot(slot) {
+  return Boolean(slot) && isRealInstant(slot.start) && isRealInstant(slot.end);
+}
+
+/** True for a usable `Date` (not null, not Invalid Date). */
+function isRealInstant(value) {
+  return value instanceof Date && Number.isFinite(value.getTime());
 }
 
 /** Clear the four boundary/small-print nodes (never leaves stale text behind). */
@@ -546,9 +723,15 @@ function clearBoundaries() {
   }
 }
 
-/** `"सूर्योदय 06:32"` — dictionary label + 24-hour time in the location's clock. */
+/**
+ * `"सूर्योदय 06:32"` — dictionary label + 24-hour time in the location's clock.
+ * Returns '' (rather than `undefined`/`Invalid Date`) when the instant is unusable,
+ * so a degraded schedule can never leak a broken time into the small print (US-9 AC2).
+ */
 function boundary(key, instant, timeZone, lang) {
-  return `${t(key, lang)} ${formatTime(instant, timeZone, lang)}`;
+  if (!isRealInstant(instant)) return '';
+  const clock = safeFormatTime(instant, timeZone, lang);
+  return clock ? `${t(key, lang)} ${clock}` : '';
 }
 
 /** S4 — N skeleton rows with aria-busy (03-ux §3 S4, `.skeleton` in style.css). */
