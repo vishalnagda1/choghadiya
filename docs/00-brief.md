@@ -78,3 +78,33 @@ tag (semantic version bump from current package.json 2.1.0, e.g. v2.2.0).
 - 2026-10-14: Client authorized direct deploy to `github.com/vishalnagda1/choghadiya`
   (main) via authenticated `gh` CLI, and requires every release to be versioned with
   a git tag (semver bump from 2.1.0). See "Release definition".
+- 2026-10-14: Post-release change request (client) → target **v2.3.0**. Six items:
+  1. **Time format** — default 12-hour; add a 12h/24h toggle.
+  2. **Manual geolocation** — an explicit "use my current location" button in addition
+     to the auto-prompt (lets the user re-trigger geolocation on demand).
+  3. **Remove geocoder attribution lines** — drop "A searched city name is sent to
+     Open-Meteo/GeoNames. Location is never stored." and "Geocoding by Open-Meteo /
+     GeoNames". NOTE: geocoder terms (Open-Meteo CC-BY / GeoNames) may require
+     attribution — devops/security must confirm and, if required, propose a minimal
+     compliant wording or select an attribution-free geocoder.
+  4. **Calendar date picker** — replace/extend prev-next nav with a calendar picker,
+     selectable range roughly ±8–10 days (future and past).
+  5. **Inauspicious periods** — compute & display **Vaar Vela (Yamagandam), Kaal Vela
+     (Gulika Kaal), Kaal Ratri (night Rahu Kaal)** for the selected date + location,
+     with explanations. This pulls the formerly out-of-scope Rahu Kaal / Yamagandam /
+     Gulika panchang features into scope (requires research to pin definitions and the
+     exact per-weekday calculation).
+  6. **Current-choghadiya detail panel** — dynamic card below the slot list showing the
+     selected choghadiya's details: what it is good for, bad for, its meaning, plus
+     contextual notes (e.g. "Rahu Kaal overlaps this otherwise-good choghadiya").
+     Default = the current ongoing choghadiya; tapping any other slot shows that one;
+     tapping the same slot again (or reload) reverts to the current slot. Bilingual
+     (EN/HI, Hindi default); meanings need authentic content research.
+  7. **Persistence & caching via sessionStorage** — use `sessionStorage` to persist
+     user settings (time format 12h/24h, language, last selected location) across
+     reloads, and to cache geocoding API responses for a bounded TTL so the same
+     city-name query is not re-hit repeatedly. NOTE: `sessionStorage` survives reload
+     but clears on tab close (per-tab); if persistence across browser restarts is
+     wanted, that is `localStorage` — team to confirm with client which is intended.
+     This relaxes the v2.2.0 "no storage ever" stance to "no server storage; local
+     session cache only" — update the privacy disclosure accordingly.
