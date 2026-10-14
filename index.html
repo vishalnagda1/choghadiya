@@ -11,7 +11,56 @@
 <!-- SEC-02: no referrer context leaks to the geocoder. -->
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>चौघड़िया — आज का शुभ मुहूर्त</title>
+<title>चौघड़िया — आज का शुभ मुहूर्त · Choghadiya</title>
+<!-- v2.3.3 SEO / sharing / LLM metadata. The page is rendered by app.js, so these tags,
+     the JSON-LD below, about.html and llms.txt are what crawlers that do not run JS
+     see. Absolute URLs are the site's own canonical origin (SEC-14 allow-list). -->
+<meta name="description" content="आज का चौघड़िया लाइव — आपकी लोकेशन के सूर्योदय-सूर्यास्त से दिन और रात के 8-8 चौघड़िया (अमृत, शुभ, लाभ, चर, रोग, काल, उद्वेग), अभी चल रहा मुहूर्त और अशुभ काल (वार वेला, काल वेला, काल रात्रि)। Today's Choghadiya: live auspicious timings for any city, in Hindi and English. Free, no sign-up.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#9A3412">
+<link rel="canonical" href="https://time.gitick.com/">
+<link rel="alternate" type="text/plain" title="llms.txt" href="llms.txt">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Choghadiya · चौघड़िया">
+<meta property="og:url" content="https://time.gitick.com/">
+<meta property="og:title" content="चौघड़िया — आज का शुभ मुहूर्त · Today's Choghadiya">
+<meta property="og:description" content="Live day and night Choghadiya for your location — the current muhurat, all 16 slots and the inauspicious periods, in Hindi and English.">
+<meta property="og:image" content="https://time.gitick.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Choghadiya — today's auspicious timings">
+<meta property="og:locale" content="hi_IN">
+<meta property="og:locale:alternate" content="en_IN">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="चौघड़िया — आज का शुभ मुहूर्त · Today's Choghadiya">
+<meta name="twitter:description" content="Live day and night Choghadiya for your location, in Hindi and English.">
+<meta name="twitter:image" content="https://time.gitick.com/assets/og-image.png">
+<!-- schema.org JSON-LD: a data block, never executed, so `script-src 'self'` does not
+     apply to it. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Choghadiya · चौघड़िया",
+  "alternateName": ["चौघड़िया", "Choghadiya Today", "आज का चौघड़िया", "Chogadiya", "Chaughadiya"],
+  "url": "https://time.gitick.com/",
+  "description": "Live Choghadiya (Vedic muhurat) calculator: the 8 day and 8 night Choghadiya slots for any location, computed from local sunrise and sunset, with the current slot highlighted and the inauspicious periods Vaar Vela, Kaal Vela and Kaal Ratri. Hindi and English.",
+  "applicationCategory": "LifestyleApplication",
+  "operatingSystem": "Any (web browser)",
+  "inLanguage": ["hi", "en"],
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+  "featureList": [
+    "Current Choghadiya highlighted live",
+    "8 day and 8 night slots from local sunrise and sunset",
+    "Any city worldwide, or your device location",
+    "Inauspicious periods: Vaar Vela, Kaal Vela, Kaal Ratri",
+    "Hindi and English, 12h or 24h time",
+    "Dates from 10 days before to 10 days after today"
+  ],
+  "subjectOf": { "@type": "WebPage", "url": "https://time.gitick.com/about.html" }
+}
+</script>
 <!-- SEC-04: every asset reference is same-origin and carries ?v=${ASSET_VERSION}
      (04-architecture §7 / §11.5). ASSET_VERSION == package.json version == 2.1.0 baseline;
      the release card bumps it to 2.2.0 in the same commit as the tag (05-plan §M4). -->
@@ -310,11 +359,17 @@
   <footer class="app">
     <p id="footer-credit" data-i18n="attribution.geocoding">स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0</p>
     <p data-i18n="convention.note">सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है</p>
+    <!-- v2.3.3: static, bilingual on purpose (no i18n key) — the crawlable entry to
+         the explainer page. -->
+    <p><a class="about-link" href="about.html">चौघड़िया क्या है? · What is Choghadiya?</a></p>
   </footer>
 
   <!-- ===== No-JS message — NFR-B3, 03-ux §6 (noscript key) ===== -->
   <noscript>
     <p class="notice" data-i18n="noscript">इस ऐप को चलाने के लिए JavaScript चालू करें</p>
+    <p>चौघड़िया आपकी लोकेशन के सूर्योदय और सूर्यास्त से दिन और रात के आठ-आठ शुभ-अशुभ मुहूर्त बताता है।
+       Choghadiya shows the eight day and eight night auspicious and inauspicious periods
+       for your location. <a href="about.html">Learn more · और जानें</a></p>
   </noscript>
 
 </div>

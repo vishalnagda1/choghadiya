@@ -87,7 +87,7 @@ check: test
 bump:
 	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z"; exit 1; }
 	$(NPM) version --no-git-tag-version --allow-same-version $(VERSION)
-	perl -pi -e 's/\?v=[A-Za-z0-9._-]+/?v=$(VERSION)/g' index.html $(SHIPPED_JS)
+	perl -pi -e 's/\?v=[A-Za-z0-9._-]+/?v=$(VERSION)/g' index.html about.html $(SHIPPED_JS)
 	@echo "ASSET_VERSION -> $(VERSION) (package.json + package-lock.json + every ?v= in index.html and the shipped modules)"
 	@echo "next: make check, then commit the bump with the annotated tag v$(VERSION)"
 

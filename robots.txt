@@ -1,0 +1,6 @@
+# Choghadiya — https://time.gitick.com/
+# All crawlers, including AI/LLM crawlers, are welcome.
+User-agent: *
+Allow: /
+
+Sitemap: https://time.gitick.com/sitemap.xml

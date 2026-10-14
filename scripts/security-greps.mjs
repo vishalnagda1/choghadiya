@@ -49,6 +49,7 @@ const IS_MAIN = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPa
 /** Shipped files: docs/09-security-audit.md §1 plus the two v2.3.0 modules (DO-1). */
 export const SHIPPED_FILES = Object.freeze([
   'index.html',
+  'about.html',
   'style.css',
   'app.js',
   'choghadiya.js',
@@ -84,6 +85,12 @@ export const SHIPPED_FILES = Object.freeze([
  * as three real <a> elements. Nothing else was added to this list.
  */
 export const ALLOWED_ORIGINS = Object.freeze([
+  // v2.3.3 SEO metadata — neither is ever fetched by the page:
+  //  - the site's own canonical origin, in <link rel="canonical">, og:/twitter: tags
+  //    and JSON-LD `url` fields (crawlers read them; the app makes no request to it);
+  //  - the schema.org vocabulary IRI (`"@context"` of the JSON-LD data blocks).
+  'https://time.gitick.com',
+  'https://schema.org',
   'https://geocoding-api.open-meteo.com',
   'http://www.w3.org/2000/svg',
   'https://open-meteo.com',

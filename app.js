@@ -1625,7 +1625,8 @@ function applyDictionary() {
   dom.closeSheet.setAttribute('aria-label', t('city.close', lang));
   // A sheet message already on screen re-translates in place (03-ux F4 step 4).
   if (state.ui.sheetError) setSheetError(state.ui.sheetError);
-  document.title = `${t('app.title', lang)} — ${t('app.subtitle', lang)}`;
+  // SEO: both app names in the title (v2.3.3).
+  document.title = `${t('app.title', lang)} — ${t('app.subtitle', lang)} · ${t('app.title', lang === 'hi' ? 'en' : 'hi')}`;
 }
 
 /**

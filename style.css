@@ -1197,3 +1197,61 @@ footer.app a { color: inherit }
   dialog.sheet { transition: transform 200ms ease-out, opacity 200ms ease-out }
   .slot { transition: background-color 150ms ease-out }
 }
+
+/* ==========================================================================
+   v2.3.3 — about.html (static explainer for search engines / LLMs). Page tokens only,
+   so it follows light/dark like the app. index.html's footer links to it.
+   ========================================================================== */
+
+.brand-link { color: inherit; text-decoration: none }
+.brand-name { font-size: var(--fs-2xl-hi); line-height: var(--lh-2xl-hi); font-weight: 700 }
+.prose { max-width: 46rem; margin-inline: auto; padding-top: var(--sp-4) }
+.prose article + article { margin-top: var(--sp-12); padding-top: var(--sp-8); border-top: 1px solid var(--border) }
+.prose h1 { margin: 0 0 var(--sp-3); font-size: var(--fs-2xl); line-height: var(--lh-2xl); color: var(--brand) }
+.prose :lang(hi) h1 { font-size: var(--fs-2xl-hi); line-height: var(--lh-2xl-hi) }
+.prose h2 { margin: var(--sp-8) 0 var(--sp-3); font-size: var(--fs-xl); line-height: var(--lh-xl) }
+.prose h3 { margin: var(--sp-5) 0 var(--sp-1); font-size: var(--fs-base); line-height: var(--lh-base) }
+.prose p, .prose li { line-height: 1.65 }
+.prose p { margin: 0 0 var(--sp-3) }
+.prose ol, .prose ul { padding-inline-start: var(--sp-6) }
+.prose a { color: var(--brand) }
+.prose .disclaimer { margin-top: var(--sp-8); font-size: var(--fs-sm); color: var(--text-muted) }
+.cta { text-align: center }
+.prose .cta-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;             /* NFR-A5 */
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.prose .cta-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+.table-wrap { overflow-x: auto }
+.about-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); line-height: var(--lh-sm) }
+.about-table th, .about-table td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+.about-table thead th { color: var(--text-muted); font-weight: 600 }
+.about-table tbody th { white-space: nowrap }
+.about-table .latin { display: block; margin-top: var(--sp-1); font-weight: 400; color: var(--text-muted) }
+.about-table .good { display: block; margin-top: var(--sp-1); color: var(--text-muted) }
+.tier { display: inline-block; padding: 0 var(--sp-2); border-radius: var(--r-full); font-weight: 600 }
+.tier.q-amrit   { color: var(--qual-amrit-fg);        background: var(--qual-amrit-bg) }
+.tier.q-good    { color: var(--qual-auspicious-fg);   background: var(--qual-auspicious-bg) }
+.tier.q-neutral { color: var(--qual-neutral-fg);      background: var(--qual-neutral-bg) }
+.tier.q-bad     { color: var(--qual-inauspicious-fg); background: var(--qual-inauspicious-bg) }
+/* ≤419 px: let the table fit rather than scroll (a scrolling region would need to be
+   keyboard-focusable) — names may wrap and long words break. */
+@media (max-width: 419px) {
+  .about-table th, .about-table td { padding: var(--sp-2) }
+  .about-table tbody th { white-space: normal }
+  .about-table td:last-child { overflow-wrap: anywhere }
+  .prose .cta-btn { padding-block: var(--sp-2); border-radius: var(--r-lg) }
+}

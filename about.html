@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<!-- SEC-01: the CSP <meta> is the FIRST element of <head> — the same policy as index.html,
+     minus connect-src (this page makes no requests and loads no script). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>चौघड़िया क्या है? अमृत, शुभ, लाभ, चर, रोग, काल, उद्वेग · What is Choghadiya?</title>
+<!-- v2.3.3: a static, no-JS explainer page for search engines, link previews and LLMs.
+     Copy is taken from i18n.js so it matches the app word for word. -->
+<meta name="description" content="चौघड़िया क्या है, कैसे निकाला जाता है और सातों चौघड़िया (अमृत, शुभ, लाभ, चर, उद्वेग, रोग, काल) का अर्थ। What Choghadiya is, how the 8 day and 8 night periods are calculated from sunrise and sunset, and what each one is good for.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#9A3412">
+<link rel="canonical" href="https://time.gitick.com/about.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Choghadiya · चौघड़िया">
+<meta property="og:url" content="https://time.gitick.com/about.html">
+<meta property="og:title" content="चौघड़िया क्या है? · What is Choghadiya?">
+<meta property="og:description" content="The seven Choghadiyas — Amrit, Shubh, Labh, Char, Udveg, Rog, Kaal — what they mean and how they are calculated.">
+<meta property="og:image" content="https://time.gitick.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg?v=2.3.2">
+<link rel="stylesheet" href="style.css?v=2.3.2">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://time.gitick.com/about.html",
+      "url": "https://time.gitick.com/about.html",
+      "name": "What is Choghadiya? · चौघड़िया क्या है?",
+      "inLanguage": [
+        "hi",
+        "en"
+      ],
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "Choghadiya · चौघड़िया",
+        "url": "https://time.gitick.com/"
+      },
+      "about": {
+        "@type": "Thing",
+        "name": "Choghadiya",
+        "alternateName": [
+          "चौघड़िया",
+          "Chogadiya",
+          "Chaughadiya"
+        ]
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Choghadiya?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Choghadiya (also spelled Chogadiya or Chaughadiya) is a Vedic time-keeping system from the Hindu panchang. The day (sunrise to sunset) and the night (sunset to the next sunrise) are each divided into eight equal parts called choghadiyas, and each part is named after one of seven qualities — Amrit, Shubh, Labh, Char, Udveg, Rog and Kaal — that mark it as auspicious, neutral or inauspicious for starting work."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long is one choghadiya?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "One eighth of the day or of the night. Near the equinoxes that is about 1 hour 30 minutes; in summer the day choghadiyas are longer and the night ones shorter, and the other way round in winter. \"Chogadiya\" literally means four ghadis — about 96 minutes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the Choghadiya different for each city?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. It depends on the local sunrise and sunset, so Mumbai, Delhi and London all have different timings on the same date. This app calculates it for your device location or any city you search."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which choghadiya is best?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Amrit is considered the most auspicious, followed by Shubh and Labh. Char is neutral and traditionally preferred for travel. Udveg, Rog and Kaal are considered inauspicious for new beginnings."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is the sequence decided?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The first day choghadiya is ruled by the weekday: Sunday starts with Udveg, Monday with Amrit, Tuesday with Rog, Wednesday with Labh, Thursday with Shubh, Friday with Char and Saturday with Kaal. The rest follow a fixed cycle."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What are Vaar Vela, Kaal Vela and Kaal Ratri?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Vaar Vela: A fixed part of the day set by the weekday — tradition holds that ceremonial work begun in it is unfruitful. Kaal Vela: The day's Kaal choghadiya — considered more adverse than Vaar Vela. Kaal Ratri: The night's Labh choghadiya, which tradition treats as Kaal Ratri and avoids for new auspicious beginnings."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "चौघड़िया क्या है?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "चौघड़िया हिंदू पंचांग की एक वैदिक समय-गणना पद्धति है। दिन (सूर्योदय से सूर्यास्त) और रात (सूर्यास्त से अगले सूर्योदय) को आठ-आठ बराबर भागों में बाँटा जाता है, और हर भाग का नाम सात में से एक गुण पर होता है — अमृत, शुभ, लाभ, चर, उद्वेग, रोग और काल — जो बताता है कि वह समय नया काम शुरू करने के लिए शुभ, सामान्य या अशुभ है।"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "एक चौघड़िया कितने समय का होता है?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "दिन या रात का आठवाँ हिस्सा। विषुव के आसपास लगभग डेढ़ घंटा; गर्मियों में दिन के चौघड़िया लंबे और रात के छोटे होते हैं, सर्दियों में इसका उल्टा। \"चौघड़िया\" का अर्थ है चार घड़ी — लगभग 96 मिनट।"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "क्या हर शहर का चौघड़िया अलग होता है?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "हाँ। यह स्थानीय सूर्योदय और सूर्यास्त पर निर्भर है, इसलिए एक ही तारीख को मुंबई, दिल्ली और लंदन का समय अलग होता है। यह ऐप आपकी लोकेशन या खोजे गए किसी भी शहर के लिए गणना करता है।"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "सबसे अच्छा चौघड़िया कौन सा है?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "अमृत सबसे शुभ माना जाता है, फिर शुभ और लाभ। चर सामान्य है और यात्रा के लिए उत्तम माना जाता है। उद्वेग, रोग और काल नई शुरुआत के लिए अशुभ माने जाते हैं।"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "क्रम कैसे तय होता है?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "दिन का पहला चौघड़िया वार के स्वामी से तय होता है: रविवार उद्वेग, सोमवार अमृत, मंगलवार रोग, बुधवार लाभ, गुरुवार शुभ, शुक्रवार चर और शनिवार काल से शुरू होता है। बाकी एक निश्चित चक्र में आते हैं।"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "वार वेला, काल वेला और काल रात्रि क्या हैं?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "वार वेला: हर वार का दिन का एक निश्चित हिस्सा — परंपरा में इसमें शुरू किया मांगलिक काम फलदायी नहीं माना जाता। काल वेला: दिन का काल चौघड़िया — वार वेला से भी अधिक अशुभ माना जाता है। काल रात्रि: रात का लाभ चौघड़िया, जिसे परंपरा काल रात्रि मानकर नई शुभ शुरुआत टालती है।"
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<div class="wrap about">
+
+  <header class="app">
+    <div class="hrow">
+      <a class="brand brand-link" href="./">
+        <span class="brand-glyph" aria-hidden="true">☀</span>
+        <span class="brand-name">चौघड़िया</span>
+        <span class="brand-sub">Choghadiya</span>
+      </a>
+    </div>
+  </header>
+
+  <main id="main" class="prose">
+
+    <p class="cta"><a class="cta-btn" href="./">आज का चौघड़िया देखें · See today's Choghadiya →</a></p>
+
+    <article lang="hi">
+      <h1>चौघड़िया क्या है?</h1>
+      <p>चौघड़िया हिंदू पंचांग की एक वैदिक समय-गणना पद्धति है, जिसका उपयोग किसी काम को शुरू करने का शुभ मुहूर्त जानने के लिए किया जाता है — ख़ासकर गुजरात और राजस्थान में। दिन (सूर्योदय से सूर्यास्त) और रात (सूर्यास्त से अगले सूर्योदय) को आठ-आठ बराबर भागों में बाँटा जाता है; हर भाग एक "चौघड़िया" है।</p>
+
+      <h2>चौघड़िया कैसे निकाला जाता है</h2>
+      <ol>
+        <li>अपनी जगह का सूर्योदय और सूर्यास्त का समय लें।</li>
+        <li>दिन की अवधि को 8 से भाग दें — यही दिन के एक चौघड़िया की लंबाई है। रात के लिए सूर्यास्त से अगले सूर्योदय तक की अवधि को 8 से भाग दें।</li>
+        <li>दिन का पहला चौघड़िया वार के स्वामी से तय होता है; बाकी एक निश्चित क्रम में आते हैं।</li>
+      </ol>
+      <p>इसलिए चौघड़िया हर शहर और हर दिन के लिए अलग होता है। यह ऐप आपकी लोकेशन के लिए यह गणना अपने-आप करता है और अभी चल रहे चौघड़िया को दिखाता है।</p>
+
+      <h2>सात चौघड़िया और उनका अर्थ</h2>
+      <div class="table-wrap">
+        <table class="about-table">
+          <thead><tr><th scope="col">चौघड़िया</th><th scope="col">प्रकार</th><th scope="col">अर्थ</th></tr></thead>
+          <tbody>
+          <tr>
+            <th scope="row"><span class="tier q-amrit">अमृत</span> <span class="latin" lang="en">Amrit</span></th>
+            <td>सर्वश्रेष्ठ</td>
+            <td>अमृत का अर्थ है अमृत यानी सर्वोत्तम — चंद्रमा का यह चौघड़िया सबसे शुभ माना जाता है, और इसमें शुरू किया गया काम अमृत जैसा मीठा व स्थायी फल देता है।<br><span class="good">इनके लिए अच्छा: कोई भी शुभ कार्य · यात्रा · व्यापार व हस्ताक्षर · दुकान या दफ़्तर का उद्घाटन · खरीदारी · पूजा-पाठ व मांगलिक कार्य · विवाह, सगाई व गृह प्रवेश</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-good">शुभ</span> <span class="latin" lang="en">Shubh</span></th>
+            <td>शुभ</td>
+            <td>शुभ का अर्थ है मंगलकारी। गुरु (बृहस्पति) के स्वामित्व वाला यह चौघड़िया संस्कार, पूजा और शुभ अवसरों के लिए अत्यंत उपयुक्त माना जाता है।<br><span class="good">इनके लिए अच्छा: पूजा व धार्मिक अनुष्ठान · विवाह, सगाई व मुंडन · गृह प्रवेश व भूमि पूजन · विद्यारंभ और पढ़ाई · व्रत-उपवास का आरंभ · परिवार से जुड़े शुभ निर्णय</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-good">लाभ</span> <span class="latin" lang="en">Labh</span></th>
+            <td>शुभ</td>
+            <td>लाभ का अर्थ है प्राप्ति या मुनाफ़ा। बुध के स्वामित्व वाला यह चौघड़िया व्यापार, धन और विद्या से जुड़ी शुरुआतों के लिए शुभ माना जाता है।<br><span class="good">इनके लिए अच्छा: नया व्यापार या उद्यम · नया खाता, निवेश या लेन-देन · नौकरी और साक्षात्कार · पढ़ाई या कोर्स का आरंभ · खरीद-बिक्री व अनुबंध · हिसाब-किताब और बिक्री</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-neutral">चर</span> <span class="latin" lang="en">Char</span></th>
+            <td>सामान्य</td>
+            <td>चर का अर्थ है चलता हुआ यानी गतिशील। शुक्र के स्वामित्व वाला यह चौघड़िया यात्रा और गमन के लिए सर्वोत्तम है, और बाकी कामों के लिए सामान्य-से-अच्छा माना जाता है।<br><span class="good">इनके लिए अच्छा: यात्रा का आरंभ · वाहन खरीदना या चलाना · स्थान बदलना · बैठकें · नियमित रोज़मर्रा के काम · कला, संगीत और नृत्य</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">उद्वेग</span> <span class="latin" lang="en">Udveg</span></th>
+            <td>अशुभ</td>
+            <td>उद्वेग का अर्थ है बेचैनी या घबराहट। सूर्य के स्वामित्व वाला यह चौघड़िया अशुभ है; कहा जाता है कि इस समय किए काम में मानसिक तनाव और अड़चनें बढ़ती हैं।<br><span class="good">इनके लिए अच्छा: सरकारी और प्रशासनिक काम · सरकारी दफ़्तर या अधिकारियों से भेंट · अधिकार या नियम-कायदे से जुड़े काम</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">रोग</span> <span class="latin" lang="en">Rog</span></th>
+            <td>अशुभ</td>
+            <td>रोग का अर्थ है बीमारी। मंगल के स्वामित्व वाला यह चौघड़िया अशुभ है; इसमें शुरू किया गया काम बीमारी, अड़चन या विवाद ला सकता है।<br><span class="good">इनके लिए अच्छा: शत्रु पर विजय और प्रतिस्पर्धा · वाद-विवाद, बहस और विवाद निपटाना · खेल या मुकाबले · (कुछ मत) युद्ध या आपात शल्य चिकित्सा</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">काल</span> <span class="latin" lang="en">Kaal</span></th>
+            <td>अशुभ</td>
+            <td>काल का अर्थ है समय या मृत्यु। शनि के स्वामित्व वाला यह चौघड़िया अशुभ है — देरी, हानि और बाधा का समय, जिसमें नए शुभ काम वर्जित माने जाते हैं।<br><span class="good">इनके लिए अच्छा: धन संचय, बचत और निवेश · उधार चुकाना और दीर्घकालीन योजना · पहले से चल रहे काम को आगे बढ़ाना · कुछ परंपराएँ इसे पितृ कार्य या श्राद्ध के लिए स्वीकार करती हैं</span></td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>अशुभ काल</h2>
+      <ul>
+        <li><strong>वार वेला</strong> — हर वार का दिन का एक निश्चित हिस्सा — परंपरा में इसमें शुरू किया मांगलिक काम फलदायी नहीं माना जाता।</li>
+        <li><strong>काल वेला</strong> — दिन का काल चौघड़िया — वार वेला से भी अधिक अशुभ माना जाता है।</li>
+        <li><strong>काल रात्रि</strong> — रात का लाभ चौघड़िया, जिसे परंपरा काल रात्रि मानकर नई शुभ शुरुआत टालती है।</li>
+      </ul>
+      <p>इन अशुभ कालों में शुभ या मांगलिक कार्य शुरू न करें; यदि कोई अशुभ काल किसी शुभ चौघड़िया पर पड़े तो उसे भी टालें।</p>
+
+      <h2>अक्सर पूछे जाने वाले प्रश्न</h2>
+        <h3>चौघड़िया क्या है?</h3>
+        <p>चौघड़िया हिंदू पंचांग की एक वैदिक समय-गणना पद्धति है। दिन (सूर्योदय से सूर्यास्त) और रात (सूर्यास्त से अगले सूर्योदय) को आठ-आठ बराबर भागों में बाँटा जाता है, और हर भाग का नाम सात में से एक गुण पर होता है — अमृत, शुभ, लाभ, चर, उद्वेग, रोग और काल — जो बताता है कि वह समय नया काम शुरू करने के लिए शुभ, सामान्य या अशुभ है।</p>
+        <h3>एक चौघड़िया कितने समय का होता है?</h3>
+        <p>दिन या रात का आठवाँ हिस्सा। विषुव के आसपास लगभग डेढ़ घंटा; गर्मियों में दिन के चौघड़िया लंबे और रात के छोटे होते हैं, सर्दियों में इसका उल्टा। &quot;चौघड़िया&quot; का अर्थ है चार घड़ी — लगभग 96 मिनट।</p>
+        <h3>क्या हर शहर का चौघड़िया अलग होता है?</h3>
+        <p>हाँ। यह स्थानीय सूर्योदय और सूर्यास्त पर निर्भर है, इसलिए एक ही तारीख को मुंबई, दिल्ली और लंदन का समय अलग होता है। यह ऐप आपकी लोकेशन या खोजे गए किसी भी शहर के लिए गणना करता है।</p>
+        <h3>सबसे अच्छा चौघड़िया कौन सा है?</h3>
+        <p>अमृत सबसे शुभ माना जाता है, फिर शुभ और लाभ। चर सामान्य है और यात्रा के लिए उत्तम माना जाता है। उद्वेग, रोग और काल नई शुरुआत के लिए अशुभ माने जाते हैं।</p>
+        <h3>क्रम कैसे तय होता है?</h3>
+        <p>दिन का पहला चौघड़िया वार के स्वामी से तय होता है: रविवार उद्वेग, सोमवार अमृत, मंगलवार रोग, बुधवार लाभ, गुरुवार शुभ, शुक्रवार चर और शनिवार काल से शुरू होता है। बाकी एक निश्चित चक्र में आते हैं।</p>
+        <h3>वार वेला, काल वेला और काल रात्रि क्या हैं?</h3>
+        <p>वार वेला: हर वार का दिन का एक निश्चित हिस्सा — परंपरा में इसमें शुरू किया मांगलिक काम फलदायी नहीं माना जाता। काल वेला: दिन का काल चौघड़िया — वार वेला से भी अधिक अशुभ माना जाता है। काल रात्रि: रात का लाभ चौघड़िया, जिसे परंपरा काल रात्रि मानकर नई शुभ शुरुआत टालती है।</p>
+    </article>
+
+    <article lang="en">
+      <h1>What is Choghadiya?</h1>
+      <p>Choghadiya (also spelled Chogadiya or Chaughadiya) is a Vedic time-keeping system from the Hindu panchang, used to pick an auspicious time (muhurat) to start something — especially in Gujarat and Rajasthan. The day (sunrise to sunset) and the night (sunset to the next sunrise) are each split into eight equal parts; each part is one "choghadiya".</p>
+
+      <h2>How Choghadiya is calculated</h2>
+      <ol>
+        <li>Take the local sunrise and sunset for your place.</li>
+        <li>Divide the length of the day by 8 — that is one day choghadiya. For the night, divide the time from sunset to the next sunrise by 8.</li>
+        <li>The first day choghadiya is set by the weekday's ruling planet; the rest follow a fixed cycle.</li>
+      </ol>
+      <p>So the Choghadiya differs for every city and every date. This app does the calculation for your location automatically and highlights the one running now.</p>
+
+      <h2>The seven Choghadiyas</h2>
+      <div class="table-wrap">
+        <table class="about-table">
+          <thead><tr><th scope="col">Choghadiya</th><th scope="col">Type</th><th scope="col">Meaning</th></tr></thead>
+          <tbody>
+          <tr>
+            <th scope="row"><span class="tier q-amrit">Amrit</span></th>
+            <td>Most auspicious</td>
+            <td>Amrit means &quot;nectar&quot; — ruled by the Moon, it is the most auspicious choghadiya, and a beginning made in it is said to give lasting, nectar-sweet results.<br><span class="good">Good for: any auspicious work · travel · business and signing · opening a shop or office · purchases · worship and ceremonies · weddings, engagements and house-warming</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-good">Shubh</span></th>
+            <td>Auspicious</td>
+            <td>Shubh means &quot;auspicious&quot; — ruled by Jupiter, it is held to be most suitable for sacraments, worship and fortunate occasions.<br><span class="good">Good for: worship and religious rituals · weddings, engagements and mundan · house-warming and bhumi pujan · beginning education · starting vows or fasts · auspicious family decisions</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-good">Labh</span></th>
+            <td>Auspicious</td>
+            <td>Labh means &quot;gain&quot; — ruled by Mercury, it is the choghadiya of profit, trade and learning.<br><span class="good">Good for: starting a business or venture · opening an account, investing, transactions · jobs and interviews · beginning study or a course · buying, selling and contracts · accounts and sales</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-neutral">Char</span></th>
+            <td>Neutral</td>
+            <td>Char means &quot;moving&quot; — ruled by Venus, it is the classic window for travel and movement, and neutral-to-good for everything else.<br><span class="good">Good for: starting a journey · buying or running a vehicle · relocation · meetings · routine everyday work · art, music and dance</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">Udveg</span></th>
+            <td>Inauspicious</td>
+            <td>Udveg means &quot;agitation&quot; — ruled by the Sun, it is inauspicious; work done in it is said to increase mental stress and friction.<br><span class="good">Good for: government and administrative work · visiting government offices or officials · work that needs authority or official process</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">Rog</span></th>
+            <td>Inauspicious</td>
+            <td>Rog means &quot;disease&quot; — ruled by Mars, it is inauspicious; work begun here is said to bring illness, obstruction or conflict.<br><span class="good">Good for: defeating enemies and competition · arguments, debate and dispute settlement · sports and contests · (some schools) warfare or emergency surgery</span></td>
+          </tr>
+          <tr>
+            <th scope="row"><span class="tier q-bad">Kaal</span></th>
+            <td>Inauspicious</td>
+            <td>Kaal means &quot;time/death&quot; — ruled by Saturn, it is inauspicious, associated with delay, loss and obstruction, so auspicious beginnings are avoided.<br><span class="good">Good for: accumulating wealth — savings and investments · repaying loans and long-term planning · continuing work already underway · some traditions accept it for ancestor rites (pitru karma / shraddh)</span></td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Inauspicious periods</h2>
+      <ul>
+        <li><strong>Vaar Vela</strong> — A fixed part of the day set by the weekday — tradition holds that ceremonial work begun in it is unfruitful.</li>
+        <li><strong>Kaal Vela</strong> — The day's Kaal choghadiya — considered more adverse than Vaar Vela.</li>
+        <li><strong>Kaal Ratri</strong> — The night's Labh choghadiya, which tradition treats as Kaal Ratri and avoids for new auspicious beginnings.</li>
+      </ul>
+      <p>Do not begin auspicious or ceremonial work during these periods; if one falls inside a good choghadiya, avoid that too.</p>
+
+      <h2>Frequently asked questions</h2>
+        <h3>What is Choghadiya?</h3>
+        <p>Choghadiya (also spelled Chogadiya or Chaughadiya) is a Vedic time-keeping system from the Hindu panchang. The day (sunrise to sunset) and the night (sunset to the next sunrise) are each divided into eight equal parts called choghadiyas, and each part is named after one of seven qualities — Amrit, Shubh, Labh, Char, Udveg, Rog and Kaal — that mark it as auspicious, neutral or inauspicious for starting work.</p>
+        <h3>How long is one choghadiya?</h3>
+        <p>One eighth of the day or of the night. Near the equinoxes that is about 1 hour 30 minutes; in summer the day choghadiyas are longer and the night ones shorter, and the other way round in winter. &quot;Chogadiya&quot; literally means four ghadis — about 96 minutes.</p>
+        <h3>Is the Choghadiya different for each city?</h3>
+        <p>Yes. It depends on the local sunrise and sunset, so Mumbai, Delhi and London all have different timings on the same date. This app calculates it for your device location or any city you search.</p>
+        <h3>Which choghadiya is best?</h3>
+        <p>Amrit is considered the most auspicious, followed by Shubh and Labh. Char is neutral and traditionally preferred for travel. Udveg, Rog and Kaal are considered inauspicious for new beginnings.</p>
+        <h3>How is the sequence decided?</h3>
+        <p>The first day choghadiya is ruled by the weekday: Sunday starts with Udveg, Monday with Amrit, Tuesday with Rog, Wednesday with Labh, Thursday with Shubh, Friday with Char and Saturday with Kaal. The rest follow a fixed cycle.</p>
+        <h3>What are Vaar Vela, Kaal Vela and Kaal Ratri?</h3>
+        <p>Vaar Vela: A fixed part of the day set by the weekday — tradition holds that ceremonial work begun in it is unfruitful. Kaal Vela: The day's Kaal choghadiya — considered more adverse than Vaar Vela. Kaal Ratri: The night's Labh choghadiya, which tradition treats as Kaal Ratri and avoids for new auspicious beginnings.</p>
+    </article>
+
+    <p class="disclaimer">ये पारंपरिक मान्यताएँ हैं, खगोलीय तथ्य नहीं। · <span lang="en">These are traditional beliefs, not astronomical facts.</span></p>
+
+    <p class="cta"><a class="cta-btn" href="./">आज का चौघड़िया देखें · See today's Choghadiya →</a></p>
+
+  </main>
+
+  <footer class="app">
+    <p>सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है · Sunrise/sunset may differ by ±1–2 minutes.</p>
+  </footer>
+
+</div>
+
+</body>
+</html>
