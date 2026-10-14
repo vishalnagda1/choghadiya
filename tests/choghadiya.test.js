@@ -25,6 +25,7 @@ import {
   POLAR,
   POLAR_SUMMER_DATE,
   POLAR_WINTER_DATE,
+  LONDON,
 } from './fixtures.js';
 
 const istMinutes = (hhmm, dateISO = MUMBAI_DATE) => {
@@ -178,4 +179,159 @@ test('todayIn / addDays / formatTime / formatDate obey the §5.1 contract', () =
   // formatDate: localised full date.
   assert.equal(formatDate('2026-10-14', 'Asia/Kolkata', 'en'), 'Wednesday, 14 October 2026');
   assert.equal(formatDate('2026-10-14', 'Asia/Kolkata', 'hi'), 'बुधवार, 14 अक्टूबर 2026');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BE-03 — timezone rendering, civil dates, DST and the night-after-midnight
+// current slot (US-3 AC1/AC3, US-7 AC1/AC2, US-13 AC3, US-14 AC2). No fixed
+// offset arithmetic anywhere: every expected wall-clock value is a fixture
+// literal or an independent Intl rendering of the same instant.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const localMinutes = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+const offsetLabel = (date, timeZone) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'longOffset' }).format(date);
+
+test('formatTime renders in the location IANA zone, 24-hour, identical in both locales (US-7 AC1)', () => {
+  const instant = new Date('2026-10-14T01:02:00Z');
+
+  // One instant -> three wall clocks, decided by the IANA zone alone (none by the device).
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en'), '06:32');
+  assert.equal(formatTime(instant, 'Europe/London', 'en'), '02:02');
+  assert.equal(formatTime(instant, 'UTC', 'en'), '01:02');
+
+  // 24-hour in both locales, in every zone; never an AM/PM marker.
+  for (const [tz, expected] of [['Asia/Kolkata', '06:32'], ['Europe/London', '02:02'], ['UTC', '01:02']]) {
+    assert.equal(formatTime(instant, tz, 'hi'), expected, `${tz}: hi === en`);
+    assert.doesNotMatch(formatTime(instant, tz, 'en'), /[AP]\.?M/i, `${tz}: no AM/PM`);
+  }
+
+  // hourCycle h23: local midnight is "00:00", never the "24:00" artefact.
+  assert.equal(formatTime(new Date('2026-10-14T18:30:00Z'), 'Asia/Kolkata', 'en'), '00:00');
+});
+
+test('formatTime renders every slot on the location clock (US-7 AC1)', () => {
+  const schedule = buildSchedule({ location: LONDON, date: '2026-03-29' });
+  for (const slot of [...schedule.daySlots, ...schedule.nightSlots]) {
+    const rendered = formatTime(slot.start, LONDON.timezone, 'en');
+    assert.match(rendered, /^\d{2}:\d{2}$/);
+    assert.equal(
+      rendered,
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: LONDON.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(slot.start),
+      'slot time is the location-zone rendering of the same instant',
+    );
+    assert.notEqual(rendered, formatTime(slot.start, 'Asia/Kolkata', 'en'), 'a London view is never IST');
+  }
+});
+
+test('formatDate honours the location zone across the +14..-11 range (US-7 AC1)', () => {
+  for (const tz of ['Asia/Kolkata', 'Europe/London', 'Pacific/Auckland', 'Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+    assert.equal(formatDate('2026-01-15', tz, 'en'), 'Thursday, 15 January 2026', `${tz} en`);
+    assert.equal(formatDate('2026-01-15', tz, 'hi'), 'गुरुवार, 15 जनवरी 2026', `${tz} hi`);
+  }
+  assert.equal(formatDate('2026-03-29', 'Europe/London', 'hi'), 'रविवार, 29 मार्च 2026');
+  assert.throws(() => formatDate('29-03-2026', 'Europe/London', 'en'), TypeError);
+});
+
+test('todayIn returns the location civil date, not the device date (US-3 AC3)', () => {
+  // 11:00Z is already the next day at UTC+14; 09:00Z is still the previous day at UTC-11.
+  assert.equal(todayIn('Pacific/Kiritimati', new Date('2026-10-14T11:00:00Z')), '2026-10-15');
+  assert.equal(todayIn('Pacific/Pago_Pago', new Date('2026-10-14T09:00:00Z')), '2026-10-13');
+
+  // Same instant, two geolocations -> two different "today"s.
+  const instant = new Date('2026-10-14T18:30:00Z');
+  assert.equal(todayIn('Asia/Kolkata', instant), '2026-10-15'); // 00:00 IST
+  assert.equal(todayIn('UTC', instant), '2026-10-14');
+
+  assert.match(todayIn('Europe/London', instant), /^\d{4}-\d{2}-\d{2}$/);
+  assert.throws(() => todayIn('Not/AZone', instant), RangeError);
+});
+
+test('DST fixture: London renders GMT before and BST after the spring transition (US-7 AC2)', () => {
+  // UK DST begins 01:00 GMT on 2026-03-29 (clocks -> 02:00 BST), so the same UTC
+  // wall time renders one hour later in the zone. No fixed offsets anywhere.
+  assert.equal(formatTime(new Date('2026-03-28T12:00:00Z'), 'Europe/London', 'en'), '12:00');
+  assert.equal(formatTime(new Date('2026-03-29T12:00:00Z'), 'Europe/London', 'en'), '13:00');
+
+  const winter = buildSchedule({ location: LONDON, date: '2026-03-28' }); // Saturday, GMT
+  const spring = buildSchedule({ location: LONDON, date: '2026-03-29' }); // Sunday, BST
+  assert.equal(winter.defined, true);
+  assert.equal(spring.defined, true);
+  assert.match(offsetLabel(winter.sunrise, LONDON.timezone), /GMT\+00:00/);
+  assert.match(offsetLabel(spring.sunrise, LONDON.timezone), /GMT\+01:00/);
+
+  // Each schedule's sunrise is *its own* civil date's sunrise (bug-guard: an anchor
+  // one solar day early would render 03-28's ~05:45 GMT for the 03-29 schedule).
+  assert.equal(todayIn(LONDON.timezone, winter.sunrise), '2026-03-28');
+  assert.equal(todayIn(LONDON.timezone, spring.sunrise), '2026-03-29');
+  const drift = localMinutes(formatTime(spring.sunrise, LONDON.timezone, 'en'))
+    - localMinutes(formatTime(winter.sunrise, LONDON.timezone, 'en'));
+  assert.ok(drift >= 50 && drift <= 61, `sunrise jumps ~57 min across the transition (got ${drift})`);
+
+  // Weekday driving both sequences is the viewed civil date's (Sunday 2026-03-29).
+  assert.equal(spring.weekday, 0);
+  assert.equal(spring.daySlots[0].name, 'udveg');
+  assert.equal(spring.nightSlots[0].name, 'shubh');
+  assert.equal(winter.weekday, 6); // Saturday
+
+  // Autumn: clocks go back at 01:00 BST on 2026-10-25.
+  assert.equal(formatTime(new Date('2026-10-24T12:00:00Z'), 'Europe/London', 'en'), '13:00');
+  assert.equal(formatTime(new Date('2026-10-25T12:00:00Z'), 'Europe/London', 'en'), '12:00');
+  const autumn = buildSchedule({ location: LONDON, date: '2026-10-25' });
+  assert.equal(autumn.defined, true);
+  assert.equal(todayIn(LONDON.timezone, autumn.sunrise), '2026-10-25');
+  assert.match(offsetLabel(autumn.sunrise, LONDON.timezone), /GMT\+00:00/);
+});
+
+test('resolveCurrentSlot keeps the after-midnight slot in the previous day list (US-14 AC2, US-3 AC1)', () => {
+  const wednesday = buildSchedule({ location: MUMBAI, date: MUMBAI_DATE }); // 2026-10-14
+  // 02:00 on Thursday 2026-10-15 IST: the civil date is Thursday, the Vedic day is Wednesday.
+  const now = new Date('2026-10-15T02:00:00+05:30');
+  const slot = resolveCurrentSlot(wednesday, now);
+
+  assert.ok(slot, 'a slot resolves after midnight');
+  assert.equal(slot.half, 'night');
+  assert.equal(slot.index, 5); // night slot 5 ≈ 01:56–03:28 IST
+  assert.equal(slot.name, 'kaal');
+  assert.ok(slot.start.getTime() <= now.getTime() && now.getTime() < slot.end.getTime());
+  assert.equal(todayIn(MUMBAI.timezone, now), '2026-10-15'); // "now" is Thursday's civil date…
+  assert.equal(wednesday.date, MUMBAI_DATE); // …but this is Wednesday's schedule
+  assert.ok(wednesday.nightSlots.includes(slot));
+  assert.equal(todayIn(MUMBAI.timezone, slot.start), '2026-10-15'); // the slot really is past midnight
+
+  // Thursday's own schedule does not own this instant — its span has not begun (~06:33).
+  const thursday = buildSchedule({ location: MUMBAI, date: '2026-10-15' });
+  assert.equal(resolveCurrentSlot(thursday, now), null);
+
+  // Every slot of Wednesday's night list — including all the after-midnight ones — resolves to Wed.
+  for (const nightSlot of wednesday.nightSlots) {
+    const mid = new Date((nightSlot.start.getTime() + nightSlot.end.getTime()) / 2);
+    const found = resolveCurrentSlot(wednesday, mid);
+    assert.ok(found, `night slot ${nightSlot.index} resolves`);
+    assert.equal(found.index, nightSlot.index);
+    assert.equal(found.half, 'night');
+  }
+  assert.equal(resolveCurrentSlot(wednesday, wednesday.nightSlots[4].start).index, 4); // midnight boundary
+  assert.equal(resolveCurrentSlot(wednesday, new Date(wednesday.nextSunrise.getTime() - 1)).index, 7);
+  assert.equal(resolveCurrentSlot(wednesday, wednesday.nextSunrise), null); // belongs to the next day
+});
+
+test('resolveCurrentSlot returns null for stale/out-of-span/malformed input, never throws', () => {
+  const wednesday = buildSchedule({ location: MUMBAI, date: MUMBAI_DATE });
+  // Before sunrise on the schedule's own date: the current Vedic day is the *previous* schedule.
+  assert.equal(resolveCurrentSlot(wednesday, new Date('2026-10-14T03:00:00+05:30')), null);
+  // A stale view is never highlighted (US-13 AC3).
+  assert.equal(resolveCurrentSlot(wednesday, new Date('2026-10-20T08:40:00+05:30')), null);
+  assert.equal(resolveCurrentSlot(wednesday, new Date('not-a-date')), null);
+  assert.equal(resolveCurrentSlot(null, new Date()), null);
+  assert.equal(resolveCurrentSlot(undefined, new Date()), null);
+  assert.equal(resolveCurrentSlot({ defined: false }, new Date()), null);
 });
