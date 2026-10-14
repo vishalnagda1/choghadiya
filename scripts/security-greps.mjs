@@ -8,13 +8,19 @@
 // reintroduce an HTML sink, an inline style/handler, or a non-allow-listed origin and
 // still pass `make check`. This script makes them a failing gate.
 //
-// What it asserts over the SHIPPED files (docs/09 §1 — index.html, style.css, app.js,
-// choghadiya.js, i18n.js, geocoder.js, favicon.svg, vendor/suncalc-2.1.1.js):
+// What it asserts over the SHIPPED files (docs/09 §1, extended by DO-1 t_ed1c4b8c with
+// the two v2.3.0 modules — inauspicious.js, session-store.js — so the SEC-22 gate covers
+// the whole shipped graph: index.html, style.css, app.js, choghadiya.js, i18n.js,
+// geocoder.js, inauspicious.js, session-store.js, favicon.svg, vendor/suncalc-2.1.1.js):
 //   (a) SEC-05 — no HTML sinks in code: innerHTML | outerHTML | insertAdjacentHTML |
 //       document.write | eval( | new Function | javascript: | setAttribute('style'
 //   (b) SEC-03 — no inline style attributes (`style="`) / <style> blocks / on*= HTML
 //       handler attributes in code.
 //   (c) SEC-14 — every http(s) origin in code is on the explicit allow-list below.
+//   (d) SEC-STORAGE (v2.3.0 item 7 / adr-009) — the web-storage tokens
+//       `localStorage` / `sessionStorage` appear ONLY in session-store.js; every other
+//       shipped module must go through that module's get/set/remove/clear. session-store.js
+//       documents the constraint itself and is therefore the sole exempt file.
 //
 // Comment policy (important, and matches the audit's own reading): comments are STRIPPED
 // before matching, because the shipped files legitimately contain PROSE *about* the
@@ -24,7 +30,7 @@
 // the gate honest: a real sink/handler/origin in executable code still fails the run.
 //
 // Exit codes are CI-honest, like scripts/smoke.mjs:
-//   0 = all three greps clean, 1 = at least one hit, 2 = the harness could not run
+//   0 = every grep clean, 1 = at least one hit, 2 = the harness could not run
 //   (a shipped file listed above is missing).
 //
 // Run: node scripts/security-greps.mjs [root]   (root defaults to the repo root;
@@ -37,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const IS_MAIN = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-/** Shipped files, verbatim from docs/09-security-audit.md §1 "Shipped files = …". */
+/** Shipped files: docs/09-security-audit.md §1 plus the two v2.3.0 modules (DO-1). */
 export const SHIPPED_FILES = Object.freeze([
   'index.html',
   'style.css',
@@ -45,6 +51,8 @@ export const SHIPPED_FILES = Object.freeze([
   'choghadiya.js',
   'i18n.js',
   'geocoder.js',
+  'inauspicious.js',
+  'session-store.js',
   'favicon.svg',
   'vendor/suncalc-2.1.1.js',
 ]);
@@ -191,7 +199,7 @@ export function stripComments(rel, src) {
 }
 
 /* ------------------------------------------------------------------ */
-/* The three gates                                                     */
+/* The gates                                                           */
 /* ------------------------------------------------------------------ */
 
 export const GATES = Object.freeze([
@@ -214,6 +222,16 @@ export const GATES = Object.freeze([
     re: /https?:\/\/[A-Za-z0-9._~:/?#[\]@!$&()*+,;=%-]+/g,
     origins: true,
   },
+  {
+    id: 'SEC-STORAGE',
+    name: 'web-storage tokens only in session-store.js',
+    // (d) v2.3.0 item 7 / adr-009: `localStorage` / `sessionStorage` may be named ONLY
+    // by the storage substrate itself. Every other shipped module reaches web storage
+    // through session-store.js's get/set/remove/clear, so a stray token anywhere else
+    // is a red flag (and a direct-storage bypass of the TTL/namespace/robustness rules).
+    re: /\b(?:localStorage|sessionStorage)\b/g,
+    exempt: ['session-store.js'],
+  },
 ]);
 
 /** 1-based line of an offset, plus the trimmed line text — for a legible failure. */
@@ -227,7 +245,7 @@ function locate(src, index) {
 }
 
 /**
- * Run all three gates over `root`. Returns { hits: [...], missing: [...] }.
+ * Run every gate over `root`. Returns { hits: [...], missing: [...] }.
  * A hit = { file, line, gate, match, text }.
  */
 export function runGates(root = ROOT) {
@@ -244,6 +262,8 @@ export function runGates(root = ROOT) {
     const code = stripComments(rel, raw);
 
     for (const gate of GATES) {
+      // A gate may exempt specific files (e.g. SEC-STORAGE and session-store.js).
+      if (gate.exempt && gate.exempt.includes(rel)) continue;
       gate.re.lastIndex = 0;
       for (const m of code.matchAll(gate.re)) {
         const value = m[0];
@@ -294,7 +314,9 @@ async function main() {
   }
 
   const total = hits.length;
-  process.stdout.write(`\nSECURITY GREPS RESULT: ${total === 0 ? 'PASS — 0 hits across 3 gates' : `FAIL — ${total} hit(s)`}\n`);
+  process.stdout.write(`\nSECURITY GREPS RESULT: ${total === 0
+    ? `PASS — 0 hits across ${GATES.length} gates`
+    : `FAIL — ${total} hit(s)`}\n`);
   return total === 0 ? 0 : 1;
 }
 

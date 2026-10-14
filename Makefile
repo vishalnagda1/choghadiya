@@ -25,15 +25,23 @@
 # on redeploy — there are no hashed filenames and no build step.
 #
 # Release bump procedure (one commit):
-#   1. make bump VERSION=2.2.0      # rewrites package.json + every ?v= to 2.2.0
+#   1. make bump VERSION=2.3.0      # rewrites package.json + every ?v= token
 #   2. make check                   # scripts/smoke.mjs asserts every ?v= == version
-#   3. git commit -am "chore(release): v2.2.0" && git tag -a v2.2.0
+#   3. git commit -am "chore(release): v2.3.0" && git tag -a v2.3.0
 # The version bump, the git tag and the `?v=` change ship in the SAME commit
-# (docs/04-architecture.md §11.4/§11.5).
+# (docs/04-architecture.md §11.4/§11.5). The bump list MUST cover any shipped module
+# that carries a `?v=` token — v2.3.0 added session-store.js and inauspicious.js to the
+# graph, so the target rewrites index.html plus every root/vendor module (`$(SHIPPED_JS)`)
+# rather than a hardcoded pair, and scripts/smoke.mjs (assetVersions()) fails the gate if
+# a token anywhere in the transitive graph is left behind.
 
 PYTHON ?= python3
 NODE   ?= node
 PORT   ?= 8080
+
+# Every shipped module that may carry a `?v=` cache-busting token (kept in sync with
+# scripts/smoke.mjs shippedJsFiles(): root modules + the vendored library).
+SHIPPED_JS := $(wildcard *.js) $(wildcard vendor/*.js)
 
 .PHONY: all dev test smoke axe greps check bump help
 
@@ -47,7 +55,7 @@ dev:
 test:
 	$(NODE) --test "tests/**/*.test.js"
 
-## smoke: headless-Chromium smoke (16 rows from the Mumbai fixture, toggle, widths, no NaN)
+## smoke: headless-Chromium smoke (Mumbai fixture rows, i18n toggle, the v2.3.0 surfaces, budgets)
 smoke:
 	$(NODE) scripts/smoke.mjs
 
@@ -65,12 +73,12 @@ check: test
 	$(NODE) scripts/smoke.mjs
 	$(NODE) scripts/axe-check.mjs
 
-## bump: set ASSET_VERSION everywhere. Usage: make bump VERSION=2.2.0
+## bump: set ASSET_VERSION everywhere. Usage: make bump VERSION=2.3.0
 bump:
 	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z"; exit 1; }
 	perl -pi -e 's/"version": "[^"]+"/"version": "$(VERSION)"/' package.json
-	perl -pi -e 's/\?v=[A-Za-z0-9._-]+/?v=$(VERSION)/g' index.html app.js
-	@echo "ASSET_VERSION -> $(VERSION) (package.json + every ?v= in index.html/app.js)"
+	perl -pi -e 's/\?v=[A-Za-z0-9._-]+/?v=$(VERSION)/g' index.html $(SHIPPED_JS)
+	@echo "ASSET_VERSION -> $(VERSION) (package.json + every ?v= in index.html and the shipped modules)"
 	@echo "next: make check, then commit the bump with the annotated tag v$(VERSION)"
 
 ## help: list available targets

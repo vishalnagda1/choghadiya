@@ -31,3 +31,9 @@ jobs:
       # no build step and no runtime dependencies (docs/05-plan.md §6, ADR-001).
       - name: Run test suite
         run: make test
+
+      # SEC-22 (DO-1, t_ed1c4b8c): the source greps are pure Node with no dev
+      # dependencies, so CI can run them on every push. (The smoke/axe halves of
+      # `make check` need a Chromium binary and axe-core, so they stay local/M7-run.)
+      - name: Run SEC-22 source greps
+        run: make greps

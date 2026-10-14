@@ -17,6 +17,12 @@
 //      version (ASSET_VERSION, US-19 AC3 / research R7);
 //   8. perf budget: total shipped JS (transitive import graph from index.html)
 //      < 60 KB min+gzip (NFR-P3) — see the PERF BUDGET line.
+//   9. the v2.3.0 surfaces (DO-1, t_ed1c4b8c): the manual geolocation button, the S8
+//      inauspicious-periods block (Mumbai fixture values), the S9 detail panel
+//      (default = live slot / tap-select / same-tap revert / reload revert), the ±10-day
+//      calendar picker, the 12h↔24h toggle re-render, and settings persistence across a
+//      reload (sessionStorage, item 7a). Slot ranges are asserted in the ACTIVE cycle:
+//      the 12-hour form by default, the 24-hour form after the toggle.
 //
 // Determinism (the "Mumbai fixture, no network" decision on the card):
 //   - Chrome runs with Emulation.setTimezoneOverride('Asia/Kolkata') and a
@@ -487,6 +493,21 @@ export async function waitForRows(page, { timeout = 25000 } = {}) {
   );
 }
 
+/**
+ * Reload the page in the SAME tab (so sessionStorage survives — the v2.3.0 item-7
+ * persistence contract) and wait for the fixture view to be rendered again. The CDP
+ * init scripts (pinned clock) and the timezone/geolocation overrides are attached to
+ * the target/session, so they re-apply to the new document; they are re-asserted here
+ * defensively because every reload-based assertion depends on the pinned Mumbai view.
+ */
+export async function reloadPage(page, cdp, { timezone } = {}) {
+  const loaded = cdp.waitForEvent('Page.loadEventFired', { sessionId: page.sessionId, timeout: 20000 });
+  await page.send('Page.reload', { ignoreCache: false });
+  await loaded;
+  if (timezone) await page.send('Emulation.setTimezoneOverride', { timezoneId: timezone });
+  await waitForRows(page);
+}
+
 /* ------------------------------------------------------------------ */
 /* Shipped-asset helpers (perf budget + cache-busting)                 */
 /* ------------------------------------------------------------------ */
@@ -576,7 +597,7 @@ async function main() {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const r = new Report();
 
-  await withPage(async ({ page, origin, consoleErrors }) => {
+  await withPage(async ({ page, cdp, origin, consoleErrors }) => {
     // --- 0. the fixture view renders -------------------------------------
     await waitForRows(page);
 
@@ -630,25 +651,37 @@ async function main() {
     r.check('night rows are the 8 fixture night slots in order (Udveg…Udveg)',
       latinOf(names.night).join(',') === expectedNight.join(','), latinOf(names.night).join(','));
 
-    // --- 4. row shape: name, time range (active format), tier word, disclosure semantics ---
+    // --- 4. row shape: name, time range (ACTIVE format), tier word, selection control ---
+    // v2.3.0 CR6 / 03-ux §3.9 (FE-6): a slot row is now a SELECTION control into the
+    // S9 detail panel — `aria-pressed` + `aria-controls="choghadiya-panel"` — and the
+    // v1.0.1 inline `.meaning` / `aria-expanded` disclosure is RETIRED (this assertion
+    // used to lock that retired contract, which is why `make check` was red here).
+    // v2.3.0 CR1 (FE-1): the range must be rendered in the ACTIVE cycle — 12-hour by
+    // default — so a bare "HH:MM – HH:MM" row is a FAILURE here; the 24-hour form is
+    // asserted after the toggle in section 18, not accepted as an alternative here.
     const shape = JSON.parse(await page.evaluate(`JSON.stringify(
       [...document.querySelectorAll('button.slot')].map(b => ({
         name: b.dataset.name, time: b.dataset.time, tier: b.dataset.tier,
-        expanded: b.getAttribute('aria-expanded'),
+        pressed: b.getAttribute('aria-pressed'),
         controls: b.getAttribute('aria-controls'),
-        meaningId: (b.parentElement.querySelector('.meaning') || {}).id || null,
+        expanded: b.getAttribute('aria-expanded'),
+        meaningNodes: b.parentElement.querySelectorAll('.meaning').length,
         text: b.textContent.trim(),
       }))
     )`));
-    // v2.3.0 CR1 (FE-1): the default cycle is 12-hour, so a row range is
-    // "hh:mm am – hh:mm am"; the widened alternative accepts the 24h "HH:MM – HH:MM"
-    // the toggle produces. Either form is a real clock range, never NaN.
-    const RANGE_RE = /^(?:\d{2}:\d{2}|\d{2}:\d{2} [ap]m) – (?:\d{2}:\d{2}|\d{2}:\d{2} [ap]m)$/;
-    r.check('every row has a Hindi+English name, a time range in the active format and a tier word',
+    const RANGE_12H_RE = /^\d{2}:\d{2} [ap]m – \d{2}:\d{2} [ap]m$/;
+    const RANGE_24H_RE = /^\d{2}:\d{2} – \d{2}:\d{2}$/;
+    r.check('every row has a Hindi+English name, a 12-hour (default) time range and a tier word',
       shape.length === 16 && shape.every((s) =>
-        /\S/.test(s.name || '') && RANGE_RE.test(s.time) && /\S/.test(s.tier || '')));
-    r.check('every row is a collapsed disclosure control (aria-expanded=false + aria-controls)',
-      shape.every((s) => s.expanded === 'false' && s.controls && s.controls === s.meaningId));
+        /\S/.test(s.name || '') && RANGE_12H_RE.test(s.time) && /\S/.test(s.tier || '')),
+      JSON.stringify(shape.find((s) => !RANGE_12H_RE.test(s.time)) || {}));
+    r.check('every row is a selection control (aria-pressed + aria-controls=choghadiya-panel, no aria-expanded)',
+      shape.every((s) => (s.pressed === 'true' || s.pressed === 'false')
+        && s.controls === 'choghadiya-panel' && s.expanded === null),
+      JSON.stringify(shape.find((s) => s.controls !== 'choghadiya-panel' || s.expanded !== null) || {}));
+    r.check('no row is selected by default, and the retired v1.0.1 inline disclosure (.meaning) is gone',
+      shape.every((s) => s.pressed === 'false' && s.meaningNodes === 0)
+      && (await page.evaluate("document.querySelectorAll('.meaning').length")) === 0);
 
     // --- 5. DOM is free of NaN / Invalid Date ----------------------------
     const domText = await page.evaluate('document.documentElement.textContent');
@@ -758,6 +791,268 @@ async function main() {
       budget.gzip < 60 * 1024, `${kb(budget.gzip)}`);
     r.note(`FCP note (M6 gate): QA runs Lighthouse mobile (mid-range Android / 4G, FCP < 1.5 s) against the deployed https://time.gitick.com/ — see docs/07-test-plan.md §M6.`);
     r.note(`shipped JS graph: ${budget.files.join(', ')}`);
+
+    /* ================================================================== */
+    /* v2.3.0 surfaces (CR1/CR2/CR4/CR5/CR6 + item 7) — added by DO-1     */
+    /* ================================================================== */
+
+    // --- 12. CR2: the manual "use my current location" button ------------
+    const geoBtn = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const b = document.getElementById('use-current');
+      if (!b) return null;
+      return {
+        inSheet: document.getElementById('sheet').contains(b),
+        label: document.getElementById('use-current-label').textContent,
+        busy: b.getAttribute('aria-busy'),
+        disabled: b.disabled,
+        type: b.getAttribute('type'),
+      };
+    })())`));
+    r.check('the manual "use my current location" button is present inside the location sheet',
+      Boolean(geoBtn) && geoBtn.inSheet === true && geoBtn.type === 'button',
+      JSON.stringify(geoBtn));
+    r.check('the geolocation button shows the localised loc.useCurrent label (idle, enabled)',
+      Boolean(geoBtn) && geoBtn.label === t('loc.useCurrent', 'hi')
+      && geoBtn.busy === 'false' && geoBtn.disabled === false,
+      geoBtn && geoBtn.label);
+
+    // --- 13. CR5: the S8 inauspicious-periods block ----------------------
+    const periods = JSON.parse(await page.evaluate(`JSON.stringify({
+      hidden: document.getElementById('periods').hidden,
+      heading: document.getElementById('periods-h').textContent,
+      rows: [...document.querySelectorAll('#period-rows .period')].map(row => ({
+        name: (row.querySelector('.period__name') || {}).textContent ?? null,
+        range: (row.querySelector('.period__range') || {}).textContent ?? null,
+        date: (row.querySelector('.period__date') || {}).textContent ?? null,
+        desc: (row.querySelector('.period__desc') || {}).textContent ?? null,
+      })),
+    })`));
+    // Mumbai 2026-10-14 (Wed) fixture from BE-A / RS-1 §11.5, rendered in 12-hour
+    // format (the default cycle) — Vaar Vela 12:24–13:52, Kaal Vela 09:28–10:56,
+    // Kaal Ratri 03:28–05:00 (on the next civil date). Exact, ±0 min.
+    const MUMBAI_PERIODS_12H = [
+      { key: 'periods.vaarVela', range: '12:24 pm – 01:52 pm', crossDate: false },
+      { key: 'periods.kaalVela', range: '09:28 am – 10:56 am', crossDate: false },
+      { key: 'periods.kaalRatri', range: '03:28 am – 05:00 am', crossDate: true },
+    ];
+    r.check('the S8 inauspicious-periods block is visible with exactly 3 rows (Vaar Vela, Kaal Vela, Kaal Ratri)',
+      periods.hidden === false && periods.rows.length === 3 && periods.heading === t('periods.heading', 'hi'),
+      JSON.stringify({ hidden: periods.hidden, heading: periods.heading, rows: periods.rows.length }));
+    r.check('the 3 period rows carry the Mumbai 2026-10-14 fixture ranges in 12-hour format (no NaN)',
+      periods.rows.length === 3 && periods.rows.every((row, i) =>
+        row.name === t(MUMBAI_PERIODS_12H[i].key, 'hi')
+        && row.range === MUMBAI_PERIODS_12H[i].range
+        && /\S/.test(row.desc || '')
+        && !/NaN|Invalid Date/.test(`${row.name}${row.range}${row.desc}`)),
+      JSON.stringify(periods.rows.map((row) => `${row.name}=${row.range}`)));
+    r.check('only the cross-midnight period (Kaal Ratri) is annotated with its trailing civil date',
+      periods.rows.length === 3
+      && periods.rows.filter((row) => Boolean(row.date)).length === 1
+      && MUMBAI_PERIODS_12H[2].crossDate === true
+      && /^· \S/.test(periods.rows[2].date || ''),
+      JSON.stringify(periods.rows.map((row) => row.date)));
+
+    // --- 14. CR6: S9 detail panel — default = the live current slot ------
+    const panelDefault = JSON.parse(await page.evaluate(`JSON.stringify({
+      hidden: document.getElementById('choghadiya-panel').hidden,
+      bodyHidden: document.getElementById('panel-body').hidden,
+      promptHidden: document.getElementById('panel-prompt').hidden,
+      badgeHidden: document.getElementById('panel-badge').hidden,
+      badge: document.getElementById('panel-badge').textContent,
+      name: document.getElementById('panel-name').textContent,
+      range: document.getElementById('panel-range').textContent,
+      note: document.getElementById('panel-note').textContent,
+      tier: document.getElementById('panel-tier-note').textContent,
+      warnHidden: document.getElementById('panel-warn').hidden,
+      meaning: document.getElementById('panel-meaning').textContent,
+      goodFor: document.getElementById('panel-goodfor').textContent,
+      badFor: document.getElementById('panel-badfor').textContent,
+      nuance: document.getElementById('panel-nuance').textContent,
+      currentName: (document.querySelector('button.slot[aria-current="true"]') || {}).dataset
+        ? document.querySelector('button.slot[aria-current="true"]').dataset.name : null,
+      pressed: document.querySelectorAll('button.slot[aria-pressed="true"]').length,
+    })`));
+    const currentLatin = String(panelDefault.currentName || '').split(', ').pop();
+    r.check('the detail panel is visible by default and follows the live current choghadiya with the current badge',
+      panelDefault.hidden === false && panelDefault.bodyHidden === false
+      && panelDefault.promptHidden === true && panelDefault.badgeHidden === false
+      && panelDefault.badge === t('panel.badge.current', 'hi') && panelDefault.pressed === 0,
+      JSON.stringify({ hidden: panelDefault.hidden, badge: panelDefault.badge, pressed: panelDefault.pressed }));
+    r.check('the default panel shows the current slot name, a 12-hour range, the current note and its tier note',
+      Boolean(currentLatin) && panelDefault.name.includes(currentLatin)
+      && RANGE_12H_RE.test(panelDefault.range)
+      && panelDefault.note === t('panel.note.current', 'hi') && /\S/.test(panelDefault.tier)
+      && !/NaN|Invalid Date/.test(`${panelDefault.name}${panelDefault.range}${panelDefault.note}${panelDefault.tier}`),
+      JSON.stringify({ name: panelDefault.name, range: panelDefault.range, note: panelDefault.note }));
+    r.check('the default panel carries the full meaning / good-for / bad-for / day-night content',
+      [panelDefault.meaning, panelDefault.goodFor, panelDefault.badFor, panelDefault.nuance].every((v) => /\S/.test(v)),
+      JSON.stringify({ meaning: String(panelDefault.meaning).slice(0, 40) }));
+
+    // --- 15. CR4: the calendar picker (±10 civil days) drives the view ---
+    const picker = JSON.parse(await page.evaluate(`JSON.stringify({
+      type: document.getElementById('datepicker').type,
+      min: document.getElementById('datepicker').min,
+      max: document.getElementById('datepicker').max,
+      value: document.getElementById('datepicker').value,
+      label: document.getElementById('date-label').textContent,
+      disabled: document.getElementById('datepicker').disabled,
+    })`));
+    const RANGE_DAYS_14 = { min: '2026-10-04', max: '2026-10-24' }; // Mumbai civil date 2026-10-14 ∓ 10
+    r.check('the date picker is a native date control with min/max = the location civil date ∓10',
+      picker.type === 'date' && picker.disabled === false
+      && picker.min === RANGE_DAYS_14.min && picker.max === RANGE_DAYS_14.max
+      && picker.value === MUMBAI_DATE,
+      JSON.stringify(picker));
+
+    const dayNames = () => page.evaluate(
+      "JSON.stringify([...document.querySelectorAll('#day-list button.slot')].map(b => b.dataset.name))",
+    ).then(JSON.parse);
+    const labelBeforePick = picker.label;
+    const dayNamesBeforePick = await dayNames();
+    const picked = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const el = document.getElementById('datepicker');
+      el.value = '2026-10-15';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { value: el.value, label: document.getElementById('date-label').textContent };
+    })())`));
+    const dayNamesAfterPick = await dayNames();
+    r.check('picking an adjacent date re-renders the slot lists and the date label',
+      picked.value === '2026-10-15' && picked.label !== labelBeforePick
+      && dayNamesAfterPick.join(',') !== dayNamesBeforePick.join(','),
+      JSON.stringify({ label: picked.label, before: dayNamesBeforePick.join(','), after: dayNamesAfterPick.join(',') }));
+    r.check('an off-today picked date drops the highlight and shows the neutral panel prompt (US-14 AC3)',
+      (await page.evaluate("document.querySelectorAll('button.slot[aria-current=\"true\"]').length")) === 0
+      && (await page.evaluate("document.getElementById('panel-body').hidden")) === true
+      && (await page.evaluate("document.getElementById('panel-prompt').hidden")) === false);
+    await page.evaluate(`(() => {
+      const el = document.getElementById('datepicker');
+      el.value = '${MUMBAI_DATE}';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await page.waitFor(
+      `document.getElementById('datepicker').value === '${MUMBAI_DATE}'
+       && document.querySelector("button.slot[aria-current='true']") !== null`,
+      { label: 'fixture date restored after the picker probe' },
+    );
+    r.check('re-picking the fixture date restores the current-slot highlight and the default panel',
+      (await page.evaluate("document.querySelectorAll('button.slot[aria-current=\"true\"]').length")) === 1
+      && (await page.evaluate("document.getElementById('panel-badge').hidden")) === false
+      && (await dayNames()).join(',') === dayNamesBeforePick.join(','));
+
+    // --- 16. CR6: tap selects a slot into the panel; the same tap reverts -
+    const firstRow = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const b = document.querySelector('#day-list button.slot');
+      return { key: b.dataset.slot, name: b.dataset.name, pressed: b.getAttribute('aria-pressed') };
+    })())`));
+    await page.evaluate("document.querySelector('#day-list button.slot').click()");
+    await page.waitFor("document.querySelector('#day-list button.slot').getAttribute('aria-pressed') === 'true'",
+      { label: 'first row selected' });
+    const selectedPanel = JSON.parse(await page.evaluate(`JSON.stringify({
+      pressed: document.querySelectorAll('button.slot[aria-pressed="true"]').length,
+      current: document.querySelectorAll('button.slot[aria-current="true"]').length,
+      currentKey: (document.querySelector('button.slot[aria-current="true"]') || {}).dataset
+        ? document.querySelector('button.slot[aria-current="true"]').dataset.slot : null,
+      badgeHidden: document.getElementById('panel-badge').hidden,
+      name: document.getElementById('panel-name').textContent,
+      range: document.getElementById('panel-range').textContent,
+      note: document.getElementById('panel-note').textContent,
+    })`));
+    r.check('tapping a non-current row selects it (aria-pressed) and the panel shows THAT slot, not the live one',
+      selectedPanel.pressed === 1 && selectedPanel.badgeHidden === true
+      && selectedPanel.name.includes(String(firstRow.name).split(', ').pop())
+      && selectedPanel.note === t('panel.note.tapAgain', 'hi')
+      && RANGE_12H_RE.test(selectedPanel.range),
+      JSON.stringify(selectedPanel));
+    r.check('the current-slot marker stays exclusive to the live row while another row is selected (US-14 AC1)',
+      selectedPanel.current === 1 && selectedPanel.currentKey !== firstRow.key,
+      JSON.stringify({ currentKey: selectedPanel.currentKey, selectedKey: firstRow.key }));
+    await page.evaluate("document.querySelector('#day-list button.slot').click()");
+    await page.waitFor("document.querySelectorAll('button.slot[aria-pressed=\"true\"]').length === 0",
+      { label: 'selection cleared by the second tap' });
+    r.check('tapping the same row again reverts the panel to the live current slot',
+      (await page.evaluate("document.getElementById('panel-badge').hidden")) === false
+      && (await page.evaluate("document.getElementById('panel-note').textContent")) === t('panel.note.current', 'hi')
+      && (await page.evaluate("document.querySelectorAll('button.slot[aria-pressed=\"true\"]').length")) === 0);
+
+    // --- 17. a reload reverts the selection (UI state only, never stored) -
+    await page.evaluate("document.querySelector('#day-list button.slot').click()");
+    await page.waitFor("document.querySelectorAll('button.slot[aria-pressed=\"true\"]').length === 1",
+      { label: 'row re-selected before the reload probe' });
+    await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
+    const afterReload = JSON.parse(await page.evaluate(`JSON.stringify({
+      rows: document.querySelectorAll('button.slot').length,
+      pressed: document.querySelectorAll('button.slot[aria-pressed="true"]').length,
+      badgeHidden: document.getElementById('panel-badge').hidden,
+      note: document.getElementById('panel-note').textContent,
+    })`));
+    r.check('a page reload reverts the S9 selection to the live current slot (selection is UI-only)',
+      afterReload.rows === 16 && afterReload.pressed === 0
+      && afterReload.badgeHidden === false && afterReload.note === t('panel.note.current', 'hi'),
+      JSON.stringify(afterReload));
+
+    // --- 18. CR1: the 12h/24h toggle re-renders every visible time -------
+    await page.evaluate("document.getElementById('b-h24').click()");
+    await page.waitFor("document.getElementById('b-h24').getAttribute('aria-pressed') === 'true'",
+      { label: '24-hour cycle active' });
+    const h24 = JSON.parse(await page.evaluate(`JSON.stringify({
+      h12: document.getElementById('b-h12').getAttribute('aria-pressed'),
+      rowRanges: [...document.querySelectorAll('button.slot')].map(b => b.dataset.time),
+      rowText: [...document.querySelectorAll('button.slot .time')].map(e => e.textContent),
+      periodRanges: [...document.querySelectorAll('#period-rows .period__range')].map(e => e.textContent),
+      panelRange: document.getElementById('panel-range').textContent,
+    })`));
+    r.check('the 24h toggle re-renders every slot range, the S8 periods block and the S9 panel in 24-hour format',
+      h24.h12 === 'false'
+      && h24.rowRanges.length === 16 && h24.rowRanges.every((v) => RANGE_24H_RE.test(v))
+      && h24.rowText.every((v) => RANGE_24H_RE.test(v))
+      && h24.periodRanges.length === 3 && h24.periodRanges.every((v) => RANGE_24H_RE.test(v))
+      && RANGE_24H_RE.test(h24.panelRange),
+      JSON.stringify({ h12: h24.h12, periods: h24.periodRanges, panel: h24.panelRange }));
+    r.check('24-hour ranges are the plain HH:MM form (no am/pm suffix) with the fixture period values',
+      h24.periodRanges.join(' | ') === '12:24 – 13:52 | 09:28 – 10:56 | 03:28 – 05:00',
+      h24.periodRanges.join(' | '));
+    await page.evaluate("document.getElementById('b-h12').click()");
+    await page.waitFor("document.getElementById('b-h12').getAttribute('aria-pressed') === 'true'",
+      { label: '12-hour cycle restored' });
+    r.check('the 12h toggle restores the 12-hour render (the default)',
+      (await page.evaluate("[...document.querySelectorAll('button.slot')].every(b => /^\\d{2}:\\d{2} [ap]m – \\d{2}:\\d{2} [ap]m$/.test(b.dataset.time))")) === true
+      && (await page.evaluate("[...document.querySelectorAll('#period-rows .period__range')].map(e => e.textContent).join(' | ')"))
+        === '12:24 pm – 01:52 pm | 09:28 am – 10:56 am | 03:28 am – 05:00 am');
+
+    // --- 19. item 7a: settings persist across a reload (sessionStorage) --
+    // Set a NON-default pair (24-hour + English), reload, and assert both survive —
+    // then put the tab back into its documented default state (12-hour, Hindi).
+    await page.evaluate("document.getElementById('b-h24').click()");
+    await page.waitFor("document.getElementById('b-h24').getAttribute('aria-pressed') === 'true'",
+      { label: '24-hour for the persistence probe' });
+    await page.evaluate("document.getElementById('b-en').click()");
+    await page.waitFor("document.documentElement.lang === 'en'", { label: 'English for the persistence probe' });
+    await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
+    const persisted = JSON.parse(await page.evaluate(`JSON.stringify({
+      lang: document.documentElement.lang,
+      h24: document.getElementById('b-h24').getAttribute('aria-pressed'),
+      h12: document.getElementById('b-h12').getAttribute('aria-pressed'),
+      rowRanges: [...document.querySelectorAll('button.slot')].map(b => b.dataset.time),
+      keys: Object.keys(sessionStorage).sort(),
+    })`));
+    r.check('the 12h/24h time format persists across a reload (sessionStorage-backed, v2.3.0 item 7)',
+      persisted.h24 === 'true' && persisted.h12 === 'false'
+      && persisted.rowRanges.length === 16 && persisted.rowRanges.every((v) => RANGE_24H_RE.test(v)),
+      JSON.stringify({ h24: persisted.h24, rows: persisted.rowRanges.slice(0, 2) }));
+    r.check('the language choice persists across a reload',
+      persisted.lang === 'en' && persisted.keys.some((k) => k.endsWith('settings.lang')),
+      JSON.stringify({ lang: persisted.lang, keys: persisted.keys }));
+    r.check('every persisted key is namespaced choghadiya.* (session-store.js owns the storage)',
+      persisted.keys.length > 0 && persisted.keys.every((k) => k.startsWith('choghadiya.')),
+      JSON.stringify(persisted.keys));
+
+    // Leave the page in its documented default state (12-hour, Hindi).
+    await page.evaluate("document.getElementById('b-h12').click()");
+    await page.waitFor("document.getElementById('b-h12').getAttribute('aria-pressed') === 'true'",
+      { label: 'default format restored after the persistence probe' });
+    await page.evaluate("document.getElementById('b-hi').click()");
+    await page.waitFor("document.documentElement.lang === 'hi'",
+      { label: 'default language restored after the persistence probe' });
 
     r.print('SMOKE — headless Chromium, Mumbai fixture, no network');
   });

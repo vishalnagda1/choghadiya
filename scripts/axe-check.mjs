@@ -5,9 +5,11 @@
 //
 // Scans the SHIPPED page with axe-core — the same deterministic Mumbai-fixture
 // view scripts/smoke.mjs builds (shared harness: scripts/smoke.mjs exports
-// withPage/waitForRows) — in four states:
-//   1. the base page;          2. the city-search <dialog> open;
-//   3. a slot row expanded;    4. the 320 px layout.
+// withPage/waitForRows) — in five states:
+//   1. the base page;            2. the city-search <dialog> open;
+//   3. a slot row SELECTED (S9 detail panel content visible, v2.3.0 CR6 — the retired
+//      v1.0.1 row-disclosure state is gone);   4. the off-today neutral panel prompt
+//      with the S8 periods block visible and the date picker focused;   5. 320 px.
 //
 // EXIT CODES (the M7 gate — CI-honest, make check depends on these):
 //   0  axe ran and found 0 critical/serious violations;
@@ -25,10 +27,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ROOT, withPage, waitForRows } from './smoke.mjs';
+import { MUMBAI_DATE } from '../tests/fixtures.js';
 
 const IS_MAIN = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const AXE_PATH = path.join(ROOT, 'node_modules', 'axe-core', 'axe.min.js');
 const FATAL_IMPACTS = new Set(['critical', 'serious']);
+
+/** The adjacent civil date used for the off-today S9 prompt state (MUMBAI_DATE + 1 day). */
+const OFF_TODAY = (() => {
+  const [y, m, d] = MUMBAI_DATE.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+})();
 
 const RUN_EXPR = `axe.run(document, { resultTypes: ['violations'], reporter: 'v2' }).then((r) => JSON.stringify({
   violations: r.violations.map((v) => ({
@@ -94,14 +103,35 @@ async function main() {
     await page.evaluate("document.getElementById('sheet').close()");
     await page.waitFor("document.getElementById('sheet').open === false", { label: 'city sheet closes' });
 
-    // 3. one slot row expanded (the disclosure line is a sibling of the button)
+    // 3. S9 detail panel with a slot row SELECTED (v2.3.0 CR6 / 03-ux §3.9): rows are
+    //    SELECTION controls (`aria-pressed` + `aria-controls="choghadiya-panel"`) and the
+    //    retired v1.0.1 row-disclosure state no longer exists, so the old
+    //    "row disclosure opens" scan is replaced by a panel-content scan.
     await page.evaluate("document.querySelector('#day-list button.slot').click()");
-    await page.waitFor("document.querySelector('#day-list button.slot').getAttribute('aria-expanded') === 'true'",
-      { label: 'row disclosure opens' });
-    await scan('slot row expanded');
-    await page.evaluate("document.querySelector('#day-list button.slot').click()");
+    await page.waitFor("document.querySelector('#day-list button.slot').getAttribute('aria-pressed') === 'true'",
+      { label: 'a slot row is selected' });
+    await scan('slot row selected — S9 panel content visible');
 
-    // 4. narrowest supported layout (NFR-A6 / 03-ux §5)
+    // 4. off-today view: the neutral S9 prompt (no badge, hidden body) with the S8
+    //    inauspicious-periods block visible and the date picker focused.
+    await page.evaluate(`(() => {
+      const el = document.getElementById('datepicker');
+      el.value = '${OFF_TODAY}';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await page.waitFor("document.getElementById('panel-prompt').hidden === false",
+      { label: 'off-today panel prompt shows' });
+    await page.evaluate("document.getElementById('datepicker').focus()");
+    await scan('off-today — S8 periods block + S9 prompt, date picker focused');
+    await page.evaluate(`(() => {
+      const el = document.getElementById('datepicker');
+      el.value = '${MUMBAI_DATE}';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await page.waitFor("document.querySelector(\"button.slot[aria-current='true']\") !== null",
+      { label: 'fixture date restored' });
+
+    // 5. narrowest supported layout (NFR-A6 / 03-ux §5)
     await page.setViewport(320, 800);
     await scan('base page @320px');
   }, { initScripts: [axeSource] });
