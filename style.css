@@ -909,6 +909,16 @@ footer.app {
 }
 footer.app p { margin: 0 }
 
+/* Attribution credit links (v2.3.0 F8). app.js renderAttribution() builds the three
+   licence hyperlinks in #footer-credit with createElement('a'); before v2.3.0 the page
+   had NO <a> elements, so style.css never needed a link rule and these anchors fell
+   back to the user-agent link colour (#0000EE). That colour fails WCAG AA on the dark
+   theme (1.99:1 against --bg #121212 — caught by the axe gate, serious color-contrast,
+   post-wave tree). Inherit the footer's --text-muted, which is contrast-verified in both
+   themes (§4.1/§4.9); the anchors keep the default underline, so they stay
+   distinguishable from the surrounding text (WCAG 1.4.1). One rule, no new token. */
+footer.app a { color: inherit }
+
 /* ==========================================================================
    S8 inauspicious-periods block (v2.3.0 CR5, 03-ux §3.8, §4.9) — FE-5
    One --surface panel, --r-lg, --sp-4 padding; an <h2> heading on the same type step
