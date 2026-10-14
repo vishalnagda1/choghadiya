@@ -46,7 +46,17 @@
 // location's civil date ∓10 days, recomputed on every render. ‹/› and the Alt+←/→
 // shortcuts keep working and clamp to the SAME window through one shared code path
 // (`setViewedDate`), and both nav buttons disable at the edges. No custom JS calendar,
-// no new dependency; `i18n.js` already carries `date.picker.label` / `date.picker.range`.
+// no new dependency; `i18n.js` already carries `date.picker.label`.
+//
+// v2.3.1 (t_b9bb50be, item 8b) — DATE PICKER DID NOT OPEN. Root cause: the transparent
+// overlay input only received a click that FOCUSED it; Chrome's native calendar popup
+// (and its opening) is not triggered by that focus, and a tap forwarded from the
+// <label for="datepicker"> or landing on the caret never reaches the input's own
+// activation behaviour. Fix: a `pointerdown` handler on the whole 44 px `.picker-field`
+// calls `datePicker.showPicker()` from inside the user gesture (preventDefault'ing the
+// native focus-first activation so the popup opens exactly once), with a `focus()`
+// fallback when the API is missing. The overlay input stays (never display:none — it
+// carries the native date semantics + keyboard path); only the OPEN is made explicit.
 //
 // FE-6 (t_778b1ea0, v2.3.0 item 6 / CR6): the S9 choghadiya detail panel. A slot row is
 // now a SELECTION control — `aria-pressed` + `aria-controls="choghadiya-panel"` — and
@@ -236,6 +246,8 @@ function init() {
   dom.results = document.getElementById('results');
   dom.dateLabel = document.getElementById('date-label');
   dom.datePicker = document.getElementById('datepicker');
+  // v2.3.1 (item 8b): the 44 px hit target that actually opens the native calendar.
+  dom.pickerField = dom.datePicker.closest('.picker-field');
   dom.prev = document.getElementById('prev-day');
   dom.next = document.getElementById('next-day');
   dom.todayPill = document.getElementById('today-pill');
@@ -295,6 +307,10 @@ function init() {
   // half-typed value can never move the view.
   dom.datePicker.addEventListener('change', onPickDate);
   dom.datePicker.addEventListener('input', onPickDate);
+  // v2.3.1 (item 8b): OPEN the popup explicitly, from inside the gesture. Wired to
+  // pointerdown on the field (not click on the input) so a tap on the visible label
+  // or caret — which never reaches the input — opens it too.
+  dom.pickerField.addEventListener('pointerdown', openDatePicker);
 
   // --- FE-04: degradation surfaces ----------------------------------------------
   // S5's action button opens the sheet, so the city field is directly reachable
@@ -528,6 +544,31 @@ function onPickDate(event) {
   if (event && event.type === 'change' && value !== state.viewedDate) {
     dom.datePicker.value = state.viewedDate;
   }
+}
+
+/**
+ * v2.3.1 (item 8b) — open the native calendar from a tap anywhere in `.picker-field`.
+ *
+ * Chrome does not open a date input's popup just because the input got focus: a click
+ * that only focuses it (which is what the transparent overlay received, and what a
+ * `<label for>` forwards) leaves the user staring at a calendar that never appears.
+ * `showPicker()` opens it, but only while a real user activation is live — so it is
+ * called straight from the `pointerdown` gesture, and the native focus-first
+ * activation is cancelled so the popup opens exactly once.
+ *
+ * Degrades safely: no location → the control is inert (S4 / no-location state);
+ * an engine without `showPicker()` (older Firefox/Safari) falls back to `focus()`,
+ * which keeps the keyboard path (typing + arrow/Alt-arrow stepping) working. A real
+ * `change` from the picker still flows through onPickDate() unchanged.
+ */
+function openDatePicker(event) {
+  if (!state.location || dom.datePicker.disabled) return; // no-location: picker inert
+  if (event && event.button !== undefined && event.button !== 0) return; // primary only
+  event.preventDefault();
+  if (typeof dom.datePicker.showPicker === 'function') {
+    try { dom.datePicker.showPicker(); return; } catch { /* fall through to focus */ }
+  }
+  dom.datePicker.focus();
 }
 
 /** The "आज / Today" reset pill (03-ux §3 S1 "Success (other date)"). */

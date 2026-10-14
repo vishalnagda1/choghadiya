@@ -1,10 +1,10 @@
-// tests/i18n.test.js — S-I18N: the 122-key coverage contract (BE-04, M4 gate).
+// tests/i18n.test.js — S-I18N: the 119-key coverage contract (BE-04, M4 gate).
 //
 // Source of truth: docs/03-ux.md §6 — the bilingual copy deck. This suite parses
 // that table out of the document (not a hand-copied list, so the doc can never
 // drift away from the gate) and asserts that i18n.js implements it *verbatim* in
 // both `hi` and `en`:
-//   - exactly 122 keys, no missing and no extra key in either language,
+//   - exactly 119 keys, no missing and no extra key in either language,
 //   - every string byte-equal to the §6 cell (US-11 AC3/AC4),
 //   - `t()` interpolation ({n}), hard failure on unknown key/language and
 //     literal-preservation of an unmatched placeholder,
@@ -65,12 +65,12 @@ function parseUxCopyDeck(markdown) {
 const deck = parseUxCopyDeck(readFileSync(uxPath, 'utf8'));
 const deckKeys = deck.map((row) => row.key);
 
-test('03-ux §6 declares exactly 122 dictionary keys, and they are unique (M4 contract)', () => {
-  assert.equal(deck.length, 122, `03-ux §6 must declare exactly 122 keys, found ${deck.length}`);
-  assert.equal(new Set(deckKeys).size, 122, '03-ux §6 contains duplicate keys');
+test('03-ux §6 declares exactly 119 dictionary keys, and they are unique (M4 contract)', () => {
+  assert.equal(deck.length, 119, `03-ux §6 must declare exactly 119 keys, found ${deck.length}`);
+  assert.equal(new Set(deckKeys).size, 119, '03-ux §6 contains duplicate keys');
 });
 
-test('every 03-ux §6 key exists in both dictionaries (122 keys x 2 languages = 244 assertions)', () => {
+test('every 03-ux §6 key exists in both dictionaries (119 keys x 2 languages = 238 assertions)', () => {
   let assertions = 0;
   const missing = [];
   for (const { key } of deck) {
@@ -80,7 +80,7 @@ test('every 03-ux §6 key exists in both dictionaries (122 keys x 2 languages = 
     }
   }
   assert.deepEqual(missing, [], `missing dictionary keys: ${missing.join(', ')}`);
-  assert.equal(assertions, 244, '122 keys × 2 languages must be asserted');
+  assert.equal(assertions, 238, '119 keys × 2 languages must be asserted');
 });
 
 test('DICT has no keys beyond 03-ux §6, and KEYS mirrors the §6 table order', () => {
@@ -92,7 +92,7 @@ test('DICT has no keys beyond 03-ux §6, and KEYS mirrors the §6 table order', 
   assert.deepEqual([...Object.keys(DICT.hi)].sort(), [...Object.keys(DICT.en)].sort());
   // The exported KEYS constant is the contract surface — same content, §6 order.
   assert.deepEqual([...KEYS], deckKeys);
-  assert.equal(KEYS.length, 122);
+  assert.equal(KEYS.length, 119);
 });
 
 test('every string matches the 03-ux §6 table verbatim in both languages', () => {

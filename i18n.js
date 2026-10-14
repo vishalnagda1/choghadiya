@@ -1,7 +1,7 @@
 // i18n.js — the single UI-copy dictionary (FE-02, t_f0568729).
 //
 // Contract: docs/04-architecture.md §5.1 (`DICT`, `t`) and docs/03-ux.md §6.
-// The 122 keys below are the §6 copy deck VERBATIM for `hi` (default, 03-ux §2 F6)
+// The 119 keys below are the §6 copy deck VERBATIM for `hi` (default, 03-ux §2 F6)
 // and `en`; the key order matches the §6 table so a reviewer can diff it line by
 // line, and `tests/i18n.test.js` (BE-04, M4 gate) is the automated 100 % coverage
 // check against that table.
@@ -80,10 +80,8 @@ export const DICT = Object.freeze({
     'undefined.reason': 'यहाँ सूर्योदय/सूर्यास्त नहीं होता',
     'undefined.tryAdjacent': 'पिछला दिन',
     'loading.status': 'लोड हो रहा है',
-    'privacy.line': 'खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स इस ब्राउज़र में बिना किसी समाप्ति के रहती हैं; हाल की खोजें और कैश किए गए परिणाम 24 घंटे बाद हट जाते हैं।',
     'attribution.geocoding': 'स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0',
     'convention.note': 'सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है',
-    'footer.noTracking': 'कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं',
     'noscript': 'इस ऐप को चलाने के लिए JavaScript चालू करें',
     'time.toggle.label': 'समय प्रारूप',
     'time.h12': '12h',
@@ -94,7 +92,6 @@ export const DICT = Object.freeze({
     'loc.granted': 'लोकेशन मिल गई',
     'loc.denied': 'लोकेशन की अनुमति नहीं मिली — शहर लिखें या ब्राउज़र में अनुमति दें',
     'date.picker.label': 'तारीख चुनें',
-    'date.picker.range': 'आज से 10 दिन पहले से 10 दिन बाद तक चुन सकते हैं',
     'periods.heading': 'अशुभ काल',
     'periods.vaarVela': 'वार वेला',
     'periods.kaalVela': 'काल वेला',
@@ -204,10 +201,8 @@ export const DICT = Object.freeze({
     'undefined.reason': 'no sunrise/sunset occurs here',
     'undefined.tryAdjacent': 'Previous day',
     'loading.status': 'Loading',
-    'privacy.line': 'Your searched city name is sent to Open-Meteo to find coordinates. No server storage — settings stay in this browser with no expiry; recent searches and cached results expire after 24 hours.',
     'attribution.geocoding': 'Location search by Open-Meteo · Data from GeoNames · CC BY 4.0',
     'convention.note': 'Sunrise/sunset may differ by ±1–2 min from a printed panchang',
-    'footer.noTracking': 'No account · no tracking · no backend',
     'noscript': 'Please enable JavaScript to use this app',
     'time.toggle.label': 'Time format',
     'time.h12': '12h',
@@ -218,7 +213,6 @@ export const DICT = Object.freeze({
     'loc.granted': 'Location found',
     'loc.denied': 'Location permission denied — type a city or allow it in your browser',
     'date.picker.label': 'Choose a date',
-    'date.picker.range': 'You can pick from 10 days before to 10 days after today',
     'periods.heading': 'Inauspicious periods',
     'periods.vaarVela': 'Vaar Vela',
     'periods.kaalVela': 'Kaal Vela',
@@ -276,7 +270,7 @@ export const DICT = Object.freeze({
   }),
 });
 
-/** The 122 keys of 03-ux §6, in table order (the M4 coverage contract, BE-04). */
+/** The 119 keys of 03-ux §6, in table order (the M4 coverage contract, BE-04). */
 export const KEYS = Object.freeze(Object.keys(DICT.hi));
 
 /**

@@ -409,30 +409,6 @@ header.app {
   background: var(--surface-2);
   cursor: default;
 }
-/* Range hint (03-ux §3.10c): screen-reader-only below 600 px keeps the pinned chrome
-   short; visible small print at ≥600 px (the `.range-hint.sr` override wins on
-   specificity, 0-2-0 vs 0-1-0). */
-.range-hint {
-  margin: 0 0 var(--sp-3);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--text-muted);
-  text-align: center;
-}
-@media (min-width: 600px) {
-  .range-hint.sr {
-    position: static;
-    width: auto;
-    height: auto;
-    margin: 0 0 var(--sp-3);
-    padding: 0;
-    border: 0;
-    overflow: visible;
-    clip: auto;
-    clip-path: none;
-    white-space: normal;
-  }
-}
 /* .today-pill — .today-pill, appears only when viewed date ≠ today (03-ux §4.5).
    Kept at 44 px tall so it meets NFR-A5 like every other control. */
 .today-pill {
@@ -806,12 +782,6 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .4) }
   cursor: pointer;
 }
 .sheet-body { padding: var(--sp-4) }
-.sheet-privacy {
-  margin: 0 0 var(--sp-3);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--text-muted);
-}
 /* v2.3.0 CR2 — "use my current location" (03-ux §3.10b / F8): full-width, ≥44 px,
    --brand fill, leading decorative 📍 (aria-hidden in the markup). Requesting →
    the button is disabled + aria-busy and the label swaps to geo.loading (app.js);

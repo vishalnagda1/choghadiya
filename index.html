@@ -73,7 +73,12 @@
          tap anywhere on the date text opens the native picker; it is NEVER display:none
          / visibility:hidden (that would drop it from the a11y tree and from
          clickability). min/max are the viewed location's civil date ∓10 (21 days
-         inclusive) and are set by app.js renderDateBar() — never hardcoded here. -->
+         inclusive) and are set by app.js renderDateBar() — never hardcoded here.
+         v2.3.1 (item 8b bug fix): the overlay alone did not reliably open the native
+         calendar (a click that lands on the transparent input only focuses it in
+         Chrome; the picker needs an explicit, in-gesture showPicker()), so app.js
+         wires a pointerdown/click handler on `.picker-field` that calls
+         datePicker.showPicker() with a focus() fallback. -->
     <div class="datebar">
       <button type="button" class="nav" id="prev-day" aria-label="पिछला दिन">‹</button>
       <div class="label">
@@ -81,7 +86,7 @@
           <label class="d" id="date-label" for="datepicker"></label>
           <span class="caret" aria-hidden="true">⌄</span>
           <input class="picker-input" id="datepicker" type="date"
-                 aria-label="तारीख चुनें" aria-describedby="date-label date-range-hint">
+                 aria-label="तारीख चुनें" aria-describedby="date-label">
         </span>
       </div>
       <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
@@ -92,10 +97,6 @@
            leaf-class display rules AND a JS-driven hidden toggle. -->
       <button type="button" class="today-pill" id="today-pill" hidden data-i18n="date.today">आज</button>
     </div>
-    <!-- CR4 range hint (03-ux §3.10c): screen-reader-only and described on the picker
-         below 600 px (the pinned chrome stays short at 320 px); visible small print at
-         ≥600 px. Colour/glyph-free — it is copy, not a state cue. -->
-    <p class="range-hint sr" id="date-range-hint" data-i18n="date.picker.range">आज से 10 दिन पहले से 10 दिन बाद तक चुन सकते हैं</p>
 
     <!-- ===== S5 geolocation-denied / unavailable notice — 03-ux §3 S5, US-8.
          role="status" (polite), NOT role="alert": it is informative, not urgent, and
@@ -279,17 +280,19 @@
   </main>
 
   <!-- ===== Footer (contentinfo landmark) — 03-ux §1.1, US-6/US-17 ===== -->
-  <!-- v2.3.0 items 3 + 7 (FE-4, t_bf7bfef8). The two v2.2.0 body lines are gone.
-       RS-3 (docs/01 §13) showed full removal (option A) is NOT lawful — Open-Meteo
+  <!-- v2.3.0 items 3 + 7 (FE-4, t_bf7bfef8); v2.3.1 item 8 (t_b9bb50be). RS-3
+       (docs/01 §13) showed full removal (option A) is NOT lawful — Open-Meteo
        (CC BY 4.0 + "link next to displayed location data") and GeoNames (CC BY 4.0
-       credit) both require attribution while their data is displayed — so the
-       recommended Option B is applied: ONE minimal credit line (§13.6 B1) plus the
-       rewritten privacy line (§13.6 B2). Both visible strings are exactly the §6
-       dictionary values (rendered by app.js applyDictionary), so no UI copy lives
-       outside i18n.js (US-11 AC3) and the static fallback text below is the `hi`
-       value, asserted by tests/i18n.test.js.
+       credit) both require attribution while their data is displayed — so Option B's
+       ONE minimal credit line (§13.6 B1) is the lawful minimum and STAYS. The two
+       v2.2.0 body lines and the rewritten v2.3.0 `privacy.line` disclosures were
+       later removed by the client at v2.3.1 (item 8a/8b): the CC BY 4.0 credit is
+       the surviving, client-confirmed-sufficient attribution. The visible credit
+       string is exactly the §6 dictionary value (rendered by app.js
+       renderAttribution()), so no UI copy lives outside i18n.js (US-11 AC3) and the
+       static fallback text below is the `hi` value, asserted by tests/i18n.test.js.
        ATTRIBUTION LINKS (F8, closed by FE-FIX t_7069b58a). The three provider /
-       licence words in `attribution.geocoding` are now real hyperlinks
+       licence words in `attribution.geocoding` are real hyperlinks
        (open-meteo.com, geonames.org, creativecommons.org/licenses/by/4.0/), built at
        render time by app.js renderAttribution() with DOM APIs only (createElement +
        textContent + setAttribute — no innerHTML/data-i18n-html, SEC-05). The static
@@ -298,10 +301,8 @@
        string byte-for-byte. DO lane extends the SEC-14 origin allow-list in
        scripts/security-greps.mjs with exactly those three origins. ===== -->
   <footer class="app">
-    <p data-i18n="privacy.line">खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स इस ब्राउज़र में बिना किसी समाप्ति के रहती हैं; हाल की खोजें और कैश किए गए परिणाम 24 घंटे बाद हट जाते हैं।</p>
     <p id="footer-credit" data-i18n="attribution.geocoding">स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0</p>
     <p data-i18n="convention.note">सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है</p>
-    <p data-i18n="footer.noTracking">कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं</p>
   </footer>
 
   <!-- ===== No-JS message — NFR-B3, 03-ux §6 (noscript key) ===== -->
@@ -334,12 +335,6 @@
       <span aria-hidden="true">📍</span>
       <span id="use-current-label" data-i18n="loc.useCurrent">मेरी वर्तमान लोकेशन उपयोग करें</span>
     </button>
-    <!-- v2.3.0 item 7 (FE-4; reworded F9 by FE-FIX t_7069b58a): the sheet-local
-         disclosure is the rewritten §6 privacy.line — "no server storage; settings in
-         this browser with no expiry; 24 h cache TTL" (localStorage scope, ADR-009) —
-         replacing the v2.2.0 "never stored" claim, which item 7 made stale, and then
-         the interim per-tab wording, which the localStorage flip made stale. -->
-    <p class="sheet-privacy" data-i18n="privacy.line">खोजा गया शहर नाम निर्देशांक ढूँढने के लिए Open-Meteo को भेजा जाता है। सर्वर पर कुछ संग्रहीत नहीं होता — सेटिंग्स इस ब्राउज़र में बिना किसी समाप्ति के रहती हैं; हाल की खोजें और कैश किए गए परिणाम 24 घंटे बाद हट जाते हैं।</p>
     <!-- F8 step 4: the sheet-LOCAL denial line, directly above the city field. It is
          role="status" (polite) and uses the ℹ glyph + text, NOT --danger — the user is
          not blocked, the typed-city path still works. Deliberately NOT the page-level
