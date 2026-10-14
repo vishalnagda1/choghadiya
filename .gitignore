@@ -6,3 +6,10 @@ dist/
 build/
 .DS_Store
 .worktrees/
+
+# --- DO-01 additions ---
+# npm pack / registry artefacts and local tooling caches (never shipped)
+*.tgz
+.npm/
+.cache/
+coverage/

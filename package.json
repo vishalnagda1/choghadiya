@@ -1,0 +1,21 @@
+{
+  "name": "choghadiya",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Choghadiya — dynamic, location-aware, bilingual (Hindi/English) Vedic day/night time-slot web app. Vanilla ESM static site, no build step, deployed to GitHub Pages at https://time.gitick.com/",
+  "homepage": "https://time.gitick.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vishalnagda1/choghadiya.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "devDependencies": {}
+}

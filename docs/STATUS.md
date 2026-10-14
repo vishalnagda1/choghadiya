@@ -9,3 +9,4 @@
 2026-10-14 09:26 | cto | t_212d772d | GATE 1 reviewed docs 00-06 — PRD/arch/plan/threat-model consistent; executive summary posted, awaiting client sign-off
 2026-10-14 09:58 | cto | t_212d772d | GATE 1 approved by client — spec & architecture signed off; build kickoff t_1e3b400d released to decompose the implementation plan
 2026-10-14 10:00 | qa-engineer | t_5fad74cc | docs/07-test-plan.md + tests/README.md — test plan (levels/tooling, envs, entry/exit, severity taxonomy, named suites S-SEQ 112-assertion/S-SCHED polar+DST/S-GEO error taxonomy/S-I18N M4/S-SMOKE/S-AXE M7, US-1..US-19 traceability), scaffold only
+2026-10-14 10:02 | devops-engineer | t_9d183581 | DO-01 scaffold — package.json (ESM, v2.1.0 baseline), Makefile (dev/test), CI runs `make test` on push/PR (Node 22), vendored suncalc 2.1.1 verbatim (sha256 f5e86948…197f), CNAME time.gitick.com; `make test` 4/4 green
