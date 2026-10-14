@@ -38,6 +38,14 @@
 // A stored location renders immediately and suppresses the auto geolocation prompt
 // (03-ux F7/F2, adr/009); `viewedDate` is deliberately NOT persisted and still resets
 // to today (CTO decision on the card).
+//
+// FE-3 (t_d7975f6c, v2.3.0 item 4 / CR4): the calendar date picker. The formatted date
+// label in the date bar became the picker's trigger — a transparent native
+// `<input type="date">` overlays it (03-ux §3.10c) — with `min`/`max` = the viewed
+// location's civil date ∓10 days, recomputed on every render. ‹/› and the Alt+←/→
+// shortcuts keep working and clamp to the SAME window through one shared code path
+// (`setViewedDate`), and both nav buttons disable at the edges. No custom JS calendar,
+// no new dependency; `i18n.js` already carries `date.picker.label` / `date.picker.range`.
 
 import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.2.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.2.0';
@@ -182,6 +190,7 @@ function init() {
   dom.sheetLocNote = document.getElementById('sheet-loc-note');
   dom.results = document.getElementById('results');
   dom.dateLabel = document.getElementById('date-label');
+  dom.datePicker = document.getElementById('datepicker');
   dom.prev = document.getElementById('prev-day');
   dom.next = document.getElementById('next-day');
   dom.todayPill = document.getElementById('today-pill');
@@ -209,6 +218,13 @@ function init() {
   dom.prev.addEventListener('click', () => stepDay(-1));
   dom.next.addEventListener('click', () => stepDay(1));
   dom.todayPill.addEventListener('click', goToToday);
+  // --- FE-3 (CR4): the native calendar picker drives `viewedDate` -----------------
+  // 'change' fires on a committed value (picker selection, typed field + blur,
+  // Spinner/arrow commit); 'input' additionally fires while typing/stepping, but
+  // onPickDate() ignores anything that is not a complete in-range ISO date, so a
+  // half-typed value can never move the view.
+  dom.datePicker.addEventListener('change', onPickDate);
+  dom.datePicker.addEventListener('input', onPickDate);
 
   // --- FE-04: degradation surfaces ----------------------------------------------
   // S5's action button opens the sheet, so the city field is directly reachable
@@ -366,12 +382,82 @@ const persistSettings = Object.freeze({
   },
 });
 
+/* ------------------------------------------------------------------ */
+/* CR4 — calendar picker range (+/- DATE_RANGE_DAYS civil days)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The client asked for "roughly ±8–10 days"; the CTO fixed ±10 (03-ux §3.10c:
+ * "min/max = the location civil date −10 / +10 days", 21 selectable days inclusive).
+ */
+const DATE_RANGE_DAYS = 10;
+
+/**
+ * The selectable window for the *viewed location*: its civil date ±10 days.
+ * "Today" is the LOCATION's civil date (Q8, US-3 AC3/Va), never the device's, so a
+ * city on the other side of the date line gets its own window. Returns `null` while
+ * there is no location (S4) — the date bar is inert then.
+ */
+function dateRange() {
+  if (!state.location) return null;
+  const today = todayAtLocation();
+  return { today, min: addDays(today, -DATE_RANGE_DAYS), max: addDays(today, DATE_RANGE_DAYS) };
+}
+
+/**
+ * Clamp "YYYY-MM-DD" into [min, max]. Lexical comparison is exact for ISO civil
+ * dates, so this needs no Date parsing and cannot produce NaN / Invalid Date.
+ */
+function clampToRange(dateISO, range) {
+  if (dateISO < range.min) return range.min;
+  if (dateISO > range.max) return range.max;
+  return dateISO;
+}
+
+/**
+ * Apply a newly viewed date from ANY navigation control (‹/›, Alt+←/→, the picker,
+ * S3's adjacent-date escape hatch). One code path for all of them means one clamp
+ * rule — no control can leave the ±10-day window (03-ux §3.10c "Edge clamping").
+ * No-ops when the date is unchanged, so a clamped edge click does not re-render.
+ */
+function setViewedDate(dateISO) {
+  if (!state.location || dateISO === state.viewedDate) return;
+  state.viewedDate = dateISO;
+  collapseSlots(); // a different date is a fresh view: close any open disclosure line
+  render();
+}
+
 /** US-13 AC1/AC2 — step the viewed date by ±1 civil day and re-render both lists. */
 function stepDay(delta) {
   if (!state.location) return; // no location yet → date bar is disabled (S4)
-  state.viewedDate = addDays(state.viewedDate, delta);
-  collapseSlots(); // a different date is a fresh view: close any open disclosure line
-  render();
+  const range = dateRange();
+  const next = addDays(state.viewedDate, delta);
+  if (next < range.min || next > range.max) return; // edge: the button is disabled anyway
+  setViewedDate(next);
+}
+
+/**
+ * The native `type="date"` control commits a value (03-ux §3.10c). Anything that is
+ * not a complete ISO civil date inside the current range is ignored — including the
+ * half-typed intermediate values `input` fires — so the view can never be driven to a
+ * malformed or out-of-range date by a partially typed field.
+ *
+ * On a committed (`change`) refusal the control is put back to the date actually being
+ * viewed: a typed out-of-range date or a cleared field must not leave the bar showing
+ * a date the page is not rendering. `input` does NOT snap back — that would fight the
+ * user mid-keystroke.
+ */
+function onPickDate(event) {
+  const range = dateRange();
+  if (!range) return;
+  const value = dom.datePicker.value;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value) && value >= range.min && value <= range.max) {
+    setViewedDate(value);
+    return;
+  }
+  if (event && event.type === 'change' && value !== state.viewedDate) {
+    dom.datePicker.value = state.viewedDate;
+  }
 }
 
 /** The "आज / Today" reset pill (03-ux §3 S1 "Success (other date)"). */
@@ -939,12 +1025,35 @@ function refreshHighlight() {
  */
 function syncTodayPill() {
   if (!state.location) return;
+  const range = dateRange();
+  // The window re-bases across the location's own midnight, so refresh the native
+  // control's min/max (and its value) here too — a stale `min` would let the picker
+  // offer a day outside the ±10 window until the next full render. The value is left
+  // alone while the field is focused: never rewrite a date the user is editing.
+  if (document.activeElement !== dom.datePicker) {
+    if (dom.datePicker.min !== range.min) dom.datePicker.min = range.min;
+    if (dom.datePicker.max !== range.max) dom.datePicker.max = range.max;
+    if (dom.datePicker.value !== state.viewedDate) dom.datePicker.value = state.viewedDate;
+  }
+  // Midnight can also push the viewed date out of the new window; snap to the edge and
+  // repaint (schedule included) rather than showing a date the picker can no longer
+  // hold. render() does not call back into this function, so there is no loop.
+  if (state.viewedDate < range.min || state.viewedDate > range.max) {
+    state.viewedDate = clampToRange(state.viewedDate, range);
+    render();
+    return;
+  }
+  dom.prev.disabled = state.viewedDate <= range.min;
+  dom.next.disabled = state.viewedDate >= range.max;
+  dom.prev.setAttribute('aria-disabled', String(dom.prev.disabled));
+  dom.next.setAttribute('aria-disabled', String(dom.next.disabled));
+
   const label = safeFormatDate(state.viewedDate, state.location.timezone, state.lang);
   if (dom.dateLabel.textContent !== label) {
     dom.dateLabel.textContent = label;
     dom.live.textContent = label;
   }
-  const isToday = state.viewedDate === todayAtLocation();
+  const isToday = state.viewedDate === range.today;
   if (dom.todayPill.hidden !== isToday) dom.todayPill.hidden = isToday;
 }
 
@@ -983,6 +1092,12 @@ function focusedSlot() {
 
 /** Single entry point: recompute the schedule (when a location exists), then paint. */
 function render() {
+  // CR4: a location change re-bases the ±10-day window (03-ux §3.10c "Location
+  // change"). If the viewed date now falls outside it, snap into range here — one
+  // clamp for every future render path, so an out-of-range date can never be
+  // scheduled, and the UI is never silently inconsistent with the picker's min/max.
+  if (state.location) state.viewedDate = clampToRange(state.viewedDate, dateRange());
+
   state.schedule = state.location
     ? buildSchedule({ location: state.location, date: state.viewedDate })
     : null;
@@ -1053,6 +1168,10 @@ function applyDictionary() {
   dom.bH24.setAttribute('aria-pressed', String(state.hourCycle === 'h23'));
   dom.prev.setAttribute('aria-label', t('date.prev', lang));
   dom.next.setAttribute('aria-label', t('date.next', lang));
+  // CR4 — the native picker's a11y name (03-ux §3.10c): a screen reader hears
+  // "Choose a date, बुधवार, 14 अक्टूबर 2026" (aria-describedby → the visible label)
+  // and still gets the native date semantics from the control itself.
+  dom.datePicker.setAttribute('aria-label', t('date.picker.label', lang));
   dom.locChip.setAttribute('aria-label', t('loc.change', lang));
   dom.locClear.setAttribute('aria-label', t('loc.clear', lang));
   dom.closeSheet.setAttribute('aria-label', t('city.close', lang));
@@ -1075,28 +1194,51 @@ function renderChip() {
   dom.locClear.hidden = !location;
 }
 
-/** Date label + "आज / Today" reset pill (03-ux §3 S1 "Success (other date)"). */
+/** Date label + picker + "आज / Today" reset pill (03-ux §3.10c, §3 S1). */
 function renderDateBar() {
-  if (!state.location) {
+  const range = dateRange();
+  if (!range) {
     // S4 / no-location: the date bar can't format a date without a zone, so it stays
-    // inert and the polite region announces the S4 status, then the empty-state line
-    // once geolocation has settled (03-ux §6 geo.loading / empty.noLocation). The bar
-    // itself stays present in every degradation (03-ux §3 S1 "Empty").
+    // inert (picker disabled, no value, no min/max) and the polite region announces the
+    // S4 status, then the empty-state line once geolocation has settled (03-ux §6
+    // geo.loading / empty.noLocation). The bar itself stays present in every
+    // degradation (03-ux §3 S1 "Empty").
     dom.dateLabel.textContent = '';
     dom.todayPill.hidden = true;
     dom.prev.disabled = true;
     dom.next.disabled = true;
+    dom.prev.setAttribute('aria-disabled', 'true');
+    dom.next.setAttribute('aria-disabled', 'true');
+    dom.datePicker.disabled = true;
+    dom.datePicker.value = '';
+    dom.datePicker.removeAttribute('min');
+    dom.datePicker.removeAttribute('max');
     dom.live.textContent = state.ui.loading
       ? t('geo.loading', state.lang)
       : t('empty.noLocation', state.lang);
     return;
   }
 
-  dom.prev.disabled = false;
-  dom.next.disabled = false;
+  // min/max are always the LOCATION's civil date ∓10 (03-ux §3.10c) — recomputed on
+  // every render, so a location change re-bases the whole window; `value` mirrors the
+  // viewed date so the picker always opens on it.
+  dom.datePicker.min = range.min;
+  dom.datePicker.max = range.max;
+  dom.datePicker.value = state.viewedDate;
+  dom.datePicker.disabled = false;
+
+  // Edge clamping must be perceivable without trial: `disabled` + `aria-disabled`
+  // + the muted dashed style (03-ux §3.10c "Edge clamping"; never colour-only).
+  const atMin = state.viewedDate <= range.min;
+  const atMax = state.viewedDate >= range.max;
+  dom.prev.disabled = atMin;
+  dom.next.disabled = atMax;
+  dom.prev.setAttribute('aria-disabled', String(atMin));
+  dom.next.setAttribute('aria-disabled', String(atMax));
+
   const label = safeFormatDate(state.viewedDate, state.location.timezone, state.lang);
   dom.dateLabel.textContent = label;
-  dom.todayPill.hidden = state.viewedDate === todayAtLocation();
+  dom.todayPill.hidden = state.viewedDate === range.today;
   dom.live.textContent = label;
 }
 

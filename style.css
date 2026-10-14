@@ -304,12 +304,125 @@ header.app {
   cursor: pointer;
 }
 .datebar .label { min-width: 0; text-align: center }
+/* Grid placement (03-ux §3.10c). DOM order is the focus order — ‹ → picker → › →
+   Today — so the pill is the 4th child; below 600 px it sits on its own centred row
+   (2), at ≥600 px inline at the bar's end. Items are placed explicitly: the two navs
+   and the label share row 1 (auto column order = DOM order), the pill is pinned. */
+.datebar .nav,
+.datebar .label { grid-row: 1 }
+.datebar .today-pill {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-top: 0;   /* the row gap already spaces it; the old 4 px offset is redundant */
+}
+@media (min-width: 600px) {
+  .datebar { grid-template-columns: auto 1fr auto auto }
+  .datebar .today-pill { grid-row: 1; grid-column: 4; justify-self: end }
+}
 .datebar .d {
   margin: 0;
   font-size: var(--fs-xl);
   line-height: var(--lh-xl);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+@media (max-width: 419px) {
+  /* 03-ux §3.10c geometry: the 20 px Hindi date needs 198 px but ≤419 px only affords
+     ~184 px, so the label steps down to --fs-base instead of wrapping inside the pinned
+     bar (a second line costs more vertical space than the 4 px of type). Declared AFTER
+     the base rule on purpose: same specificity, so source order wins. The column gap is
+     tightened to 4 px — with a 15 px classic scrollbar (desktop Chrome at 320 px) the
+     field is 169 px, not the 184 px of a mobile viewport, and the caret + gap would
+     otherwise push the longest Hindi dates onto a second line. */
+  .datebar { gap: var(--sp-1) }
+  /* `nowrap` is the fit guarantee: a desktop Chrome viewport at 320 px loses ~15 px to
+     the classic scrollbar, so the field is 169–177 px instead of the 184 px a mobile
+     viewport affords, and the longest Hindi dates (मंगलवार/शुक्रवार + दिसंबर) need
+     166–169 px on top of the caret's 7 px + gap. Wrapping inside the pinned bar costs a
+     second line (row 48 px instead of 44 px); one text line that overlaps the 4 px gap
+     before the caret by < 1 px costs nothing and stays inside the date bar (no page
+     scroll). On a real mobile viewport nothing overflows at all. */
+  .datebar .d { font-size: var(--fs-base); line-height: var(--lh-base); white-space: nowrap }
+}
+/* Calendar picker (CR4, 03-ux §3.10c): the visible date label IS the trigger and a
+   transparent native <input type="date"> overlays it. `.picker-field` is the
+   positioning context and the 44 px hit target; the input is never display:none /
+   visibility:hidden — that would remove it from the a11y tree and from clickability. */
+.datebar .picker-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  width: 100%;
+  min-width: 0;                 /* load-bearing: without it the field's intrinsic
+                                   width pushes › onto its own row at 320 px */
+  min-height: 44px;             /* NFR-A5 — the whole label area is tappable */
+}
+.datebar .picker-field .caret {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  pointer-events: none;         /* the caret must never steal a tap from the input */
+}
+.picker-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;                   /* invisible, but still rendered / focusable */
+  cursor: pointer;
+  font: inherit;
+}
+/* The focused element is transparent, so the visible label carries the ring instead
+   (03-ux §3.10c). The input's own ring is suppressed — the ring is relocated, never
+   removed (`:has()` is inside NFR-B1's browser scope). */
+.picker-input:focus,
+.picker-input:focus-visible { outline: none }
+.datebar .picker-field:has(.picker-input:focus-visible) .d {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* No location yet (S4): the picker is inert, so it must not look tappable. */
+.picker-input:disabled { cursor: default }
+.datebar .picker-field:has(.picker-input:disabled) { cursor: default }
+.datebar .picker-field:has(.picker-input:disabled) .caret { opacity: .5 }
+/* Range edges (03-ux §3.10c "Edge clamping"): a disabled ‹ / › is perceivable without
+   trial — muted text AND a dashed border (a shape cue, never colour alone, NFR-A2). */
+.datebar .nav:disabled {
+  color: var(--text-muted);
+  border-style: dashed;
+  background: var(--surface-2);
+  cursor: default;
+}
+/* Range hint (03-ux §3.10c): screen-reader-only below 600 px keeps the pinned chrome
+   short; visible small print at ≥600 px (the `.range-hint.sr` override wins on
+   specificity, 0-2-0 vs 0-1-0). */
+.range-hint {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text-muted);
+  text-align: center;
+}
+@media (min-width: 600px) {
+  .range-hint.sr {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0 0 var(--sp-3);
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+  }
 }
 /* .today-pill — .today-pill, appears only when viewed date ≠ today (03-ux §4.5).
    Kept at 44 px tall so it meets NFR-A5 like every other control. */

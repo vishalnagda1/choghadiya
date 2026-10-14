@@ -66,17 +66,36 @@
 
   <main id="main">
 
-    <!-- ===== Date bar — 03-ux §1.1, US-12/US-13 ===== -->
+    <!-- ===== Date bar — 03-ux §1.1, US-12/US-13; calendar picker 03-ux §3.10c (CR4) =====
+         The formatted date label IS the picker's trigger (no separate icon button: at
+         320 px a 4th 44 px control would truncate the Hindi date). The native
+         <input type="date"> is transparent and exactly overlays the visible label, so a
+         tap anywhere on the date text opens the native picker; it is NEVER display:none
+         / visibility:hidden (that would drop it from the a11y tree and from
+         clickability). min/max are the viewed location's civil date ∓10 (21 days
+         inclusive) and are set by app.js renderDateBar() — never hardcoded here. -->
     <div class="datebar">
       <button type="button" class="nav" id="prev-day" aria-label="पिछला दिन">‹</button>
       <div class="label">
-        <p class="d" id="date-label"></p>
-        <!-- [hidden] reset (03-ux §10 fix 2) is exercised by this element: it carries
-             leaf-class display rules AND a JS-driven hidden toggle. -->
-        <button type="button" class="today-pill" id="today-pill" hidden data-i18n="date.today">आज</button>
+        <span class="picker-field">
+          <label class="d" id="date-label" for="datepicker"></label>
+          <span class="caret" aria-hidden="true">⌄</span>
+          <input class="picker-input" id="datepicker" type="date"
+                 aria-label="तारीख चुनें" aria-describedby="date-label date-range-hint">
+        </span>
       </div>
       <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
+      <!-- Today pill LAST in the DOM so the tab order is exactly the documented
+           ‹ → picker → › → Today (03-ux §3.10c). CSS grid puts it on its own centred
+           row below 600 px and inline at the bar's end ≥600 px.
+           [hidden] reset (03-ux §10 fix 2) is exercised by this element: it carries
+           leaf-class display rules AND a JS-driven hidden toggle. -->
+      <button type="button" class="today-pill" id="today-pill" hidden data-i18n="date.today">आज</button>
     </div>
+    <!-- CR4 range hint (03-ux §3.10c): screen-reader-only and described on the picker
+         below 600 px (the pinned chrome stays short at 320 px); visible small print at
+         ≥600 px. Colour/glyph-free — it is copy, not a state cue. -->
+    <p class="range-hint sr" id="date-range-hint" data-i18n="date.picker.range">आज से 10 दिन पहले से 10 दिन बाद तक चुन सकते हैं</p>
 
     <!-- ===== S5 geolocation-denied / unavailable notice — 03-ux §3 S5, US-8.
          role="status" (polite), NOT role="alert": it is informative, not urgent, and
