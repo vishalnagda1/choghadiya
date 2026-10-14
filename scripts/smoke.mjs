@@ -509,6 +509,70 @@ export async function reloadPage(page, cdp, { timezone } = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Open-Meteo geocoding fixture (item 7b coverage, t_7ed6b2ab)         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deterministic stand-in for the ONE live network call the app makes — BE-02's
+ * Open-Meteo geocoding request (docs/04-architecture.md §5.2). The item-7b checks
+ * must drive a REAL city search through the app, but this suite never touches the
+ * network (the "no network" discipline in the header): a CDP `Fetch` interceptor
+ * pauses every request to the geocoding host and fulfills it with this fixed payload.
+ * Each record is valid per §5.1 (finite coords + a real IANA zone) so `mapResult`
+ * keeps all three — the mapped array is what gets persisted.
+ */
+const GEO_FIXTURE_RESULTS = Object.freeze([
+  { name: 'Jaipur', admin1: 'Rajasthan', country: 'India', latitude: 26.9124, longitude: 75.7873, timezone: 'Asia/Kolkata', population: 3046163 },
+  { name: 'Jaipur', admin1: 'Odisha', country: 'India', latitude: 20.9, longitude: 85.7, timezone: 'Asia/Kolkata', population: 512 },
+  { name: 'Jaipur Kalan', admin1: 'Punjab', country: 'India', latitude: 30.65, longitude: 76.2, timezone: 'Asia/Kolkata', population: 318 },
+]);
+
+/** Host prefix of the geocoding endpoint (§5.2) — nothing else is intercepted. */
+const GEO_ENDPOINT_PREFIX = 'https://geocoding-api.open-meteo.com/';
+
+/**
+ * Install (and count) a `Fetch` interceptor for the geocoding host on the page session.
+ * Every matching request resolves 200 with GEO_FIXTURE_RESULTS and bumps `requests`;
+ * any non-matching request is continued untouched (static assets load normally). The
+ * returned handle's `enable()` re-arms the domain after a `Page.reload` — the Fetch
+ * domain is session-scoped, so re-arming keeps the no-network guarantee honest across
+ * the reload scenarios (see `handle.reset`).
+ */
+function installGeocodeInterceptor(page, cdp) {
+  const handle = { requests: 0 };
+  handle.enable = () => page.send('Fetch.enable', {
+    patterns: [{ urlPattern: 'https://geocoding-api.open-meteo.com/*', requestStage: 'Request' }],
+  });
+  handle.reset = () => { handle.requests = 0; };
+  cdp.on('Fetch.requestPaused', async (params, sid) => {
+    if (sid !== page.sessionId) return;
+    const { requestId, request } = params;
+    if (!String(request.url).startsWith(GEO_ENDPOINT_PREFIX)) {
+      try { await page.send('Fetch.continueRequest', { requestId }); } catch { /* page navigated */ }
+      return;
+    }
+    handle.requests += 1;
+    const body = Buffer.from(JSON.stringify({ results: GEO_FIXTURE_RESULTS }), 'utf8').toString('base64');
+    try {
+      await page.send('Fetch.fulfillRequest', {
+        requestId,
+        responseCode: 200,
+        responseHeaders: [
+          { name: 'Content-Type', value: 'application/json; charset=utf-8' },
+          // The geocoding host is CROSS-ORIGIN to the local static server: without this
+          // header the browser fails the fetch before the app can read it, and the
+          // geocoder maps that to a "network" error. A real Open-Meteo response carries
+          // `Access-Control-Allow-Origin: *`, so the fixture must too.
+          { name: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+        body,
+      });
+    } catch { /* request already aborted/gone */ }
+  });
+  return handle;
+}
+
+/* ------------------------------------------------------------------ */
 /* Shipped-asset helpers (perf budget + cache-busting)                 */
 /* ------------------------------------------------------------------ */
 
@@ -1053,6 +1117,145 @@ async function main() {
     await page.evaluate("document.getElementById('b-hi').click()");
     await page.waitFor("document.documentElement.lang === 'hi'",
       { label: 'default language restored after the persistence probe' });
+
+    /* ================================================================== */
+    /* 20. item 7b: the 24 h persistent geocode cache (DO-FIX t_7ed6b2ab) */
+    /*     — the gap that let the unwired cache (t_ab3859f8) slip green.  */
+    /* ================================================================== */
+    // Proves the item-7b contract end-to-end through the real app path: a city search
+    // persists a {t,v} envelope with a ~24 h TTL, a repeat search after a same-tab
+    // reload costs ZERO requests (served from sessionStorage), and a manually expired
+    // entry refetches and is renewed. The live geocoding API is never contacted — a CDP
+    // Fetch interceptor fulfills every request with GEO_FIXTURE_RESULTS.
+    //
+    // The page clock is pinned to FIXTURE_NOW_MS (08:30 IST on the fixture date), so a
+    // fresh 24 h envelope's `t` is exactly FIXTURE_NOW_MS + CACHE_TTL_MS — asserted with
+    // a 60 s tolerance. Language is the restored default 'hi', so the cache key is
+    // `hi\u0000jaipur` (normalized language + lowercased query, geocoder.js).
+    const GEO_QUERY = 'Jaipur';
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+    const GEO_CACHE_KEY = 'hi' + String.fromCharCode(0) + 'jaipur'; // \u0000jaipur';
+    const GEO_ENTRY_KEY = `choghadiya.geocache.entry.${GEO_CACHE_KEY}`;
+    const GEO_INDEX_KEY = 'choghadiya.geocache.index';
+    const interceptor = installGeocodeInterceptor(page, cdp);
+    await interceptor.enable();
+
+    /** Submit the sheet's city form exactly as Enter / the खोजें button does. */
+    const submitCitySearch = async (query) => {
+      await page.evaluate(`(() => {
+        const input = document.getElementById('city');
+        input.value = ${JSON.stringify(query)};
+        document.getElementById('city-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      })()`);
+    };
+
+    // --- 20a. a search WRITES the cache ----------------------------------
+    interceptor.reset();
+    await submitCitySearch(GEO_QUERY);
+    await page.waitFor(`document.querySelectorAll('#results li').length >= 1`,
+      { label: 'item-7b: geocoding results rendered from the fixture' });
+    const searchState = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      const keys = Object.keys(sessionStorage).sort();
+      const entryKeys = keys.filter((k) => k.startsWith('choghadiya.geocache.entry.'));
+      return {
+        rows: document.querySelectorAll('#results li').length,
+        keys,
+        entryKeys,
+        index: sessionStorage.getItem(${JSON.stringify(GEO_INDEX_KEY)}),
+        entries: entryKeys.map((k) => ({ key: k, raw: sessionStorage.getItem(k) })),
+      };
+    })())`));
+
+    r.check('item 7b: a city search issues exactly one geocoding request (fixture-fulfilled, no live network)',
+      interceptor.requests === 1, `requests=${interceptor.requests}`);
+    r.check(`item 7b: the fulfilled payload renders all ${GEO_FIXTURE_RESULTS.length} results`,
+      searchState.rows === GEO_FIXTURE_RESULTS.length, `rows=${searchState.rows}`);
+    r.check('item 7b: the search persists >=1 choghadiya.geocache.entry.* key plus choghadiya.geocache.index',
+      searchState.entryKeys.length >= 1 && searchState.entryKeys.includes(GEO_ENTRY_KEY)
+      && searchState.index !== null,
+      JSON.stringify({ entryKeys: searchState.entryKeys, hasIndex: searchState.index !== null }));
+
+    const indexEnv = (() => { try { return JSON.parse(searchState.index); } catch { return null; } })();
+    r.check('item 7b: the geocache.index is a session-store {t,v} envelope whose v lists the persisted entry key',
+      Boolean(indexEnv) && indexEnv.t === null && Array.isArray(indexEnv.v) && indexEnv.v.includes(GEO_CACHE_KEY),
+      searchState.index);
+
+    let envelope = null;
+    let envelopeOk = searchState.entries.length > 0;
+    let envelopeDetail = '';
+    for (const entry of searchState.entries) {
+      try { envelope = JSON.parse(entry.raw); } catch { envelopeOk = false; envelopeDetail = `${entry.key}: unparsable`; break; }
+      const tOk = envelope && typeof envelope.t === 'number' && Number.isFinite(envelope.t)
+        && Math.abs(envelope.t - (FIXTURE_NOW_MS + CACHE_TTL_MS)) <= 60000; // ~ now + 24 h
+      const vOk = envelope && Array.isArray(envelope.v) && envelope.v.length > 0;
+      if (!(tOk && vOk)) {
+        envelopeOk = false;
+        envelopeDetail = JSON.stringify({ key: entry.key, t: envelope && envelope.t, vLen: envelope && Array.isArray(envelope.v) ? envelope.v.length : null });
+        break;
+      }
+    }
+    r.check('item 7b: every entry parses as a {t,v} envelope with t ~= now + 24 h and a non-empty v array',
+      envelopeOk, envelopeDetail);
+    const mapped = envelope && Array.isArray(envelope.v) ? envelope.v : [];
+    r.check('item 7b: the cached v is the mapped GeocodeResult[] (finite coords + IANA tz) from the fixture',
+      mapped.length === GEO_FIXTURE_RESULTS.length
+      && mapped.every((x) => Number.isFinite(x.latitude) && Number.isFinite(x.longitude)
+        && (x.timezone === null || typeof x.timezone === 'string') && typeof x.name === 'string'),
+      JSON.stringify(mapped.map((x) => `${x.name}/${x.latitude}`)));
+    // The item-7a namespacing lock EXTENDED to the geocache keys (they are the new
+    // physical keys item 7b adds; session-store.js owns them, like every other key).
+    r.check('item 7b: every persisted key — settings AND geocache — is namespaced choghadiya.*',
+      searchState.keys.length > 0 && searchState.keys.every((k) => k.startsWith('choghadiya.')),
+      JSON.stringify(searchState.keys));
+
+    // --- 20b. reload -> the SAME query costs ZERO network calls ----------
+    await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
+    await interceptor.enable(); // re-arm defensively: the Fetch domain is session-scoped
+    const survivedReload = await page.evaluate(`sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)}) !== null`);
+    interceptor.reset();
+    await submitCitySearch(GEO_QUERY);
+    await page.waitFor(`document.querySelectorAll('#results li').length >= 1`,
+      { label: 'item-7b: cached results rendered after the reload' });
+    const afterReload7b = JSON.parse(await page.evaluate(`JSON.stringify({
+      rows: document.querySelectorAll('#results li').length,
+      geoResources: performance.getEntriesByType('resource')
+        .filter((e) => e.name.includes('geocoding-api.open-meteo.com')).length,
+    })`));
+    r.check('item 7b: after a reload the identical query costs 0 geocoding requests (served from the session cache)',
+      interceptor.requests === 0, `requests=${interceptor.requests}`);
+    r.check('item 7b: no geocoding resource-timing entry is created after the cached reload search',
+      afterReload7b.geoResources === 0, `geo resource entries=${afterReload7b.geoResources}`);
+    r.check('item 7b: the cache entry survives the reload and all results still render from it',
+      survivedReload === true && afterReload7b.rows === GEO_FIXTURE_RESULTS.length,
+      JSON.stringify({ survivedReload, rows: afterReload7b.rows }));
+
+    // --- 20c. TTL expiry -> the stale entry refetches --------------------
+    await page.evaluate(`(() => {
+      sessionStorage.setItem(${JSON.stringify(GEO_ENTRY_KEY)},
+        JSON.stringify({ t: Date.now() - 1000, v: ${JSON.stringify(GEO_FIXTURE_RESULTS)} }));
+      sessionStorage.setItem(${JSON.stringify(GEO_INDEX_KEY)}, JSON.stringify({ t: null, v: [${JSON.stringify(GEO_CACHE_KEY)}] }));
+    })()`);
+    const seededPast = await page.evaluate(`JSON.parse(sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})).t < Date.now() - 500`);
+    await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
+    await interceptor.enable();
+    interceptor.reset();
+    await submitCitySearch(GEO_QUERY);
+    await page.waitFor(`document.querySelectorAll('#results li').length >= 1`,
+      { label: 'item-7b: results after the expiry refetch' });
+    const renewed = JSON.parse(await page.evaluate(`JSON.stringify((() => {
+      let env = null;
+      try { env = JSON.parse(sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})); } catch { /* corrupt */ }
+      return { env, rows: document.querySelectorAll('#results li').length };
+    })())`));
+    r.check('item 7b: a past-t (expired) entry is NOT served — the search refetches (>=1 request)',
+      seededPast === true && interceptor.requests >= 1,
+      JSON.stringify({ seededPast, requests: interceptor.requests }));
+    r.check('item 7b: the expired entry is renewed with a fresh ~24 h envelope (t ~= now + 24 h)',
+      Boolean(renewed.env) && typeof renewed.env.t === 'number'
+      && Math.abs(renewed.env.t - (FIXTURE_NOW_MS + CACHE_TTL_MS)) <= 60000
+      && Array.isArray(renewed.env.v) && renewed.env.v.length > 0
+      && renewed.rows === GEO_FIXTURE_RESULTS.length,
+      JSON.stringify({ t: renewed.env && renewed.env.t, rows: renewed.rows }));
 
     r.print('SMOKE — headless Chromium, Mumbai fixture, no network');
   });
