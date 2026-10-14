@@ -20,14 +20,15 @@
 // State is centralised in `state` (lang, location, viewedDate, schedule, ui) —
 // FE-04/FE-05 extend this file sequentially, they do not fork it.
 //
-// Deliberate scope boundary (owned by later cards — see the completion summary):
-//   - current-slot highlight, "अभी / Now" badge, ≤ 60 s poll, row disclosure,
-//     Alt+←/→ date shortcuts, remaining live-region semantics → FE-05.
+// FE-05 (t_fffccd6d): accessibility semantics, disclosure and the live highlight —
+// `aria-current` + the "अभी / Now" badge, the ≤ 60 s visibility-aware current-slot
+// poll, the `aria-expanded` meaning-line disclosure on every row, and the Alt+←/→
+// date shortcuts. It extends render()/slotRow() only; no state or fetch path changes.
 // The FE-03 failure seams (`onGeoUnavailable`, `setSheetError`) are now the real
 // S5/S6/S7 components; every degradation keeps the date bar and the language
 // toggle alive (03-ux §3 S3, §2 F3).
 
-import { addDays, buildSchedule, formatDate, formatTime, todayIn } from './choghadiya.js?v=2.1.0';
+import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.1.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.1.0';
 import { createGeocoder, isAbortError } from './geocoder.js?v=2.1.0';
 
@@ -71,6 +72,13 @@ const GEOLOCATION_WATCHDOG_MS = GEOLOCATION_OPTIONS.timeout + 2000;
 const SLOT_COUNT = 8;
 
 /**
+ * Current-slot poll interval (US-14 AC4, PRD Q2 default = auto-update). 60 s is the
+ * spec ceiling ("≤ 60 s"); a tick is a pure re-evaluation of the visible schedule and
+ * writes to the DOM only when the current slot actually changed.
+ */
+const SLOT_POLL_MS = 60000;
+
+/**
  * Centralised in-memory state (04-arch §4.1 AppState). Nothing is persisted (ADR-007).
  *
  * `location` starts null: the shell paints first and geolocation resolves after first
@@ -101,6 +109,15 @@ let geocoder = null;
 
 /** Pending geolocation watchdog timer id (see GEOLOCATION_WATCHDOG_MS). */
 let geoWatchdog = null;
+
+/** Current-slot poll timer id (see startSlotPoll). */
+let slotPollTimer = null;
+
+/**
+ * The `half:index` key last written to the DOM as the current slot, so the poll can
+ * tell a real boundary change from a no-op tick (`undefined` = never synced yet).
+ */
+let appliedCurrentKey;
 
 /* ------------------------------------------------------------------ */
 /* Lifecycle                                                           */
@@ -176,6 +193,12 @@ function init() {
     if (state.ui.sheetError) setSheetError(null);
   });
 
+  // --- FE-05: keyboard shortcuts + the live current-slot poll --------------------
+  // Alt+←/→ mirrors the ‹ / › buttons (03-ux §7.2); the poll keeps the highlight
+  // honest while the page stays open (US-14 AC4).
+  document.addEventListener('keydown', onDateShortcut);
+  startSlotPoll();
+
   render(); // S4: shell + skeleton lists, no location yet (never blocking)
   scheduleGeolocation(); // requested AFTER first paint (US-4 AC1)
 }
@@ -195,6 +218,7 @@ function setLang(lang) {
 function stepDay(delta) {
   if (!state.location) return; // no location yet → date bar is disabled (S4)
   state.viewedDate = addDays(state.viewedDate, delta);
+  collapseSlots(); // a different date is a fresh view: close any open disclosure line
   render();
 }
 
@@ -202,6 +226,7 @@ function stepDay(delta) {
 function goToToday() {
   if (!state.location) return;
   state.viewedDate = todayAtLocation();
+  collapseSlots();
   render();
 }
 
@@ -411,10 +436,13 @@ function setSheetError(kind) {
   state.ui.sheetError = kind;
   const key = SHEET_ERROR_KEY[kind];
   const retryable = RETRYABLE.has(kind);
+  // Expose the role="alert" region BEFORE its text changes: a live region that is
+  // display:none is not monitored, so unhiding first is what makes the announcement
+  // reliable (03-ux §7.3 — S6 is the assertive half of the status/alert split).
+  dom.sheetError.hidden = !key;
   dom.sheetMsg.textContent = key ? t(key, state.lang) : '';
   dom.sheetErrorGlyph.textContent = retryable ? '⚠' : '';
   dom.retrySearch.hidden = !retryable;
-  dom.sheetError.hidden = !key;
   if (kind === 'query-required') dom.cityInput.focus(); // 03-ux S1 validation
 }
 
@@ -494,6 +522,7 @@ function selectResult(result) {
   state.ui.notice = null;
   dom.cityInput.value = '';
   state.viewedDate = todayAtLocation();
+  collapseSlots();
   render();
   dom.sheet.close(); // focus return happens in onSheetClose
 }
@@ -514,8 +543,173 @@ function clearLocation() {
   state.viewedDate = null;
   state.ui.loading = false;
   state.ui.notice = null;
+  collapseSlots();
   render();
   openSheet();
+}
+
+/* ------------------------------------------------------------------ */
+/* Accessibility — disclosure, current-slot highlight, keyboard        */
+/* ------------------------------------------------------------------ */
+
+/** Identity of a slot across re-renders: half + index (stable within a schedule). */
+function slotKey(slot) {
+  return `${slot.half}:${slot.index}`;
+}
+
+/** Drop any open disclosure line (a schedule change rebuilds the rows). */
+function collapseSlots() {
+  state.ui.expandedSlot = null;
+}
+
+/**
+ * Disclosure (03-ux §4.5 row-click behaviour, §7.2): every row `<button>` carries
+ * `aria-expanded` and an `aria-controls` reference to its inline `.meaning` line.
+ *
+ * The meaning line is a SIBLING of the button inside the same `<li>`, not a
+ * descendant: a `<button>` flattens its descendants in the accessibility tree, so a
+ * nested meaning line would be unreachable for a screen-reader user. Toggling mutates
+ * in place — it never calls render() — so focus and the open row both survive
+ * (03-ux §7.2: focus only moves on sheet open/close).
+ */
+function toggleMeaning(button, item, slot) {
+  const next = button.getAttribute('aria-expanded') !== 'true';
+  button.setAttribute('aria-expanded', String(next));
+  const meaning = item.querySelector('.meaning');
+  if (meaning) meaning.hidden = !next;
+  state.ui.expandedSlot = next ? slotKey(slot) : null;
+}
+
+/**
+ * Apply/remove the current-slot marker on ONE row (US-14 AC1, 03-ux §7.3):
+ * `aria-current="true"`, the visible `.badge-now` (dictionary word + decorative
+ * glyph — never colour alone), and the current state appended to the accessible
+ * name, which reads name, time range, tier, current state in that order.
+ */
+function setCurrent(button, isCurrent) {
+  const parts = [button.dataset.name, button.dataset.time, button.dataset.tier].filter(Boolean);
+
+  if (isCurrent) {
+    button.setAttribute('aria-current', 'true');
+    ensureNowBadge(button);
+    parts.push(t('slot.now', state.lang));
+  } else {
+    button.removeAttribute('aria-current');
+    const badge = button.querySelector('.badge-now');
+    if (badge) badge.remove();
+  }
+
+  button.setAttribute('aria-label', parts.join(', '));
+}
+
+/** The `.badge-now` pill (03-ux §4.5), created on demand inside the row's meta zone. */
+function ensureNowBadge(button) {
+  const meta = button.querySelector('.slot-meta');
+  let badge = button.querySelector('.badge-now');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'badge-now';
+    const glyph = document.createElement('span');
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = '●';
+    const word = document.createElement('span');
+    word.textContent = t('slot.now', state.lang);
+    badge.append(glyph, word);
+    (meta || button).append(badge);
+  }
+  return badge;
+}
+
+/**
+ * Reconcile the DOM's current-slot marker with `resolveCurrentSlot(schedule, now)`.
+ *
+ * `force` re-applies every row after render() has rebuilt the lists; an unforced call
+ * (the poll) leaves the DOM untouched when the current slot has not changed, so a
+ * screen reader is never re-announced on a no-op tick. `resolveCurrentSlot` returns
+ * null whenever the viewed date is not the location's current Vedic day, so a past or
+ * future date keeps NO highlight at all (US-14 AC3) — and the state is carried by
+ * name + badge, never by colour.
+ */
+function syncCurrentSlot(force) {
+  const current = resolveCurrentSlot(state.schedule, new Date());
+  const key = current ? slotKey(current) : null;
+  if (!force && key === appliedCurrentKey) return;
+  appliedCurrentKey = key;
+
+  for (const list of [dom.dayList, dom.nightList]) {
+    if (!list) continue;
+    for (const button of list.querySelectorAll('button.slot')) {
+      setCurrent(button, key !== null && button.dataset.slot === key);
+    }
+  }
+}
+
+/**
+ * ≤ 60 s, visibility-aware poll (US-14 AC4, PRD Q2): the highlight advances while the
+ * page stays open, no work happens in a hidden tab, and returning to the tab catches
+ * up immediately instead of waiting a full interval. A tick never re-renders the
+ * lists, so an open disclosure and the focused row survive it.
+ */
+function startSlotPoll() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (slotPollTimer === null) slotPollTimer = window.setInterval(refreshHighlight, SLOT_POLL_MS);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+}
+
+function onVisibilityChange() {
+  if (!document.hidden) refreshHighlight();
+}
+
+function refreshHighlight() {
+  if (document.hidden) return; // visibility-aware: no polling work in a hidden tab
+  syncCurrentSlot(false);
+  syncTodayPill();
+}
+
+/**
+ * Keep "today" honest across a midnight/sunrise boundary while the page is open: the
+ * date label and the आज/Today reset pill follow the location's civil date. Only
+ * writes when the value actually changed, so the polite live region is not
+ * re-announced on a no-op tick.
+ */
+function syncTodayPill() {
+  if (!state.location) return;
+  const label = safeFormatDate(state.viewedDate, state.location.timezone, state.lang);
+  if (dom.dateLabel.textContent !== label) {
+    dom.dateLabel.textContent = label;
+    dom.live.textContent = label;
+  }
+  const isToday = state.viewedDate === todayAtLocation();
+  if (dom.todayPill.hidden !== isToday) dom.todayPill.hidden = isToday;
+}
+
+/**
+ * Alt+← / Alt+→ date shortcuts (03-ux §7.2 — a documented convenience for the ‹ / ›
+ * buttons). Ignored inside a text field and while the modal sheet is open, so it can
+ * never fight a native caret or a focused sheet control. stepDay() rebuilds the date
+ * bar and the rows, so an existing row focus is restored onto the same slot position
+ * rather than dropped to <body> (focus only moves on sheet open/close, 03-ux §7.2).
+ */
+function onDateShortcut(event) {
+  if (!event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  const target = event.target;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+  if (state.ui.sheetOpen || !state.location) return;
+
+  event.preventDefault();
+  const previous = focusedSlot();
+  stepDay(event.key === 'ArrowLeft' ? -1 : 1);
+  if (previous) {
+    const next = document.querySelector(`button.slot[data-slot="${previous}"]`);
+    if (next) next.focus();
+  }
+}
+
+/** The `data-slot` key of the focused row, or null when focus is elsewhere. */
+function focusedSlot() {
+  const el = document.activeElement;
+  return el && el.classList && el.classList.contains('slot') ? el.dataset.slot : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -535,6 +729,7 @@ function render() {
   renderDateBar();
   renderNotice();
   renderSections();
+  syncCurrentSlot(true); // rows are freshly built — (re)apply the current-slot marker
 }
 
 /**
@@ -761,9 +956,13 @@ function setRows(list, slots) {
 /**
  * One slot row: a single <button> (whole row is the tap/keyboard target, ≥ 56 px)
  * with the 03-ux §3 zones — name (both scripts in the active language), 24-hour
- * range, quality chip (tier word + glyph). Built with createElement/textContent
- * only (NFR-S2). FE-05 adds aria-expanded + the `.meaning` disclosure line and the
- * current-slot marker.
+ * range, quality chip (tier word + glyph) — plus the FE-05 disclosure line. Built
+ * with createElement/textContent only (NFR-S2).
+ *
+ * The button carries `aria-expanded` + `aria-controls` for its `.meaning` line and
+ * stages the accessible-name parts on `dataset`; `syncCurrentSlot()` completes the
+ * label with the current state when the row is live (03-ux §7.3 — name, time range,
+ * tier, current state, in that order).
  */
 function slotRow(slot) {
   const { timezone } = state.location;
@@ -773,11 +972,22 @@ function slotRow(slot) {
   const latinName = t(`quality.${slot.name}`, 'en');
   const localName = t(`quality.${slot.name}`, lang);
   const tierWord = t(`tier.${slot.tier}`, lang);
+  const key = slotKey(slot);
+  const expanded = state.ui.expandedSlot === key;
+  const meaningId = `meaning-${slot.half}-${slot.index}`;
 
   const item = document.createElement('li');
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'slot';
+  button.dataset.slot = key;
+  // The accessible name is assembled from these parts (03-ux §7.3 order); the glyph
+  // is excluded so no raw ✓/✕ character is ever announced.
+  button.dataset.name = lang === 'hi' ? `${localName}, ${latinName}` : latinName;
+  button.dataset.time = `${from} – ${to}`;
+  button.dataset.tier = tierWord;
+  button.setAttribute('aria-expanded', String(expanded));
+  button.setAttribute('aria-controls', meaningId);
 
   // Zone 2 — "लाभ · Labh" when HI, "Labh" when EN (03-ux §3 zone 2).
   const name = document.createElement('span');
@@ -790,7 +1000,8 @@ function slotRow(slot) {
   time.textContent = `${from} – ${to}`;
 
   // Zone 4 — chip: decorative glyph (aria-hidden) + the tier word that carries the
-  // meaning, so colour is never the only signal (US-15 AC1, 03-ux §7.3).
+  // meaning, so colour is never the only signal (US-15 AC1, 03-ux §7.3). The
+  // current-slot badge is appended here on demand by ensureNowBadge().
   const meta = document.createElement('span');
   meta.className = 'slot-meta';
   const chip = document.createElement('span');
@@ -804,12 +1015,18 @@ function slotRow(slot) {
   meta.append(chip);
 
   button.append(name, time, meta);
-  // Accessible name reads name, time range, tier in that order (03-ux §7.3); the
-  // glyph is excluded so no raw ✓/✕ character is ever announced.
-  const spokenName = lang === 'hi' ? `${localName}, ${latinName}` : latinName;
-  button.setAttribute('aria-label', `${spokenName}, ${from} – ${to}, ${tierWord}`);
+  button.addEventListener('click', () => toggleMeaning(button, item, slot));
 
-  item.append(button);
+  // Inline disclosure line: ONLY the already-known quality meaning, no new content
+  // and no request (03-ux §4.5). A <span> because it sits inside the <li> as flow
+  // content and is displayed as a block by `.meaning`.
+  const meaning = document.createElement('span');
+  meaning.className = 'meaning';
+  meaning.id = meaningId;
+  meaning.textContent = t(`meaning.${slot.name}`, lang);
+  meaning.hidden = !expanded;
+
+  item.append(button, meaning);
   return item;
 }
 

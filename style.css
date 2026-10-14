@@ -429,9 +429,12 @@ header.app {
   gap: var(--sp-2);
   min-width: 0;
 }
+/* Disclosure line, expanded by the row button (03-ux §4.5). It is a SIBLING of the
+   button inside the same <li> — a <button> flattens its descendants for assistive
+   tech — so it lays out as a block under the row, not as a fourth grid cell. */
 .meaning {
-  grid-column: 1 / -1;
-  padding-bottom: var(--sp-2);
+  display: block;
+  padding: 0 var(--sp-4) var(--sp-3);
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
