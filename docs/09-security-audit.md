@@ -12,9 +12,9 @@ Low/Informational items listed in §8.
 | Owner | security-engineer |
 | Date | 2026-10-14 |
 | Release commit audited | `6112405850f8865a85a64b885bcf231d620d3837` (HEAD at audit time) |
-| Shipped-code base | `303f682` — verified: `git diff --name-only 303f682..HEAD` over `index.html app.js choghadiya.js geocoder.js i18n.js style.css favicon.svg vendor .github scripts tests package.json` returns **0 files**; commits after `303f682` (DOCS `238cb02`, QA `6112405`) are documentation only |
+| Shipped-code base | `303f682` — verified: `git diff --name-only 303f682..HEAD` over `index.html app.js choghadiya.js geocoder.js i18n.js style.css favicon.svg vendor .github scripts tests package.json` returns **0 files**; commits after `303f682` (DOCS `238cb02`, tech-lead status `a170fd0`, QA `6112405`) are documentation only |
 | Inputs | `docs/06-threat-model.md` v1.0 (SEC-01..SEC-24 checklist), `docs/04-architecture.md` §5.2/§5.3, `docs/adr/003`, `docs/00-brief.md` "Data & compliance", the integrated codebase |
-| Fix cards created | `SEC-FIX-1` devops-engineer (F1+F3, Medium/Low), `SEC-FIX-2` frontend-dev (F2, Low) — see §7 |
+| Fix cards created | `SEC-FIX-1` devops-engineer = `t_899c4547` (F1+F3, Medium/Low), `SEC-FIX-2` frontend-dev = `t_9ec675d1` (F2, Low) — see §7 |
 
 ---
 
