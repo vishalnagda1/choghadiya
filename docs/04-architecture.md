@@ -128,7 +128,7 @@ Rejected alternatives are recorded per-decision in `docs/adr/` — see §3.1.
 | [006](adr/006-i18n-hand-rolled-dictionary.md) | Single hand-rolled dictionary file | Accepted |
 | [007](adr/007-no-persistent-storage.md) | No cookies / localStorage / sessionStorage in v1 | Accepted — superseded in part by 009 |
 | [008](adr/008-testing-tooling.md) | `node --test` + headless Chromium/axe | Accepted |
-| [009](adr/009-session-scoped-storage.md) | Session-scoped storage for settings + geocode cache (v2.3.0) | Accepted (scope question open for GATE 2) |
+| [009](adr/009-session-scoped-storage.md) | Client-side storage for settings + geocode cache (v2.3.0) | Accepted — Amended 2026-10-14 (scope = `localStorage`) |
 
 ---
 
@@ -506,6 +506,7 @@ throughput.
 | v1.0 (initial) | 2026-10-14 | architect | Initial architecture: module surface, runtime data model, internal + geocoder contracts, CSP/origin list, error taxonomy, testing strategy, deploy/local-dev, 8 ADRs, plan in `05-plan.md`. |
 | v1.0.1 | 2026-10-14 | architect | §7/§11: folded in client-authorized release definition (brief 2026-10-14) — `gh` CLI deploy to `github.com/vishalnagda1/choghadiya` (main) → Pages `time.gitick.com`; semver git tag from `package.json` 2.1.0 (next: v2.2.0); release step = single devops card `t_169d64f7` behind GATE 2. No deploy workflow; CI is test-only. |
 | v1.1 | 2026-10-14 | architect | Appended **§16 v2.3.0 addendum** (brief change log items 1–7): `session-store.js` + `inauspicious.js` module contracts, `formatTime` hour-cycle and `createGeocoder({fetchImpl, cacheStore})` surfaces, persisted-settings data model, privacy stance change ("no server storage; local session cache only", ADR-009), GATE 2 open questions. §3.1 ADR index updated; §1–§15 otherwise unchanged — where §16 conflicts with §2–§13, §16 governs v2.3.0 (superseded statements listed in the §16 intro). |
+| v1.2 | 2026-10-14 | architect | **ADR-009 amendment + QA F5 fix.** §16: storage scope finalized to `localStorage` (client-confirmed `t_6886a974` — `STORAGE_SCOPE='local'`, settings persist indefinitely, geocache keeps its 24 h TTL; §16.2/§16.4/§16.5 aligned, §16.6 GATE 2 question resolved). §16.2 `createGeocoder` contract corrected to the shipped five-option signature (`app.js` passes `{ lang, cacheStore }`); §16.3 geocache key layout corrected to `choghadiya.geocache.entry.<lang>\u0000<query>` + `choghadiya.geocache.index`; §16.2/§16.3 envelope corrected (`t` = expiry instant or `null`). ADR-009 gained the "Amendment" section (final scope, consequences, one-line revert). |
 
 ---
 
@@ -515,7 +516,8 @@ Source: `docs/00-brief.md` change log 2026-10-14 (items 1–7), CTO-settled API
 shapes (board cards BE-A/B/C), `docs/01-research.md` §11 (inauspicious periods).
 This section is appended, not merged: **where it conflicts with §1–§13, §16
 governs v2.3.0**. Superseded statements: the §3 "Storage: None" row and §4
-"There is no database and no persistence" (now ADR-009 session-scoped storage);
+"There is no database and no persistence" (now ADR-009 client-side storage,
+`localStorage` scope);
 §8.2's privacy stance wording ("no storage") — everything else stands. The
 §5.1 `formatTime` signature was already updated in place by BE-B and is
 restated below for the record.
@@ -538,17 +540,19 @@ v2.3.0 file-ownership additions (full ticket list in `05-plan.md` §8, milestone
 
 ```js
 // session-store.js — the ONLY module allowed to reference sessionStorage/localStorage
-export const STORAGE_SCOPE = 'session';   // 'session' (decision) — flip to 'local' is a
-                                          // one-line change (ADR-009, GATE 2 open question)
+export const STORAGE_SCOPE = 'local';    // FINAL scope: localStorage (client-confirmed
+                                          // 2026-10-14, ADR-009 "Amendment"; applied by
+                                          // BE-FIX-1). One-line revert: 'session' (per-tab).
 export function get(key)                          // -> value | null
-export function set(key, value, opts = {})        // opts.ttlMs optional; absent = session lifetime
+export function set(key, value, opts = {})        // opts.ttlMs optional; absent = no expiry
 export function remove(key)
 export function clear()
 ```
 
-Semantics (BE-C `t_a46a447b`): entries are a JSON envelope
-`{ t: <epoch ms>, v: <value> }`; `get` returns `null` **and deletes the entry**
-when expired (`now > t + ttlMs`), malformed, unparsable, or not an envelope;
+Semantics (BE-C `t_a46a447b`): entries are a JSON envelope `{ t, v }` with `t`
+= expiry instant in epoch ms (`Date.now() + ttlMs`) or `null` for a no-expiry
+entry; `get` returns `null` **and deletes the entry** when expired
+(`Date.now() >= t`), malformed, unparsable, or not an envelope;
 all storage access is try/catch-wrapped with a silent in-memory `Map` fallback
 (private mode / quota / disabled storage → app keeps working, zero throws);
 keys namespaced `choghadiya.*`.
@@ -594,26 +598,40 @@ export function formatTime(date, timeZone, lang, opts = { hourCycle: 'h12' })
   // opts.hourCycle: 'h12' (DEFAULT) | 'h23'; 'h23' byte-identical to v2.2.0 output.
 
 // geocoder.js — v2.3.0 cache surface (BE-C t_a46a447b)
-export function createGeocoder({ fetchImpl, cacheStore } = {})
+export function createGeocoder({ fetchImpl, debounceMs, lang, cache, cacheStore } = {})
+  // ALL five options optional. app.js calls it as createGeocoder({ lang, cacheStore })
+  //   with cacheStore = { get, set, remove } — the session-store.js façade.
+  // fetchImpl = globalThis.fetch (injectable for tests); debounceMs = 400;
+  //   lang = "en" ("hi" | "en"); cache = fresh Map (in-memory FIFO-64).
   // cacheStore OPTIONAL: default (omitted) = in-memory FIFO-64 Map — v2.2.0
-  // behaviour unchanged. Session-backed cacheStore (session-store.js):
-  // TTL 24 h, FIFO cap 64, cache key = normalized query + language; same query
-  // within TTL costs zero fetches across a reload; expired -> refetch.
+  // behaviour unchanged. Store-backed cacheStore (session-store.js): TTL 24 h,
+  // FIFO cap 64; cache key = `<lang>\u0000<normalized query>` (normalized =
+  // trimmed + case-folded); same query within TTL costs zero fetches across a
+  // reload; expired -> refetch.
 ```
 
 ### 16.3 Data-model additions (extends §4.1)
 
 ```text
-StoredEnvelope { t: number /* epoch ms */, v: any }    // session-store.js wire format (JSON)
+StoredEnvelope { t: number | null /* expiry instant, epoch ms */, v: any }
+                                        // session-store.js wire format (JSON);
+                                        // t = null -> no expiry (settings keys)
 
 Settings — persisted keys (change item 7a), all via session-store.js:
   choghadiya.settings.timeFormat: "12h" | "24h"        // default "12h" (item 1)
   choghadiya.settings.lang:       "hi" | "en"          // default "hi"
   choghadiya.settings.location:   { lat, lon, timezone, label } | null
+  // TTL: none — settings persist indefinitely (envelope t: null; ADR-009 amendment).
   // viewedDate is NOT persisted — reload always returns to today.
 
-Geocode cache entries (change item 7b): key = choghadiya.geocode.<normalized-query>.<lang>,
-  value = GeocodeResult[], TTL 24 h, FIFO cap 64.
+Geocode cache entries (change item 7b), persisted via session-store.js (the store
+applies the `choghadiya.` namespace shown here):
+  choghadiya.geocache.entry.<lang>\u0000<normalized query>  -> GeocodeResult[]  (TTL 24 h)
+  choghadiya.geocache.index                              -> string[] FIFO insertion order of
+                                                            cache keys, capped at 64 (no TTL)
+  // Cache key order is <lang>\u0000<query>: lang first ("hi" | "en"), then U+0000,
+  // then the normalized query (trimmed + case-folded). geocoder.js builds the
+  // unprefixed forms `geocache.entry.*` / `geocache.index`.
 
 Inauspicious { runtime, produced by inauspicious.js }:
   { defined, reason?, vaarVela: {start,end}|null, kaalVela: {start,end}|null,
@@ -624,33 +642,39 @@ Inauspicious { runtime, produced by inauspicious.js }:
 
 | Constant | Value | Where |
 |----------|-------|-------|
-| `STORAGE_SCOPE` | `'session'` | session-store.js |
+| `STORAGE_SCOPE` | `'local'` (one-line revert: `'session'`) | session-store.js |
 | Geocode cache TTL | `24 * 60 * 60 * 1000` ms | geocoder.js / session-store.js |
 | `MAX_CACHE_ENTRIES` | `64` (unchanged) | geocoder.js |
 | Settings defaults | `'12h'`, `'hi'`, no location | app.js |
 
 ### 16.5 Privacy & security deltas (handoff to SEC-1 / `docs/06`)
 
-- Privacy stance: **"no server storage; local session cache only"** (was "no
-  storage" — ADR-007, superseded in part by ADR-009). Disclosure copy update is
-  owned by FE-4/TW-1 and must stay truthful about the session cache.
+- Privacy stance: **"no server storage; local TTL-gated cache only"**
+  (client-confirmed phrasing 2026-10-14; ADR-007 said "no storage", the interim
+  v2.3.0 wording was "local session cache only"). Disclosure copy update is
+  owned by FE-4/TW-1 and must stay truthful about the local cache.
 - US-17's "Location is never stored" is no longer literally true (last selected
-  location + recent city queries persist per tab); coordinates still never leave
-  the device — the §5.2 origin list and the §5.3 CSP are **unchanged** (no new
-  network origins, `connect-src` untouched).
+  location + recent city queries persist in `localStorage`, surviving full
+  browser restarts); coordinates still never leave the device — the §5.2 origin
+  list and the §5.3 CSP are **unchanged** (no new network origins,
+  `connect-src` untouched).
 - New hygiene rule for the security greps gate (DO-1):
   `sessionStorage`/`localStorage` may appear **only** in `session-store.js`.
 - Storage contents: three settings keys + geocode results (city names) + last
-  location coords — on-device, per-tab, cleared on tab close; no cookies, no
-  server writes.
+  location coords — on-device (`localStorage` per ADR-009 amendment): settings
+  persist indefinitely, geocache entries expire at 24 h TTL; shared-device
+  at-rest exposure until the user clears site data; no cookies, no server
+  writes.
 
 ### 16.6 Open questions
 
-1. **GATE 2 — `sessionStorage` vs `localStorage`** (the brief's own note):
-   `sessionStorage` is per-tab and clears on tab close (the client's literal
-   words); `localStorage` survives browser restart. `STORAGE_SCOPE` isolates the
-   flip to one line in `session-store.js` (plus disclosure copy + ADR-009 status).
-   Default shipped value until the client answers: `'session'` (ADR-009).
+1. **GATE 2 — `sessionStorage` vs `localStorage` — RESOLVED 2026-10-14:
+   `localStorage`** (client-confirmed on board card `t_6886a974`; settings
+   survive full browser restarts, geocache keeps its 24 h TTL). `STORAGE_SCOPE
+   = 'local'` in `session-store.js` (flip applied by BE-FIX-1); the one-line
+   revert to `'session'` restores per-tab retention. Recorded in ADR-009's
+   "Amendment" section. (Trail: the brief's note flagged the ambiguity;
+   `'session'` was the interim default.)
 2. **Saturday's double periods vs the single-interval contract** (flagged, not
    re-litigated): RS-1 §11.2/§11.3 shows Saturday's day sequence contains
    `"kaal"` twice (1st and 8th eighths) and its night sequence `"labh"` twice —

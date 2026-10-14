@@ -2,9 +2,10 @@
 
 - **Status:** Accepted (2026-10-14) — **superseded in part by
   [ADR-009](009-session-scoped-storage.md)** (2026-10-14): v2.3.0 change item 7
-  adds session-scoped storage (settings + geocoding cache). Everything below
+  adds client-side storage (settings + geocoding cache; scope `localStorage`,
+  ADR-009 amendment 2026-10-14). Everything below
   stands as written and remains accurate for v1–v2.2.0; from v2.3.0 the privacy
-  stance is "no server storage; local session cache only" (ADR-009).
+  stance is "no server storage; local TTL-gated cache only" (ADR-009).
 - **Deciders:** architect (privacy posture: PRD NFR-PR1..PR3, brief §Data & compliance)
 - **Impacts:** `app.js` state handling, geolocation-denied flow, language toggle
 

@@ -313,8 +313,9 @@ request (see the brief's change log for the exact wording):**
   inauspicious periods Vaar Vela / Kaal Vela / Kaal Ratri (item 5; naming
   corrected per RS-1 — `04-architecture.md` §16.2) + the detail panel with
   contextual notes (item 6).
-- *Storage ("no cookies / localStorage / sessionStorage")* — now session-scoped
-  storage for settings + a TTL geocode cache (item 7; ADR-009).
+- *Storage ("no cookies / localStorage / sessionStorage")* — now client-side
+  storage for settings (localStorage scope, ADR-009 amendment 2026-10-14) + a
+  TTL geocode cache (item 7; ADR-009).
 
 All other §6 non-goals stand (countdown timer, shareable URLs, favourites,
 PWA/offline, notifications, Gujarati, Nominatim, webfonts, framework, bundler).
@@ -380,6 +381,11 @@ board card IDs are authoritative and in parentheses after each plan ID.
   keys, `STORAGE_SCOPE='session'`); `createGeocoder({fetchImpl, cacheStore})`
   with default FIFO-64 behaviour unchanged (existing tests green unmodified),
   session-backed TTL 24 h / cap 64 / key = normalized query + language (item 7b).
+  *(AC as planned; superseded details: scope is now `STORAGE_SCOPE='local'`
+  (ADR-009 amendment, BE-FIX-1), the shipped `createGeocoder` option set is
+  `{fetchImpl, debounceMs, lang, cache, cacheStore}` (app.js passes
+  `{lang, cacheStore}`), and the cache key is `<lang>\u0000<normalized query>` —
+  see `04` §16.2/§16.3 v1.2.)*
 - **BE-A · Inauspicious-periods engine** (`t_ae7c48a6`, backend-dev).
   Files: `inauspicious.js` (new), `tests/inauspicious.test.js` (new). Deps:
   **RS-1**.
