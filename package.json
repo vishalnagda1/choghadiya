@@ -1,6 +1,6 @@
 {
   "name": "choghadiya",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "type": "module",
   "description": "Choghadiya — dynamic, location-aware, bilingual (Hindi/English) Vedic day/night time-slot web app. Vanilla ESM static site, no build step, deployed to GitHub Pages at https://time.gitick.com/",

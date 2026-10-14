@@ -71,11 +71,11 @@
 // and is deliberately never persisted (adr/009 — a reload always returns to current).
 // `aria-current` + the "अभी / Now" badge remain EXCLUSIVE to the live row (US-14).
 
-import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.3.0';
-import { computeInauspicious, overlappingPeriod } from './inauspicious.js?v=2.3.0';
-import { DEFAULT_LANG, t } from './i18n.js?v=2.3.0';
-import { createGeocoder, isAbortError } from './geocoder.js?v=2.3.0';
-import { get as storeGet, remove as storeRemove, set as storeSet } from './session-store.js?v=2.3.0';
+import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.3.1';
+import { computeInauspicious, overlappingPeriod } from './inauspicious.js?v=2.3.1';
+import { DEFAULT_LANG, t } from './i18n.js?v=2.3.1';
+import { createGeocoder, isAbortError } from './geocoder.js?v=2.3.1';
+import { get as storeGet, remove as storeRemove, set as storeSet } from './session-store.js?v=2.3.1';
 
 /**
  * Quality glyph per Slot.tier (03-ux §4.1: ✓✓ / ✓ / ○ / ✕). Always paired with the
