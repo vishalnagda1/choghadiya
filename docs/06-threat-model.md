@@ -215,75 +215,80 @@ implements it (plan IDs; the CTO owns board-card creation).
 
 ### 6.1 CSP & delivery hardening
 
-- [ ] **SEC-01** *(FE-01)* — The CSP `<meta>` exists **verbatim** as `04-architecture.md` §5.3
+- [x] **SEC-01** *(FE-01)* — The CSP `<meta>` exists **verbatim** as `04-architecture.md` §5.3
       (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https://geocoding-api.open-meteo.com; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`) **and is the first element of `<head>`**, before any `<link>`, `<script>`, or `<style>`.
-- [ ] **SEC-02** *(FE-01)* — `<meta name="referrer" content="no-referrer">` present in `<head>`.
-- [ ] **SEC-03** *(FE-01/FE-02/FE-03/FE-05)* — No inline `style="…"` attributes, no `<style>` blocks,
+- [x] **SEC-02** *(FE-01)* — `<meta name="referrer" content="no-referrer">` present in `<head>`.
+- [x] **SEC-03** *(FE-01/FE-02/FE-03/FE-05)* — No inline `style="…"` attributes, no `<style>` blocks,
       no inline event handler attributes (`onclick=` etc.), no inline `<script>` with logic
       (a documented, logic-free `nomodule`/bootstrap fallback is the only exception).
       Dynamic styling uses CSS classes or CSSOM property assignment (`el.style.x = …` is
       allowed; `el.setAttribute('style', …)` is **not**). `style-src 'self'` is enforced as written.
-- [ ] **SEC-04** *(FE-01)* — All asset references are same-origin and carry `?v=${ASSET_VERSION}`;
+- [x] **SEC-04** *(FE-01)* — All asset references are same-origin and carry `?v=${ASSET_VERSION}`;
       no `<base>`, no `preconnect`/`dns-prefetch`/`prefetch`/`prerender` hints, no external
       `<link>` (fonts, icons, manifests) — anywhere in shipped files.
 
 ### 6.2 Output handling / XSS (the primary application threat)
 
-- [ ] **SEC-05** *(FE-02/FE-03)* — All dynamic text (geocoder `name`/`admin1`/`country`, location
+- [x] **SEC-05** *(FE-02/FE-03)* — All dynamic text (geocoder `name`/`admin1`/`country`, location
       labels, formatted dates/times, interpolated vars) is inserted with `textContent` /
       `createElement` only. **Zero** occurrences of `innerHTML`, `outerHTML`,
       `insertAdjacentHTML`, `document.write`, `eval`, `new Function`, `setAttribute('style')`,
       or `javascript:` URLs in shipped files (NFR-S2).
-- [ ] **SEC-06** *(FE-02)* — `t()` output and dictionary values are only ever consumed as text;
+- [x] **SEC-06** *(FE-02)* — `t()` output and dictionary values are only ever consumed as text;
       interpolation (`{n}`) never becomes markup.
 - [ ] **SEC-07** *(FE-02/FE-03)* — DOM-clobbering hygiene: all state in ES-module scope; element
       lookup via explicit `querySelector`; no reads of implicit `window.*`/`document.*` globals;
-      form controls carry no `name` attributes.
+      form controls carry no `name` attributes. *(⚠️ PARTIAL at audit 2026-10-14 — F2 (Low):
+      `index.html:190` input carries `name="city"`; no exploitable path (module scope, no
+      global reads); see `docs/09-security-audit.md` §7.)*
 
 ### 6.3 Input & third-party data validation (TB1/TB2)
 
-- [ ] **SEC-08** *(BE-02)* — Query validated before any request: trimmed, 2–64 chars, no control
+- [x] **SEC-08** *(BE-02)* — Query validated before any request: trimmed, 2–64 chars, no control
       characters; violations throw `GeocoderError{code:'bad-query'}` **without a request**.
-- [ ] **SEC-09** *(BE-02)* — Request target is a hard-coded constant
+- [x] **SEC-09** *(BE-02)* — Request target is a hard-coded constant
       (`https://geocoding-api.open-meteo.com/v1/search`); parameters built with
       `URLSearchParams`/`encodeURIComponent`; user input lands **only** in `name`; the fetch
       URL is never composed from user input or response data.
-- [ ] **SEC-10** *(BE-02)* — Response objects are **never spread or copied wholesale**; only the
+- [x] **SEC-10** *(BE-02)* — Response objects are **never spread or copied wholesale**; only the
       allow-listed fields (`name`, `admin1`, `country`, `latitude`, `longitude`, `timezone`,
       `population`) are mapped onto a fresh object literal (defeats prototype pollution and
       surprise-field injection).
-- [ ] **SEC-11** *(BE-02/BE-03)* — Every third-party value is type/range-checked before use:
+- [x] **SEC-11** *(BE-02/BE-03)* — Every third-party value is type/range-checked before use:
       `latitude` finite ∈ [−90, 90], `longitude` finite ∈ [−180, 180], `population` finite or
       ignored; `timezone` must pass `new Intl.DateTimeFormat('en', { timeZone })` (else the
       result is dropped); all strings length-capped (≤ 200 chars) before storage/rendering.
       A malformed result is **dropped**, never crashed on.
-- [ ] **SEC-12** *(BE-02)* — Rate discipline: one request per explicit submit or 400 ms quiet
+- [x] **SEC-12** *(BE-02)* — Rate discipline: one request per explicit submit or 400 ms quiet
       period; in-memory cache **capped at ≤ 64 entries** (FIFO eviction); `AbortController`
       cancels superseded in-flight requests; at most one in-flight request at a time.
 
 ### 6.4 Network & privacy (NFR-PR1..PR4)
 
-- [ ] **SEC-13** *(BE-02/FE-03)* — `geocoder.js` is the only module calling `fetch`; requests carry
+- [x] **SEC-13** *(BE-02/FE-03)* — `geocoder.js` is the only module calling `fetch`; requests carry
       **no** credentials/cookies/auth headers (explicit `credentials: 'omit'`), no coordinates,
       no identifiers — only `name`, `count=8`, `language`.
-- [ ] **SEC-14** *(all FE/BE)* — Shipped files contain zero references to any origin other than
+- [x] **SEC-14** *(all FE/BE)* — Shipped files contain zero references to any origin other than
       `https://geocoding-api.open-meteo.com` (and no `http://` at all): no analytics, trackers,
       beacons (`sendBeacon`/`XMLHttpRequest` to third parties), webfonts, or CDN URLs. A grep of
       the shipped tree must show only the allow-listed origin.
-- [ ] **SEC-15** *(FE-03)* — The privacy one-liner (US-17) is visible in the city-search sheet and
+- [x] **SEC-15** *(FE-03)* — The privacy one-liner (US-17) is visible in the city-search sheet and
       the footer attribution is present (NFR-PR4) — disclosure is part of the trust boundary.
 
 ### 6.5 Supply chain & dependencies
 
-- [ ] **SEC-16** *(DO-01)* — `vendor/suncalc-2.1.1.js` is the verbatim ESM build of npm
+- [x] **SEC-16** *(DO-01)* — `vendor/suncalc-2.1.1.js` is the verbatim ESM build of npm
       `suncalc@2.1.1` (BSD-2-Clause); the DO-01 commit message records the tarball source and
       sha256; the file is never hand-edited; no runtime fetch of the library from anywhere.
-- [ ] **SEC-17** *(DO-01/DO-02)* — All dependencies (incl. dev-only: `axe-core`, headless browser
+- [x] **SEC-17** *(DO-01/DO-02)* — All dependencies (incl. dev-only: `axe-core`, headless browser
       tooling) are pinned to **exact** versions (no `^`/`~`/`latest`); devDeps are never
       referenced from shipped files; license review: permissive only.
 - [ ] **SEC-18** *(DO-01)* — `.github/workflows/ci.yml` is least-privilege: top-level
       `permissions: contents: read`; every third-party action pinned to a full commit SHA; the
       workflow receives **no secrets** and **never deploys** (deploy is manual, `t_169d64f7`).
+      *(⚠️ PARTIAL at audit 2026-10-14 — F1 (Medium): `ci.yml:18,21` use tag pins
+      (`@v4`), not commit SHAs; permissions/secrets/no-deploy verified OK; see
+      `docs/09-security-audit.md` §7.)*
 
 ### 6.6 Secrets & release operations
 
@@ -291,13 +296,16 @@ implements it (plan IDs; the CTO owns board-card creation).
       client-authorized) is **never** committed, echoed to logs, or placed in CI; it lives in the
       operator's credential store only. Every release is a semver git tag on a clean commit
       (brief §Release definition). Recommend branch protection on `main` (ops note to CTO).
-- [ ] **SEC-20** *(all lanes)* — The repo and its full history contain zero secrets: no `.env`,
+      *(Audit 2026-10-14: repo/history-clean half VERIFIED — gitleaks clean over 31 commits;
+      the deploy-time half stays with the release card; note F7: no git remote configured in
+      the audit workspace.)*
+- [x] **SEC-20** *(all lanes)* — The repo and its full history contain zero secrets: no `.env`,
       tokens, keys, or credentials of any kind (`.gitignore` covers env files; audit runs
       `gitleaks` or an equivalent full-history grep).
 
 ### 6.7 Logging & security-event policy
 
-- [ ] **SEC-21** *(FE-02/FE-03/FE-04/BE-02)* — Production code logs **no user-derived data**: no city
+- [x] **SEC-21** *(FE-02/FE-03/FE-04/BE-02)* — Production code logs **no user-derived data**: no city
       names, coordinates, queries, or response bodies in `console.*`; unexpected errors surface
       as the §8.1 UI states (implemented by FE-04's degradation screens) with bare error codes. There is no log pipeline and no third-party
       error/analytics SDK (04 §8.2). Security-relevant events (CSP violations, geocode failures)
@@ -308,12 +316,23 @@ implements it (plan IDs; the CTO owns board-card creation).
 - [ ] **SEC-22** *(DO-02 / audit)* — `make check` (or the audit script) additionally greps shipped
       files for HTML sinks (SEC-05), inline styles/handlers (SEC-03), and non-allow-listed
       origins (SEC-14) — any hit fails the gate.
-- [ ] **SEC-23** *(BE-04)* — The test suite runs fully offline (no network in any test); the
+      *(⚠️ PARTIAL at audit 2026-10-14 — F3 (Low): the greps were run clean by this audit
+      (docs/09 §3), but no persistent failing gate exists in `make check`/`smoke.mjs`; see
+      `docs/09-security-audit.md` §7.)*
+- [x] **SEC-23** *(BE-04)* — The test suite runs fully offline (no network in any test); the
       geocoder suite uses the injectable `fetchImpl`, proving no hidden network path.
-- [ ] **SEC-24** *(security-engineer, audit)* — Manual browser pass at audit: walk all flows
+- [x] **SEC-24** *(security-engineer, audit)* — Manual browser pass at audit: walk all flows
       (geolocation grant/deny, city search, empty/error results, language toggle, date nav) with
       devtools open; assert **zero CSP violations**, exactly one request host
       (`geocoding-api.open-meteo.com`), and no request containing coordinates.
+
+**Audit status (pre-release audit 2026-10-14, `docs/09-security-audit.md`):** 20 of 24 items
+verified and ticked at release commit `6112405` (shipped code = `303f682`). SEC-07/SEC-18/SEC-22
+are PARTIAL (F2/F1/F3, fix cards open) and SEC-19's deploy-time half stays with the release
+card. **SEC-08/SEC-11/SEC-12 and RK9 are verified closed** (fix `6a41384` re-verified live:
+control-char queries rejected with no request; hostile tz/out-of-range records dropped;
+strings capped ≤ 200; cache FIFO ≤ 64) — REV-M3 follow-up completed. Verdict:
+**PASS-with-accepted-risks (0 Critical, 0 High, 1 Medium, 2 Low)**.
 
 ---
 
@@ -406,3 +425,4 @@ detail.
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | security-engineer | Initial threat model: assets & attacker classes (§2), trust boundaries TB1–TB4 (§3), STRIDE per component (§4), risk register (§5), implementation checklist SEC-01..SEC-24 mapped to plan tickets (§6), OWASP Top 10 2021 + ASVS v4.0 chapter mapping (§7), architecture change verdict — origin list and CSP unchanged, 5 additive clarifications, no ADR amendment (§8), accepted residuals (§9), audit contract (§10). |
+| v1.0 + audit ticks | 2026-10-14 | security-engineer | Pre-release audit (`docs/09-security-audit.md`, commit `6112405`): §6 boxes ticked (20/24 verified; SEC-07/18/22 partial = F2/F1/F3 with fix cards; SEC-19 deploy half = release card), SEC-08/11/12 + RK9 re-verified closed after `6a41384` (REV-M3 follow-up). Verdict: PASS-with-accepted-risks (0 Critical, 0 High, 1 Medium, 2 Low). No change to §1–§5/§7–§10 content. |
