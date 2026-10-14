@@ -3,9 +3,10 @@
 **Release:** v2.3.0 (semver minor, bumping the `package.json` baseline `2.2.0`)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** pre-release — prepared on `main`; **not yet tagged or deployed**. The
-version bump, the annotated `v2.3.0` tag and the Pages deploy are cut by the
-release step after client sign-off (GATE 2).
+**Status:** released — GATE 2 rev 2 client sign-off 2026-10-14; tagged `v2.3.0`
+(release commit `1a13519`) and pushed to `vishalnagda1/choghadiya` `main`; GitHub
+Pages rebuilt for that commit and <https://time.gitick.com/> serves the new build
+(post-deploy verification below).
 **Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
 > **Versioning note.** The package baseline is `2.2.0`; this release is cut as
@@ -120,13 +121,15 @@ fixed on `main`:
 > gate: the client confirmed item 7 as `localStorage`, the attribution credit was
 > rendered with links, and QA-1 / SEC-1 findings **F2, F3, F4, F5, F8, F9, F10 and
 > F12 were all fixed** (see *Notable fixes* above). Those findings are therefore
-> **moved out of this section** — they are fixed on `main` and **pending QA-2's
-> re-test verdict** ([docs/08-test-report.md](docs/08-test-report.md) §14) and the
-> SEC-1 delta re-sign-off ([docs/09-security-audit.md](docs/09-security-audit.md)).
+> **moved out of this section** — they are fixed on `main` and **cleared by QA-2's
+> re-test verdict**, [docs/08-test-report.md](docs/08-test-report.md) §14 (**PASS**,
+> no open Critical/High/Medium) and the SEC-1 delta re-sign-off,
+> [docs/09-security-audit.md](docs/09-security-audit.md) (**PASS-with-accepted-risks**,
+> 0 Critical / 0 High / 0 Medium).
 > The gate is green on the post-wave tree — `make check` **exit 0** at HEAD
 > `61282a8` (tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS 5 states).
-> **Until QA-2 publishes §14 this release has no final QA verdict**; if §14 is
-> *PASS-WITH-KNOWN-ISSUES*, its remaining findings supersede this list.
+> No QA finding remains open above Informational; the informational residuals
+> (F13/F14/F15) are carried to the post-release backlog.
 
 Remaining known issues (no open code defect; both are product decisions, not bugs):
 
@@ -187,9 +190,10 @@ v2.3.0:
 > across 4 gates**, smoke **67/67**, axe **PASS (5 states)**, 0 critical/serious.
 > These figures supersede QA-1's (§13, HEAD `d45fef1`, 100/100 · 66/66), which
 > predate the fix wave; the authoritative post-wave verdict is **QA-2's
-> [docs/08](docs/08-test-report.md) §14 (pending)**, with the SEC-1 delta
-> re-sign-off in [docs/09](docs/09-security-audit.md). The release commit is **HEAD
-> of `main` at publish time** — see
+> [docs/08](docs/08-test-report.md) §14 (PASS — no open Critical/High/Medium)**, with the SEC-1 delta
+> re-sign-off (**PASS-with-accepted-risks**, 0 Critical / 0 High / 0 Medium) in
+> [docs/09](docs/09-security-audit.md). The release commit was **HEAD of `main`
+> at publish time** (`1a13519`) — see
 > [docs/releases/v2.3.0-publish-staged.md](docs/releases/v2.3.0-publish-staged.md).
 
 | Check | Command | Result |
@@ -205,12 +209,19 @@ v2.3.0:
 
 ### Post-deploy verification (deployed URL)
 
-**Placeholder** — to be executed by the release step against the live
-<https://time.gitick.com/> after the v2.3.0 push and Pages rebuild: confirm the
-Pages build for the release commit, that the deployed shell serves the new
-`?v=2.3.0` assets (all HTTP 200), a live smoke of the new surfaces, and the
-mobile Lighthouse FCP gate (**FCP < 1.5 s**). Record the results in the release
-task metadata.
+Executed by the release step (`DO-3`, `t_0a7a35b6`) against the live
+<https://time.gitick.com/> after the v2.3.0 push and Pages rebuild:
+
+| Check | Result |
+|-------|--------|
+| Pages build for the release commit `1a13519` | **built** (GitHub Pages API: `status=built`, `duration=66.7 s`, no error) |
+| Tag on the remote | `refs/tags/v2.3.0` → annotated object `7612422…` → commit `1a13519` |
+| Deployed shell is the new build | `?v=2.3.0` on `favicon.svg`/`style.css`/`app.js`; full module graph (`app.js` → `choghadiya.js`, `inauspicious.js`, `i18n.js`, `geocoder.js`, `session-store.js`; `choghadiya.js` → `vendor/suncalc-2.1.1.js`) — **every asset HTTP 200** with `?v=2.3.0`, none versionless |
+| v2.3.0 surfaces live (real Chrome) | 12-hour default (`06:32 am`) with a working 12h↔24h toggle (`06:32`), "use my current location" button, native date picker `min=2026-10-04 / max=2026-10-24 / value=2026-10-14` (= today ∓10), inauspicious-periods block (Vaar Vela / Kaal Vela / Kaal Ratri incl. the cross-midnight civil-date suffix), choghadiya detail panel (current slot + meaning/good-for), **0 console errors** |
+| `localStorage` semantics live | `choghadiya.settings.*` written as `{"t":null,"v":…}` envelopes (no expiry); the 24h choice and the location survived a reload; no `sessionStorage` use |
+| Attribution credit live | 3 real hyperlinks in the footer — open-meteo.com / geonames.org / creativecommons.org/licenses/by/4.0/ — each `rel="noopener noreferrer" target="_blank"` |
+| Deployed smoke | The `scripts/smoke.mjs` harness serves the repo files from its own local static server and pins a fixture clock/geolocation, so it has **no remote-URL mode**; the shipped-file gate was re-run green on the release commit (`make check` **exit 0** @ `1a13519` — tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS 5 states) and the deployed URL was covered by the live browser probe above instead |
+| M6 mobile FCP gate (Lighthouse 12.8.2, mobile + simulated throttling) | **1496 ms / 1127 ms / 1127 ms** over 3 runs → **max 1496 ms < 1500 ms gate: PASS**; LCP 1.60/1.28/1.28 s, TBT 20/0/0 ms, performance score 0.99/0.92/0.92. (Informational: CLS 0 in run 1, 0.178 in runs 2–3 — the geolocation-prompt layout shift on a first visit; not a v2.3.0 gate, flagged as a possible follow-up.) |
 
 ---
 
