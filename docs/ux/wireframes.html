@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03-ux wireframe — Choghadiya (Today view)</title>
+<style>
+/* ============================================================
+   WIREFRAME ONLY — tokens copied verbatim from docs/03-ux.md §4
+   Light theme default; dark via prefers-color-scheme OR [data-theme].
+   ============================================================ */
+:root{
+  --bg:#FAF7F2; --surface:#FFFFFF; --surface-2:#F1ECE3;
+  --text:#1A1A1A; --text-muted:#5C5C5C; --border:#E2DACE;
+  --brand:#9A3412; --brand-contrast:#FFFFFF;
+  --day-accent:#7A2C0E; --night-accent:#1F3A6E;
+  --qa-fg:#0F5132; --qa-bg:#E3F1E6;          /* auspicious */
+  --qm-fg:#0B3D62; --qm-bg:#E1EEF9;          /* amrit */
+  --qn-fg:#6B3A00; --qn-bg:#FDF0DC;          /* neutral  */
+  --qi-fg:#8A1B1B; --qi-bg:#FCE9E7;          /* inauspicious */
+  --current-bg:#FFE8D6; --current-fg:#7A2C0E;
+  --focus:#9A3412; --danger:#8A1B1B;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  --r-sm:6px; --r-md:10px; --r-lg:16px; --r-full:999px;
+  --shadow:0 1px 2px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.05);
+  --font: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Devanagari","Nirmala UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121212; --surface:#1E1E1E; --surface-2:#262626;
+    --text:#ECECEC; --text-muted:#ADADAD; --border:#333333;
+    --brand:#F0A868; --brand-contrast:#1A0F08;
+    --day-accent:#FFB59A; --night-accent:#A9C6FF;
+    --qa-fg:#9FE7B4; --qa-bg:#12331F;
+    --qm-fg:#A9D6FF; --qm-bg:#0E2A44;
+    --qn-fg:#FFD9A3; --qn-bg:#3A2A12;
+    --qi-fg:#FFB4AB; --qi-bg:#3B1A1A;
+    --current-bg:#4A2A10; --current-fg:#FFD9A3;
+    --focus:#8FB4FF; --danger:#FFB4AB;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+[data-theme="dark"]{
+  --bg:#121212; --surface:#1E1E1E; --surface-2:#262626;
+  --text:#ECECEC; --text-muted:#ADADAD; --border:#333333;
+  --brand:#F0A868; --brand-contrast:#1A0F08;
+  --day-accent:#FFB59A; --night-accent:#A9C6FF;
+  --qa-fg:#9FE7B4; --qa-bg:#12331F;
+  --qm-fg:#A9D6FF; --qm-bg:#0E2A44;
+  --qn-fg:#FFD9A3; --qn-bg:#3A2A12;
+  --qi-fg:#FFB4AB; --qi-bg:#3B1A1A;
+  --current-bg:#4A2A10; --current-fg:#FFD9A3;
+  --focus:#8FB4FF; --danger:#FFB4AB;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+     font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:960px;margin:0 auto;padding:0 var(--sp-4) var(--sp-8)}
+.wf-note{background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r-md);
+         padding:var(--sp-3);font-size:12px;color:var(--text-muted);margin:var(--sp-4) 0}
+
+/* header — mobile-first: row 1 = brand + toggle, row 2 = location bar */
+header.app{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);
+           z-index:5;padding:var(--sp-2) 0}
+.hrow{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2)}
+.brand{display:flex;align-items:center;gap:var(--sp-2);flex:1 1 auto;min-width:0}
+.brand h1{font-size:26px;line-height:1.25;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .sub{display:none;font-size:12px;color:var(--text-muted)}
+@media (min-width:480px){.brand .sub{display:block;font-size:12px}}
+.lang-toggle{display:inline-flex;flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-full);overflow:hidden}
+.lang-toggle button{min-width:44px;min-height:44px;padding:0 var(--sp-3);border:0;background:transparent;
+                    color:var(--text);font:inherit;font-size:14px;cursor:pointer}
+.lang-toggle button[aria-pressed="true"]{background:var(--brand);color:var(--brand-contrast);font-weight:600}
+.lang-toggle button + button{border-left:1px solid var(--border)}
+.loc-chip{min-height:44px;display:inline-flex;align-items:center;gap:var(--sp-1);
+          padding:0 var(--sp-3);border:1px solid var(--border);background:var(--surface);
+          border-radius:var(--r-full);color:var(--text);font:inherit;font-size:14px;cursor:pointer}
+.loc-chip .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#loc-chip{flex:1 1 100%;justify-content:center;min-width:0}
+#loc-chip .name{flex:1 1 auto;text-align:center}
+#theme{flex:0 0 auto;width:44px;justify-content:center}
+@media (min-width:600px){
+  #loc-chip{flex:0 1 auto}
+  #loc-chip .name{flex:0 1 auto}
+}
+
+/* date bar */
+.datebar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0}
+.datebar .nav{width:44px;height:44px;border:1px solid var(--border);background:var(--surface);
+              border-radius:var(--r-full);color:var(--text);font-size:18px;cursor:pointer}
+.datebar .label{text-align:center;min-width:0}
+.datebar .label .d{font-size:18px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+@media (min-width:480px){.datebar .label .d{font-size:20px}}
+.datebar .label .tz{font-size:12px;color:var(--text-muted)}
+.today-pill{display:inline-block;margin-top:var(--sp-1);min-height:32px;padding:2px var(--sp-3);
+            border:1px solid var(--brand);background:var(--brand);color:var(--brand-contrast);
+            border-radius:var(--r-full);font:inherit;font-size:12px;cursor:pointer}
+
+/* notice */
+.notice{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;background:var(--surface-2);
+        border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3);font-size:12px;
+        margin-bottom:var(--sp-4)}
+.notice .act{margin-left:auto;min-height:44px;padding:0 var(--sp-4);border:0;border-radius:var(--r-md);
+             background:var(--brand);color:var(--brand-contrast);font:inherit;font-size:14px;cursor:pointer}
+
+/* sections */
+.panes{display:grid;gap:var(--sp-6)}
+@media (min-width:900px){.panes{grid-template-columns:1fr 1fr;align-items:start}}
+.pane{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+      box-shadow:var(--shadow);overflow:hidden}
+.pane > h2{font-size:20px;line-height:1.3;margin:0;padding:var(--sp-3) var(--sp-4);
+           display:flex;justify-content:space-between;gap:var(--sp-2);align-items:baseline}
+.pane.day > h2{color:var(--day-accent);border-bottom:1px solid var(--border)}
+.pane.night > h2{color:var(--night-accent);border-bottom:1px solid var(--border)}
+.pane h2 .edge{font-size:12px;font-weight:400;color:var(--text-muted)}
+ol.slot-list{list-style:none;margin:0;padding:0}
+ol.slot-list[aria-busy="true"]{opacity:.6}
+li + li{border-top:1px solid var(--border)}
+
+/* slot row */
+.slot{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--sp-2);align-items:center;
+      width:100%;min-height:56px;padding:var(--sp-2) var(--sp-4);border:0;background:transparent;
+      color:inherit;font:inherit;text-align:start;cursor:pointer}
+.slot:hover{background:var(--surface-2)}
+.slot .nm{font-size:18px;font-weight:600;display:block;line-height:1.4;overflow:hidden;text-overflow:ellipsis}
+.slot .nm .tr{font-size:14px;font-weight:400;color:var(--text-muted)}
+.slot .time{font-size:16px;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.quality{display:inline-flex;align-items:center;gap:var(--sp-1);font-size:14px;font-weight:600;
+         padding:2px var(--sp-2);border-radius:var(--r-full);white-space:nowrap}
+.quality.ausp{color:var(--qa-fg);background:var(--qa-bg)}
+.quality.amrit{color:var(--qm-fg);background:var(--qm-bg)}
+.quality.neut{color:var(--qn-fg);background:var(--qn-bg)}
+.quality.inausp{color:var(--qi-fg);background:var(--qi-bg)}
+.badge-now{font-size:12px;font-weight:700;color:var(--current-fg)}
+.slot[aria-current="true"]{background:var(--current-bg);box-shadow:inset 3px 0 0 0 var(--current-fg)}
+.slot .meaning{grid-column:1 / -1;font-size:14px;color:var(--text-muted);padding-bottom:var(--sp-2)}
+.slot .meaning[hidden]{display:none}
+.smallprint{padding:var(--sp-2) var(--sp-4);font-size:12px;color:var(--text-muted);border-top:1px solid var(--border)}
+@media (max-width:419px){.slot{grid-template-columns:minmax(0,1fr) auto}.slot .time{grid-column:1}}
+
+/* empty / polar state */
+.statebox{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+          padding:var(--sp-6);text-align:center;box-shadow:var(--shadow)}
+.statebox .big{font-size:18px;font-weight:600}
+.statebox .det{font-size:14px;color:var(--text-muted);margin-top:var(--sp-1)}
+.statebox .acts{display:flex;gap:var(--sp-2);justify-content:center;margin-top:var(--sp-4);flex-wrap:wrap}
+.statebox .acts button{min-height:44px;padding:0 var(--sp-4);border:1px solid var(--border);
+                       background:var(--surface-2);color:var(--text);border-radius:var(--r-md);font:inherit}
+
+/* sheet */
+dialog.sheet{border:0;padding:0;border-radius:var(--r-lg);background:var(--surface);color:var(--text);
+             max-width:520px;width:calc(100% - 32px);box-shadow:var(--shadow)}
+dialog.sheet::backdrop{background:rgba(0,0,0,.4)}
+.sheet .head{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4);border-bottom:1px solid var(--border)}
+.sheet .head h2{font-size:20px;margin:0;flex:1}
+.sheet .close{width:44px;height:44px;border:1px solid var(--border);background:var(--surface-2);
+              border-radius:var(--r-full);color:var(--text);font:inherit;cursor:pointer}
+.sheet .body{padding:var(--sp-4)}
+.sheet .privacy{font-size:12px;color:var(--text-muted);margin:0 0 var(--sp-3)}
+.field-row{display:flex;gap:var(--sp-2)}
+.field-row input{flex:1;min-height:44px;padding:0 var(--sp-3);font:inherit;font-size:16px;
+                 color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md)}
+.field-row button{min-height:44px;padding:0 var(--sp-4);border:0;border-radius:var(--r-md);
+                  background:var(--brand);color:var(--brand-contrast);font:inherit;cursor:pointer}
+.results{list-style:none;margin:var(--sp-3) 0 0;padding:0}
+.results li + li{border-top:1px solid var(--border)}
+.results button{display:block;width:100%;min-height:56px;padding:var(--sp-2) var(--sp-3);border:0;
+                background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer}
+.results button:hover{background:var(--surface-2)}
+.results .r1{display:block;font-weight:600}
+.results .r2{display:block;font-size:12px;color:var(--text-muted)}
+
+/* footer */
+footer.app{margin-top:var(--sp-8);padding:var(--sp-4) 0;border-top:1px solid var(--border);
+           font-size:12px;color:var(--text-muted);display:grid;gap:var(--sp-2)}
+footer.app a{color:var(--brand)}
+
+/* skeleton */
+.skeleton{height:56px;border-top:1px solid var(--border);
+          background:linear-gradient(90deg,var(--surface-2),var(--surface),var(--surface-2));
+          background-size:200% 100%;animation:sh 1.2s linear infinite}
+@media (prefers-reduced-motion: reduce){.skeleton{animation:none}}
+@keyframes sh{from{background-position:200% 0}to{background-position:-200% 0}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.demo-label{font-size:14px;font-weight:700;margin:var(--sp-8) 0 var(--sp-2);color:var(--brand)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="wf-note">
+    <strong>WIREFRAME / MOCK — not production code.</strong> Tokens are copied verbatim from
+    <code>docs/03-ux.md</code> §4 so the intended look can be checked without reading CSS.
+    Fixture data = Mumbai, Wednesday 2026-10-14 (sunrise 06:32, sunset 18:17) — the worked example
+    in <code>docs/03-ux.md</code> §8. "Now" is pinned to <b>08:40</b> so the highlighted slot is
+    deterministic. Buttons: language toggle, theme toggle and the city sheet are live; slot rows
+    toggle their meaning line; everything else is static state.
+  </p>
+
+  <header class="app">
+    <div class="hrow">
+      <div class="brand">
+        <span aria-hidden="true">☀</span>
+        <h1 data-i18n="app.title">चौघड़िया</h1>
+        <span class="sub" data-i18n="app.subtitle">आज का शुभ मुहूर्त</span>
+      </div>
+      <div class="lang-toggle" role="group" aria-label="भाषा / Language">
+        <button type="button" id="b-hi" aria-pressed="true">हिं</button>
+        <button type="button" id="b-en" aria-pressed="false">EN</button>
+      </div>
+      <button type="button" class="loc-chip" id="theme" aria-label="Theme / थीम">◐</button>
+      <button type="button" class="loc-chip" id="loc-chip">
+        <span aria-hidden="true">📍</span><span class="name">मुंबई, महाराष्ट्र</span><span aria-hidden="true">⌄</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== S1 Today view ===== -->
+  <div class="datebar">
+    <button type="button" class="nav" aria-label="पिछला दिन / Previous day">‹</button>
+    <div class="label">
+      <div class="d" id="date-label">बुधवार, 14 अक्टूबर 2026</div>
+      <div class="tz">मुंबई, महाराष्ट्र, भारत · IST (UTC+5:30)</div>
+      <button type="button" class="today-pill" hidden data-i18n="date.today">आज</button>
+    </div>
+    <button type="button" class="nav" aria-label="अगला दिन / Next day">›</button>
+  </div>
+
+  <p class="sr" role="status" id="live">दिखाया जा रहा है: बुधवार, 14 अक्टूबर 2026</p>
+
+  <div class="panes">
+    <!-- DAY -->
+    <section class="pane day" aria-labelledby="day-h">
+      <h2 id="day-h"><span data-i18n="section.day">दिन · Day</span>
+        <span class="edge">सूर्योदय 06:32</span></h2>
+      <ol class="slot-list" id="day-list"></ol>
+      <p class="smallprint">सूर्योदय 06:32 · सूर्यास्त 18:17 · 8 × 88 मिनट</p>
+    </section>
+    <!-- NIGHT -->
+    <section class="pane night" aria-labelledby="night-h">
+      <h2 id="night-h"><span data-i18n="section.night">रात · Night</span>
+        <span class="edge">सूर्यास्त 18:17</span></h2>
+      <ol class="slot-list" id="night-list"></ol>
+      <p class="smallprint">अगला सूर्योदय 06:33 · 8 × 92 मिनट</p>
+    </section>
+  </div>
+
+  <footer class="app">
+    <span data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</span>
+    <span data-i18n="attribution.geocoding">Geocoding by Open-Meteo / GeoNames</span>
+    <span data-i18n="convention.note">सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है</span>
+    <span data-i18n="footer.noTracking">कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं</span>
+  </footer>
+
+  <!-- ===== S2 City search sheet ===== -->
+  <h2 class="demo-label">S2 — City search sheet (modal)</h2>
+  <button type="button" class="today-pill" id="open-sheet">खोलें: शहर चुनें / Open city sheet</button>
+  <dialog class="sheet" id="sheet" aria-labelledby="sheet-h">
+    <div class="head">
+      <h2 id="sheet-h" data-i18n="city.sheetTitle">शहर चुनें</h2>
+      <button type="button" class="close" id="close-sheet" aria-label="बंद करें / Close">✕</button>
+    </div>
+    <div class="body">
+      <p class="privacy" data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
+      <form class="field-row" method="dialog" onsubmit="return false">
+        <label class="sr" for="city" data-i18n="city.fieldLabel">शहर का नाम</label>
+        <input id="city" type="text" data-i18n-ph="city.placeholder" placeholder="जैसे: लंदन, जयपुर"
+               autocomplete="off" maxlength="64">
+        <button type="submit" data-i18n="city.submit">खोजें</button>
+      </form>
+      <ul class="results" id="results">
+        <li><button type="button"><span class="r1">लंदन</span><span class="r2">England, United Kingdom · 14:20 · Europe/London</span></button></li>
+        <li><button type="button"><span class="r1">London</span><span class="r2">Ontario, Canada · 09:20 · America/Toronto</span></button></li>
+        <li><button type="button"><span class="r1">London</span><span class="r2">Kentucky, United States · 09:20 · America/New_York</span></button></li>
+      </ul>
+      <p class="privacy" style="margin:var(--sp-4) 0 0">S7 — कोई शहर नहीं मिला — वर्तनी जाँचें / No city found — check the spelling<br>
+        S6 — ⚠ <span style="color:var(--danger)">खोज नहीं हो सकी। दोबारा कोशिश करें / Search failed. Try again</span>
+        <button type="button" data-i18n="city.retry" style="min-height:32px;padding:2px 12px;margin-left:8px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--text);font:inherit;font-size:12px">दोबारा</button></p>
+    </div>
+  </dialog>
+
+  <!-- ===== S3 polar ===== -->
+  <h2 class="demo-label">S3 — Not-defined state (polar / no sunrise-sunset)</h2>
+  <div class="statebox" role="status">
+    <div aria-hidden="true" style="font-size:24px">ⓘ</div>
+    <p class="big" data-i18n="undefined.polar">इस जगह और इस तारीख पर चौघड़िया उपलब्ध नहीं</p>
+    <p class="det" data-i18n="undefined.reason">यहाँ सूर्योदय/सूर्यास्त नहीं होता</p>
+    <p class="det" style="margin-top:var(--sp-3)">Choghadiya is not defined at this location/date</p>
+    <p class="det">(no sunrise/sunset occurs here)</p>
+    <div class="acts">
+      <button type="button">‹ पिछला दिन / Previous day</button>
+      <button type="button">अगला दिन / Next day ›</button>
+    </div>
+  </div>
+
+  <!-- ===== S5 empty + denied notice ===== -->
+  <h2 class="demo-label">S5 — Geolocation denied / empty (no location yet)</h2>
+  <div class="notice" role="status">
+    <span aria-hidden="true">ℹ</span>
+    <span data-i18n="geo.denied">लोकेशन उपलब्ध नहीं — शहर लिखें</span>
+    <button type="button" class="act" data-i18n="loc.choose">शहर चुनें</button>
+  </div>
+  <div class="statebox">
+    <p class="big" data-i18n="empty.noLocation">आज का चौघड़िया देखने के लिए शहर चुनें</p>
+    <p class="det" data-i18n="loc.my">मेरी लोकेशन</p>
+  </div>
+
+  <!-- ===== S4 skeleton ===== -->
+  <h2 class="demo-label">S4 — Loading skeleton (first paint)</h2>
+  <div class="pane">
+    <ol class="slot-list" aria-busy="true" aria-label="loading">
+      <li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>
+    </ol>
+  </div>
+  <p class="sr" role="status">लोड हो रहा है / Loading…</p>
+</div>
+
+<script>
+/* ---------- fixture: docs/03-ux.md §8 (Mumbai, Wed 2026-10-14) ---------- */
+const DAY = [
+  ["quality.labh","Labh","लाभ","06:32","08:00","ausp"],
+  ["quality.amrit","Amrit","अमृत","08:00","09:28","amrit"],
+  ["quality.kaal","Kaal","काल","09:28","10:56","inausp"],
+  ["quality.shubh","Shubh","शुभ","10:56","12:25","ausp"],
+  ["quality.rog","Rog","रोग","12:25","13:53","inausp"],
+  ["quality.udveg","Udveg","उद्वेग","13:53","15:21","inausp"],
+  ["quality.char","Char","चर","15:21","16:49","neut"],
+  ["quality.labh","Labh","लाभ","16:49","18:17","ausp"]
+];
+const NIGHT = [
+  ["quality.udveg","Udveg","उद्वेग","18:17","19:49","inausp"],
+  ["quality.shubh","Shubh","शुभ","19:49","21:21","ausp"],
+  ["quality.amrit","Amrit","अमृत","21:21","22:53","amrit"],
+  ["quality.char","Char","चर","22:53","00:25","neut"],
+  ["quality.rog","Rog","रोग","00:25","01:57","inausp"],
+  ["quality.kaal","Kaal","काल","01:57","03:29","inausp"],
+  ["quality.labh","Labh","लाभ","03:29","05:01","ausp"],
+  ["quality.udveg","Udveg","उद्वेग","05:01","06:33","inausp"]
+];
+const TIER = {ausp:["tier.auspicious","शुभ","Auspicious","✓"],
+              amrit:["tier.mostAuspicious","सर्वश्रेष्ठ","Most auspicious","✓✓"],
+              neut:["tier.neutral","सामान्य","Neutral","○"],
+              inausp:["tier.inauspicious","अशुभ","Inauspicious","✕"]};
+const MEAN = {labh:["meaning.labh","व्यापार, धन, अध्ययन के लिए शुभ","Good for business, trade, finance, learning"],
+              amrit:["meaning.amrit","यात्रा, व्यापार, शुभ कार्य के लिए सर्वोत्तम","Best for travel, business, auspicious work"],
+              kaal:["meaning.kaal","हानि, देरी; नए काम से बचें","Loss, delay; avoid new starts"],
+              shubh:["meaning.shubh","पूजा, विवाह, धार्मिक कार्य के लिए शुभ","Good for worship, weddings, religious work"],
+              rog:["meaning.rog","विवाद, बीमारी; नए काम से बचें","Avoid conflict, illness; don't start new work"],
+              udveg:["meaning.udveg","चिंता; केवल सरकारी काम","Anxiety; only government work"],
+              char:["meaning.char","यात्रा, दैनिक कार्य के लिए सामान्य","Neutral — travel, routine work"]};
+const NOW = "08:40";  /* pinned so the mock is deterministic */
+
+/* static strings from docs/03-ux.md §6 (subset used by this mock) */
+const DICT = {
+  "app.title":        ["चौघड़िया", "Choghadiya"],
+  "app.subtitle":     ["आज का शुभ मुहूर्त", "Today's auspicious timings"],
+  "date.today":       ["आज", "Today"],
+  "section.day":      ["दिन · Day", "Day · दिन"],
+  "section.night":    ["रात · Night", "Night · रात"],
+  "privacy.line":     ["शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।",
+                       "A searched city name is sent to Open-Meteo/GeoNames. Location is never stored."],
+  "attribution.geocoding": ["Geocoding by Open-Meteo / GeoNames", "Geocoding by Open-Meteo / GeoNames"],
+  "convention.note":  ["सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है",
+                       "Sunrise/sunset may differ by ±1–2 min from a printed panchang"],
+  "footer.noTracking": ["कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं",
+                        "No account · no tracking · no backend"],
+  "city.sheetTitle":  ["शहर चुनें", "Choose a city"],
+  "city.fieldLabel":  ["शहर का नाम", "City name"],
+  "city.placeholder": ["जैसे: लंदन, जयपुर", "e.g. London, Jaipur"],
+  "city.submit":      ["खोजें", "Search"],
+  "city.retry":       ["दोबारा", "Retry"],
+  "undefined.polar":  ["इस जगह और इस तारीख पर चौघड़िया उपलब्ध नहीं", "Choghadiya is not defined at this location/date"],
+  "undefined.reason": ["यहाँ सूर्योदय/सूर्यास्त नहीं होता", "no sunrise/sunset occurs here"],
+  "geo.denied":       ["लोकेशन उपलब्ध नहीं — शहर लिखें", "Location unavailable — enter a city"],
+  "loc.choose":       ["शहर चुनें", "Choose city"],
+  "loc.my":           ["मेरी लोकेशन", "My location"],
+  "empty.noLocation": ["आज का चौघड़िया देखने के लिए शहर चुनें", "Choose a city to see today's Choghadiya"]
+};
+
+let lang = "hi";
+const t = (hi, en) => (lang === "hi" ? hi : en);
+
+function rowHTML(s, isCurrent){
+  const [key,en,hi,from,to,cls] = s;
+  const tier = TIER[cls];
+  const mean = MEAN[key.split(".")[1]];
+  const enLabel = t(en, en), hiLabel = hi;
+  const aria = (lang === "hi" ? [hi, enLabel] : [en]).join(", ")
+    + ", " + from + " – " + to + ", " + t(tier[1], tier[2])
+    + (isCurrent ? ", " + t("अभी", "now") : "");
+  return `<li><button type="button" class="slot"${isCurrent ? ' aria-current="true"' : ''}
+      aria-expanded="false" aria-label="${aria}">
+      <span class="nm">${lang === "hi" ? hi + ' <span class="tr">' + enLabel + "</span>" : enLabel}</span>
+      <span class="time">${from} – ${to}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${isCurrent ? '<span class="badge-now">' + t("अभी", "Now") + "</span>" : ""}
+        <span class="quality ${cls}"><span aria-hidden="true">${tier[3]}</span>${t(tier[1], tier[2])}</span>
+      </span>
+      <span class="meaning" hidden>${t(mean[1], mean[2])}</span>
+    </button></li>`;
+}
+
+function render(){
+  document.documentElement.lang = lang;
+  /* static strings */
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const e = DICT[el.getAttribute("data-i18n")];
+    if (e) el.textContent = e[lang === "hi" ? 0 : 1];
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
+    const e = DICT[el.getAttribute("data-i18n-ph")];
+    if (e) el.setAttribute("placeholder", e[lang === "hi" ? 0 : 1]);
+  });
+  document.getElementById("day-list").innerHTML =
+    DAY.map(s => rowHTML(s, s[3] <= NOW && NOW < s[4])).join("");
+  document.getElementById("night-list").innerHTML = NIGHT.map(s => rowHTML(s, false)).join("");
+  document.getElementById("date-label").textContent =
+    lang === "hi" ? "बुधवार, 14 अक्टूबर 2026" : "Wednesday, 14 October 2026";
+  document.getElementById("live").textContent =
+    lang === "hi" ? "दिखाया जा रहा है: बुधवार, 14 अक्टूबर 2026"
+                  : "Showing: Wednesday, 14 October 2026";
+  document.getElementById("b-hi").setAttribute("aria-pressed", lang === "hi");
+  document.getElementById("b-en").setAttribute("aria-pressed", lang === "en");
+  /* slot rows: expand/collapse meaning */
+  document.querySelectorAll(".slot").forEach(b => b.addEventListener("click", () => {
+    const m = b.querySelector(".meaning");
+    m.hidden = !m.hidden;
+    b.setAttribute("aria-expanded", String(!m.hidden));
+  }));
+}
+render();
+
+document.getElementById("b-hi").addEventListener("click", () => { lang = "hi"; render(); });
+document.getElementById("b-en").addEventListener("click", () => { lang = "en"; render(); });
+document.getElementById("theme").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme",
+    cur ? (cur === "dark" ? "light" : "dark") : (sysDark ? "light" : "dark"));
+});
+const sheet = document.getElementById("sheet");
+document.getElementById("open-sheet").addEventListener("click", () => {
+  sheet.showModal(); document.getElementById("city").focus();
+});
+document.getElementById("close-sheet").addEventListener("click", () => sheet.close());
+sheet.addEventListener("close", () => document.getElementById("loc-chip").focus());
+</script>
+</body>
+</html>
