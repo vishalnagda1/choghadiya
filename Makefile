@@ -25,18 +25,28 @@
 # on redeploy — there are no hashed filenames and no build step.
 #
 # Release bump procedure (one commit):
-#   1. make bump VERSION=2.3.0      # rewrites package.json + every ?v= token
+#   1. make bump VERSION=2.3.1      # package.json + package-lock.json + every ?v= token
 #   2. make check                   # scripts/smoke.mjs asserts every ?v= == version
-#   3. git commit -am "chore(release): v2.3.0" && git tag -a v2.3.0
+#   3. git commit -am "chore(release): v2.3.1" && git tag -a v2.3.1
 # The version bump, the git tag and the `?v=` change ship in the SAME commit
 # (docs/04-architecture.md §11.4/§11.5). The bump list MUST cover any shipped module
 # that carries a `?v=` token — v2.3.0 added session-store.js and inauspicious.js to the
 # graph, so the target rewrites index.html plus every root/vendor module (`$(SHIPPED_JS)`)
 # rather than a hardcoded pair, and scripts/smoke.mjs (assetVersions()) fails the gate if
 # a token anywhere in the transitive graph is left behind.
+#
+# The version lives in THREE places and `make bump` moves all three in one command:
+# package.json `version`, package-lock.json root `version` AND packages."".version
+# (folded in t_2f439e59 — previously the two lock fields were hand-edited every
+# release and drifted). `npm version --no-git-tag-version --allow-same-version` does
+# the two files cleanly and touches exactly those three fields (verified: the axe-core
+# devDependency version is left untouched); --allow-same-version keeps a re-run with the
+# current version a no-op instead of npm's "Version not changed" hard error.
+# The `?v=` tokens are still rewritten by the perl pass (unchanged behaviour).
 
 PYTHON ?= python3
 NODE   ?= node
+NPM    ?= npm
 PORT   ?= 8080
 
 # Every shipped module that may carry a `?v=` cache-busting token (kept in sync with
@@ -73,12 +83,12 @@ check: test
 	$(NODE) scripts/smoke.mjs
 	$(NODE) scripts/axe-check.mjs
 
-## bump: set ASSET_VERSION everywhere. Usage: make bump VERSION=2.3.0
+## bump: set ASSET_VERSION everywhere. Usage: make bump VERSION=2.3.1
 bump:
 	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z"; exit 1; }
-	perl -pi -e 's/"version": "[^"]+"/"version": "$(VERSION)"/' package.json
+	$(NPM) version --no-git-tag-version --allow-same-version $(VERSION)
 	perl -pi -e 's/\?v=[A-Za-z0-9._-]+/?v=$(VERSION)/g' index.html $(SHIPPED_JS)
-	@echo "ASSET_VERSION -> $(VERSION) (package.json + every ?v= in index.html and the shipped modules)"
+	@echo "ASSET_VERSION -> $(VERSION) (package.json + package-lock.json + every ?v= in index.html and the shipped modules)"
 	@echo "next: make check, then commit the bump with the annotated tag v$(VERSION)"
 
 ## help: list available targets
