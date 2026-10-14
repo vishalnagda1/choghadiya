@@ -215,13 +215,23 @@ header.app {
   font-weight: 600;
 }
 
-/* Location chip — .loc-chip, pill, min 44 px tall, ellipsised city name (03-ux §4.5). */
+/* Location field — .loc-field wraps the .loc-chip button and the trailing ✕ clear
+   button (03-ux §4.5 "Location chip"; 03-ux F2 step 7 clear affordance, FE-03).
+   .loc-chip is pill-shaped, min 44 px tall, ellipsised city name at 320 px; the
+   clear button is a separate 44×44 round target (a <button> cannot nest). */
+.loc-field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 1 1 100%;
+  min-width: 0;
+}
 .loc-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--sp-1);
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 44px;
   padding: 0 var(--sp-3);
@@ -241,7 +251,27 @@ header.app {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ✕ clear affordance: 44×44 target, aria-labelled from `loc.clear` (US-5, US-18 AC4).
+   Shown only when a location is set (JS toggles [hidden]) — the FE-01
+   `[hidden]{display:none !important}` reset out-specifies this display rule. */
+.loc-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-base);
+  cursor: pointer;
+}
 @media (min-width: 600px) {
+  .loc-field { flex: 0 1 auto }
   .loc-chip { flex: 0 1 auto }
   .loc-chip .name { flex: 0 1 auto; text-align: start }
 }

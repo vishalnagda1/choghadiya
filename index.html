@@ -34,11 +34,20 @@
         <button type="button" id="b-hi" aria-pressed="true">हिं</button>
         <button type="button" id="b-en" aria-pressed="false">EN</button>
       </div>
-      <button type="button" class="loc-chip" id="loc-chip" aria-label="लोकेशन बदलें">
-        <span aria-hidden="true">📍</span>
-        <span class="name" data-i18n="loc.choose">शहर चुनें</span>
-        <span aria-hidden="true">⌄</span>
-      </button>
+      <!-- Location field: the chip opens the sheet (S2); the trailing ✕ clears the
+           chosen/geolocated location and re-opens the sheet (03-ux F2 step 7, US-5).
+           Two sibling buttons rather than one nested pair (a <button> cannot contain
+           another). FE-03 owns the chip affordances; FE-04 owns the S5/empty states. -->
+      <div class="loc-field" id="loc-field">
+        <button type="button" class="loc-chip" id="loc-chip" aria-label="लोकेशन बदलें">
+          <span aria-hidden="true">📍</span>
+          <span class="name" id="loc-name" data-i18n="loc.choose">शहर चुनें</span>
+          <span class="chev" aria-hidden="true">⌄</span>
+        </button>
+        <button type="button" class="loc-clear" id="loc-clear" aria-label="लोकेशन हटाएँ" hidden>
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -138,6 +147,11 @@
              placeholder="जैसे: लंदन, जयपुर" data-i18n-ph="city.placeholder">
       <button type="submit" data-i18n="city.submit">खोजें</button>
     </form>
+    <!-- FE-03: visible inline message (city.required / city.noResults / city.error).
+         FE-04 upgrades this to the S6 component (role="alert" + दोबारा/Retry). -->
+    <p class="error" id="sheet-msg" hidden></p>
+    <!-- FE-03/FE-05: polite live region for city.resultsCount after a search. -->
+    <p class="sr" id="sheet-status" role="status"></p>
     <ul class="results" id="results"></ul>
   </div>
 </dialog>
