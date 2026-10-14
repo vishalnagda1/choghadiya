@@ -57,7 +57,10 @@ geocode call to a third-party API).
 
 ## Release definition
 Merged, working refactor deployed to GitHub Pages (https://time.gitick.com/),
-satisfying all MVP acceptance criteria and passing QA.
+satisfying all MVP acceptance criteria and passing QA. Deployed directly to
+`github.com/vishalnagda1/choghadiya` (main) via the `gh` CLI (authenticated as
+vishalnagda1, repo + workflow scopes). Each release MUST be versioned with a git
+tag (semantic version bump from current package.json 2.1.0, e.g. v2.2.0).
 
 ## Open questions + agreed defaults
 - Presentation: "Today" view with prev/next date navigation (confirmed).
@@ -72,4 +75,6 @@ satisfying all MVP acceptance criteria and passing QA.
 - "Hindi (matches current app + Vedic context)."
 
 ## Change log
-(none)
+- 2026-10-14: Client authorized direct deploy to `github.com/vishalnagda1/choghadiya`
+  (main) via authenticated `gh` CLI, and requires every release to be versioned with
+  a git tag (semver bump from 2.1.0). See "Release definition".
