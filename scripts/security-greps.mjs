@@ -17,6 +17,9 @@
 //   (b) SEC-03 — no inline style attributes (`style="`) / <style> blocks / on*= HTML
 //       handler attributes in code.
 //   (c) SEC-14 — every http(s) origin in code is on the explicit allow-list below.
+//       Three of those origins (the licence-credit hosts open-meteo.com /
+//       www.geonames.org / creativecommons.org, added by DO-FIX t_aa4f3a28) are
+//       LINK-ONLY: they may appear only as `href` values, never in a fetch/import/src.
 //   (d) SEC-STORAGE (v2.3.0 item 7 / adr-009) — the web-storage tokens
 //       `localStorage` / `sessionStorage` appear ONLY in session-store.js; every other
 //       shipped module must go through that module's get/set/remove/clear. session-store.js
@@ -59,7 +62,7 @@ export const SHIPPED_FILES = Object.freeze([
 
 /**
  * SEC-14 allow-list — the ONLY http(s) references permitted in shipped code.
- * Both entries are documented and deliberate; neither is a network fetch.
+ * Every entry is documented and deliberate; none is a network fetch.
  *
  *  - https://geocoding-api.open-meteo.com — the single optional geocode origin,
  *    also the only host in the CSP `connect-src` (index.html, geocoder.js).
@@ -68,10 +71,40 @@ export const SHIPPED_FILES = Object.freeze([
  *    The string is never dereferenced (CSP `default-src 'none'` would block it,
  *    and nothing requests it). Allow-listed explicitly, as the fix card requires,
  *    rather than special-cased by file name.
+ *  - https://open-meteo.com — licence-credit hyperlink (Open-Meteo data
+ *    attribution). Added by DO-FIX (t_aa4f3a28) for the v2.3.0 fix wave; the host
+ *    is LINK-ONLY (see LINK_ONLY_ORIGINS), never fetched.
+ *  - https://www.geonames.org — licence-credit hyperlink (GeoNames CC BY 4.0
+ *    attribution). LINK-ONLY.
+ *  - https://creativecommons.org — the CC BY 4.0 licence hyperlink
+ *    (…/licenses/by/4.0/). LINK-ONLY.
+ *
+ * The three credit hosts are exactly those sanctioned by RS-3 §13.6 and SEC-1
+ * (docs/09 §10.9 F8): the footer attribution rendered by app.js renderAttribution()
+ * as three real <a> elements. Nothing else was added to this list.
  */
 export const ALLOWED_ORIGINS = Object.freeze([
   'https://geocoding-api.open-meteo.com',
   'http://www.w3.org/2000/svg',
+  'https://open-meteo.com',
+  'https://www.geonames.org',
+  'https://creativecommons.org',
+]);
+
+/**
+ * The subset of ALLOWED_ORIGINS that may appear ONLY as hyperlink targets.
+ *
+ * These are licence/credit links: allowing the bare origin would otherwise let a
+ * future edit turn one into a `fetch('https://open-meteo.com/…')` (or an
+ * `import`/`new URL`/`src=`) and still pass SEC-14. So every occurrence of a
+ * link-only origin must sit in an `href` context — `href="…"` (HTML) or
+ * `href: '…'` / `href = "…"` (JS). A network/script use of any of these hosts is
+ * a SEC-14 failure even though the origin is allow-listed.
+ */
+export const LINK_ONLY_ORIGINS = Object.freeze([
+  'https://open-meteo.com',
+  'https://www.geonames.org',
+  'https://creativecommons.org',
 ]);
 
 /**
@@ -87,6 +120,23 @@ function isAllowedOrigin(url) {
     const next = url[allow.length];
     return next === undefined || !/[A-Za-z0-9.-]/.test(next);
   });
+}
+
+/** True when `url` begins with one of the link-only (hyperlink-target) origins. */
+function isLinkOnlyOrigin(url) {
+  return LINK_ONLY_ORIGINS.some((allow) => url.startsWith(allow));
+}
+
+/**
+ * True when the URL starting at `index` is the value of an `href` — i.e. the code
+ * immediately before the URL's opening quote ends in `href:` (JS object/assignment)
+ * or `href=` (HTML attribute / JS assignment). Link-only origins must appear nowhere
+ * else, so a `fetch('https://open-meteo.com/…')` is correctly NOT an href context
+ * and fails the gate.
+ */
+function isHrefValue(code, index) {
+  const before = code.slice(Math.max(0, index - 64), index);
+  return /(?:^|[^A-Za-z0-9_$])href\s*[:=]\s*['"]$/.test(before);
 }
 
 /* ------------------------------------------------------------------ */
@@ -267,7 +317,11 @@ export function runGates(root = ROOT) {
       gate.re.lastIndex = 0;
       for (const m of code.matchAll(gate.re)) {
         const value = m[0];
-        if (gate.origins && isAllowedOrigin(value)) continue;
+        if (gate.origins && isAllowedOrigin(value)) {
+          // Allowed origin. A link-only host is allowed ONLY as an href value; any
+          // other use (fetch/import/src/new URL) falls through to a hit below.
+          if (!isLinkOnlyOrigin(value) || isHrefValue(code, m.index)) continue;
+        }
         const { line, text } = locate(code, m.index);
         hits.push({ file: rel, line, gate: gate.id, match: value.slice(0, 120), text });
       }

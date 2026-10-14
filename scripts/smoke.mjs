@@ -14,14 +14,16 @@
 //   5. zero `NaN` / `Invalid Date` in the rendered DOM (US-9 AC2);
 //   6. no console error / uncaught exception; favicon.svg loads 200;
 //   7. cache-busting: every `?v=` in index.html/app.js equals the package.json
-//      version (ASSET_VERSION, US-19 AC3 / research R7);
+//      version (ASSET_VERSION, US-19 AC3 / research R7), AND every internal module
+//      specifier in the shipped graph carries a `?v=` token (presence — SEC F12,
+//      e.g. inauspicious.js's ./choghadiya.js import);
 //   8. perf budget: total shipped JS (transitive import graph from index.html)
 //      < 60 KB min+gzip (NFR-P3) — see the PERF BUDGET line.
 //   9. the v2.3.0 surfaces (DO-1, t_ed1c4b8c): the manual geolocation button, the S8
 //      inauspicious-periods block (Mumbai fixture values), the S9 detail panel
 //      (default = live slot / tap-select / same-tap revert / reload revert), the ±10-day
 //      calendar picker, the 12h↔24h toggle re-render, and settings persistence across a
-//      reload (sessionStorage, item 7a). Slot ranges are asserted in the ACTIVE cycle:
+//      reload (localStorage, item 7a). Slot ranges are asserted in the ACTIVE cycle:
 //      the 12-hour form by default, the 24-hour form after the toggle.
 //
 // Determinism (the "Mumbai fixture, no network" decision on the card):
@@ -497,11 +499,13 @@ export async function waitForRows(page, { timeout = 25000 } = {}) {
 }
 
 /**
- * Reload the page in the SAME tab (so sessionStorage survives — the v2.3.0 item-7
- * persistence contract) and wait for the fixture view to be rendered again. The CDP
- * init scripts (pinned clock) and the timezone/geolocation overrides are attached to
- * the target/session, so they re-apply to the new document; they are re-asserted here
- * defensively because every reload-based assertion depends on the pinned Mumbai view.
+ * Reload the page in the SAME tab (so the item-7 persistence contract holds — the
+ * v2.3.0 item-7a settings + item-7b geocache live in localStorage, which survives a
+ * reload and a browser restart) and wait for the fixture view to be rendered again.
+ * The CDP init scripts (pinned clock) and the timezone/geolocation overrides are
+ * attached to the target/session, so they re-apply to the new document; they are
+ * re-asserted here defensively because every reload-based assertion depends on the
+ * pinned Mumbai view.
  */
 export async function reloadPage(page, cdp, { timezone } = {}) {
   const loaded = cdp.waitForEvent('Page.loadEventFired', { sessionId: page.sessionId, timeout: 20000 });
@@ -621,6 +625,27 @@ export function assetVersions() {
   for (const rel of ['index.html', ...shippedJsFiles().map((f) => path.relative(ROOT, f))]) {
     const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     for (const m of src.matchAll(/\?v=([A-Za-z0-9._-]+)/g)) out.push({ file: rel, version: m[1] });
+  }
+  return out;
+}
+
+/**
+ * Every internal (same-origin, relative) module specifier in the shipped graph, as
+ * `{ file, specifier }`. This is the SEC F12 surface: a relative specifier WITHOUT a
+ * `?v=` token is not cache-busted by the release bump, so GitHub Pages' CDN can serve
+ * a stale module after a redeploy (F12 found `inauspicious.js` importing
+ * `./choghadiya.js` bare; BE-FIX-2 t_e8b818ea versioned it). Unlike `assetVersions()`
+ * — which only reads the tokens that ARE present — this enumerates the specifiers so
+ * the gate can assert token PRESENCE, not just token value.
+ */
+export function internalModuleSpecifiers() {
+  const out = [];
+  for (const abs of shippedJsFiles()) {
+    const rel = path.relative(ROOT, abs);
+    const src = fs.readFileSync(abs, 'utf8');
+    for (const m of src.matchAll(/\b(?:from|import)\s+['"]([^'"]+)['"]/g)) {
+      if (m[1].startsWith('.')) out.push({ file: rel, specifier: m[1] });
+    }
   }
   return out;
 }
@@ -849,6 +874,18 @@ async function main() {
     r.check(`every ?v= asset version equals the package.json version (${pkg.version})`,
       versions.length >= 5 && wrong.length === 0,
       wrong.length ? wrong.slice(0, 3).map((v) => `${v.file}:${v.version}`).join(', ') : `found ${versions.length}`);
+
+    // --- 10b. SEC F12: EVERY internal module specifier carries a ?v= -----
+    // assetVersions() above only reads the tokens that are present, so a bare
+    // specifier (no ?v=) was invisible to it. This enumerates the shipped graph's
+    // relative specifiers and requires a ?v= token on each — presence, not value.
+    const specifiers = internalModuleSpecifiers();
+    const unversioned = specifiers.filter((s) => !/\?v=[A-Za-z0-9._-]+/.test(s.specifier));
+    r.check(`every internal module specifier carries a ?v= token (${specifiers.length} specifiers)`,
+      specifiers.length > 0 && unversioned.length === 0,
+      unversioned.length
+        ? unversioned.map((s) => `${s.file} -> ${s.specifier}`).join(', ')
+        : specifiers.map((s) => `${s.file} -> ${s.specifier}`).join(', '));
 
     // --- 11. perf budget -------------------------------------------------
     const budget = shippedJsBudget();
@@ -1086,9 +1123,13 @@ async function main() {
       && (await page.evaluate("[...document.querySelectorAll('#period-rows .period__range')].map(e => e.textContent).join(' | ')"))
         === '12:24 pm – 01:52 pm | 09:28 am – 10:56 am | 03:28 am – 05:00 am');
 
-    // --- 19. item 7a: settings persist across a reload (sessionStorage) --
+    // --- 19. item 7a: settings persist across a reload (localStorage) ----
     // Set a NON-default pair (24-hour + English), reload, and assert both survive —
     // then put the tab back into its documented default state (12-hour, Hindi).
+    // v2.3.0 item 7 ships localStorage (client-confirmed at GATE 2): settings are
+    // written with no expiry (envelope t:null), so they survive a reload AND a full
+    // browser restart. A same-tab reload is the strictest check this harness can make
+    // without relaunching Chrome; the no-expiry envelope is what makes it durable.
     await page.evaluate("document.getElementById('b-h24').click()");
     await page.waitFor("document.getElementById('b-h24').getAttribute('aria-pressed') === 'true'",
       { label: '24-hour for the persistence probe' });
@@ -1100,9 +1141,9 @@ async function main() {
       h24: document.getElementById('b-h24').getAttribute('aria-pressed'),
       h12: document.getElementById('b-h12').getAttribute('aria-pressed'),
       rowRanges: [...document.querySelectorAll('button.slot')].map(b => b.dataset.time),
-      keys: Object.keys(sessionStorage).sort(),
+      keys: Object.keys(localStorage).sort(),
     })`));
-    r.check('the 12h/24h time format persists across a reload (sessionStorage-backed, v2.3.0 item 7)',
+    r.check('the 12h/24h time format persists across a reload (localStorage-backed, v2.3.0 item 7)',
       persisted.h24 === 'true' && persisted.h12 === 'false'
       && persisted.rowRanges.length === 16 && persisted.rowRanges.every((v) => RANGE_24H_RE.test(v)),
       JSON.stringify({ h24: persisted.h24, rows: persisted.rowRanges.slice(0, 2) }));
@@ -1127,7 +1168,7 @@ async function main() {
     /* ================================================================== */
     // Proves the item-7b contract end-to-end through the real app path: a city search
     // persists a {t,v} envelope with a ~24 h TTL, a repeat search after a same-tab
-    // reload costs ZERO requests (served from sessionStorage), and a manually expired
+    // reload costs ZERO requests (served from localStorage), and a manually expired
     // entry refetches and is renewed. The live geocoding API is never contacted — a CDP
     // Fetch interceptor fulfills every request with GEO_FIXTURE_RESULTS.
     //
@@ -1158,14 +1199,14 @@ async function main() {
     await page.waitFor(`document.querySelectorAll('#results li').length >= 1`,
       { label: 'item-7b: geocoding results rendered from the fixture' });
     const searchState = JSON.parse(await page.evaluate(`JSON.stringify((() => {
-      const keys = Object.keys(sessionStorage).sort();
+      const keys = Object.keys(localStorage).sort();
       const entryKeys = keys.filter((k) => k.startsWith('choghadiya.geocache.entry.'));
       return {
         rows: document.querySelectorAll('#results li').length,
         keys,
         entryKeys,
-        index: sessionStorage.getItem(${JSON.stringify(GEO_INDEX_KEY)}),
-        entries: entryKeys.map((k) => ({ key: k, raw: sessionStorage.getItem(k) })),
+        index: localStorage.getItem(${JSON.stringify(GEO_INDEX_KEY)}),
+        entries: entryKeys.map((k) => ({ key: k, raw: localStorage.getItem(k) })),
       };
     })())`));
 
@@ -1214,7 +1255,7 @@ async function main() {
     // --- 20b. reload -> the SAME query costs ZERO network calls ----------
     await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
     await interceptor.enable(); // re-arm defensively: the Fetch domain is session-scoped
-    const survivedReload = await page.evaluate(`sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)}) !== null`);
+    const survivedReload = await page.evaluate(`localStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)}) !== null`);
     interceptor.reset();
     await submitCitySearch(GEO_QUERY);
     await page.waitFor(`document.querySelectorAll('#results li').length >= 1`,
@@ -1224,7 +1265,7 @@ async function main() {
       geoResources: performance.getEntriesByType('resource')
         .filter((e) => e.name.includes('geocoding-api.open-meteo.com')).length,
     })`));
-    r.check('item 7b: after a reload the identical query costs 0 geocoding requests (served from the session cache)',
+    r.check('item 7b: after a reload the identical query costs 0 geocoding requests (served from the local cache)',
       interceptor.requests === 0, `requests=${interceptor.requests}`);
     r.check('item 7b: no geocoding resource-timing entry is created after the cached reload search',
       afterReload7b.geoResources === 0, `geo resource entries=${afterReload7b.geoResources}`);
@@ -1234,11 +1275,11 @@ async function main() {
 
     // --- 20c. TTL expiry -> the stale entry refetches --------------------
     await page.evaluate(`(() => {
-      sessionStorage.setItem(${JSON.stringify(GEO_ENTRY_KEY)},
+      localStorage.setItem(${JSON.stringify(GEO_ENTRY_KEY)},
         JSON.stringify({ t: Date.now() - 1000, v: ${JSON.stringify(GEO_FIXTURE_RESULTS)} }));
-      sessionStorage.setItem(${JSON.stringify(GEO_INDEX_KEY)}, JSON.stringify({ t: null, v: [${JSON.stringify(GEO_CACHE_KEY)}] }));
+      localStorage.setItem(${JSON.stringify(GEO_INDEX_KEY)}, JSON.stringify({ t: null, v: [${JSON.stringify(GEO_CACHE_KEY)}] }));
     })()`);
-    const seededPast = await page.evaluate(`JSON.parse(sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})).t < Date.now() - 500`);
+    const seededPast = await page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})).t < Date.now() - 500`);
     await reloadPage(page, cdp, { timezone: MUMBAI.timezone });
     await interceptor.enable();
     interceptor.reset();
@@ -1247,7 +1288,7 @@ async function main() {
       { label: 'item-7b: results after the expiry refetch' });
     const renewed = JSON.parse(await page.evaluate(`JSON.stringify((() => {
       let env = null;
-      try { env = JSON.parse(sessionStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})); } catch { /* corrupt */ }
+      try { env = JSON.parse(localStorage.getItem(${JSON.stringify(GEO_ENTRY_KEY)})); } catch { /* corrupt */ }
       return { env, rows: document.querySelectorAll('#results li').length };
     })())`));
     r.check('item 7b: a past-t (expired) entry is NOT served — the search refetches (>=1 request)',
