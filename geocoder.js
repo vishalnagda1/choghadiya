@@ -35,6 +35,15 @@
 //           normalised to null and the record is kept.
 //   SEC-12  every cache write goes through setCapped(): ≤ 64 entries, FIFO
 //           eviction, shared by the module defaultCache and any caller Map.
+//   SEC-11 (read path, v2.3.0 fix SEC F10)  the persisted-cache READ path re-applies
+//           the same `mapResult` validation used for network data. A tampered or
+//           legacy entry — an invalid IANA `timezone`, non-finite/out-of-range
+//           coords, an oversized string — has its bad records DROPPED (and a
+//           fully-invalid entry is treated as a cache miss), so it can never reach
+//           app.js `selectResult`, whose `Intl.DateTimeFormat` would otherwise throw
+//           an uncaught RangeError and blank the render. With localStorage storage
+//           the entry now survives browser restarts, so at-rest time is unbounded
+//           (bounded only by the 24 h TTL) and this read-path check is the gate.
 
 /** Design-time constants (docs/04-architecture.md §7). */
 export const DEBOUNCE_MS = 400;
@@ -240,7 +249,27 @@ const PERSIST_INDEX_KEY = 'geocache.index';
 /** Prefix of every persisted entry key (the store applies its own namespace). */
 const PERSIST_ENTRY_PREFIX = 'geocache.entry.';
 
-/** Read a persisted entry; null on miss, expiry, corruption, or storage failure. */
+/**
+ * Read a persisted entry; null on miss, expiry, corruption, or storage failure.
+ *
+ * SEC F10 (v2.3.0 fix): a persisted value is AT REST and therefore untrusted — it
+ * can be tampered with (devtools, an extension, a shared device) or written by an
+ * older release. Records are therefore re-validated on READ through `mapPersisted`,
+ * which DROPS any record with a non-finite/non-numeric or out-of-range coordinate, a
+ * present-but-invalid IANA timezone, or (re-capped) oversized strings. `mapPersisted`
+ * delegates to the same `mapResult` used for network data, so a healthy entry
+ * round-trips unchanged — its only extra strictness is that at-rest coordinates must
+ * be real finite numbers (see `mapPersisted` for the `Number(null) === 0` trap).
+ *   - some records invalid → the valid subset is served (never a crash);
+ *   - every record invalid → `null`, i.e. a cache miss, so the next call refetches
+ *     and overwrites the bad entry (self-healing, no request amplification beyond
+ *     that single refetch);
+ *   - an EMPTY array is a legitimate "service had no match" entry (§5.2) and is
+ *     served as-is.
+ * The read stays side-effect-free (a corrupt entry is overwritten by the next
+ * successful persistSet, not deleted here), and any storage failure still degrades
+ * to a miss.
+ */
 function persistGet(store, key) {
   if (!store) return null;
   let value;
@@ -249,7 +278,30 @@ function persistGet(store, key) {
   } catch {
     return null; // a storage failure must never break geocoding
   }
-  return Array.isArray(value) ? value : null;
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0) return []; // legitimate "no matches" entry — kept
+
+  const records = value.map(mapPersisted).filter((record) => record !== null);
+  if (records.length === 0) return null; // wholly invalid entry → miss, then refetch
+  return records;
+}
+
+/**
+ * Internal: strict re-validation of ONE at-rest record (SEC F10), then the shared
+ * `mapResult` rules (range, IANA timezone, string caps).
+ *
+ * Stricter than the network path on ONE point, deliberately: at rest the coordinates
+ * are numbers this module wrote itself, and JSON has already turned `NaN`/`±Infinity`
+ * into `null` — which `mapResult`'s coercing `Number(raw.latitude)` would turn into
+ * `0` and happily accept, silently relocating the user to (0, 0) instead of dropping
+ * the record. A persisted record therefore must carry REAL finite numbers; anything
+ * else (null, strings, booleans) is corruption and is dropped.
+ */
+function mapPersisted(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.latitude !== 'number' || !Number.isFinite(raw.latitude)) return null;
+  if (typeof raw.longitude !== 'number' || !Number.isFinite(raw.longitude)) return null;
+  return mapResult(raw);
 }
 
 /**

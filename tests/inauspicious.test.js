@@ -291,7 +291,11 @@ test('module is pure: no DOM / network / storage, imports choghadiya.js read-onl
   for (const forbidden of [NETWORK_TOKEN, 'XMLHttpRequest', 'document.', 'window.', 'localStorage', 'sessionStorage']) {
     assert.ok(!src.includes(forbidden), `inauspicious.js must not reference ${forbidden}`);
   }
-  assert.ok(src.includes("from './choghadiya.js'"), 'imports choghadiya.js');
+  // SEC F12 (v2.3.0 fix, t_e8b818ea): the internal specifier must carry a `?v=`
+  // cache-busting token. A bare `./choghadiya.js` is fetched TWICE (versioned via
+  // app.js, bare here) and the bare URL escapes cache-busting → version skew on
+  // redeploy (US-19 AC3). The token must equal the package version.
+  assert.match(src, /from '\.\/choghadiya\.js\?v=[A-Za-z0-9._-]+'/, 'imports the VERSIONED choghadiya.js specifier');
   assert.equal(CONFIG.SLOTS_PER_HALF, 8);
 });
 

@@ -21,7 +21,10 @@
 // day sequence contains "kaal" twice (1st and 8th) and the night sequence "labh"
 // twice (1st and 8th), so Kaal Vela and Kaal Ratri each occur twice that day.
 
-import { computeSunTimes, daySequence, nightSequence } from './choghadiya.js';
+// SEC F12 (v2.3.0 fix): the `?v=` token is REQUIRED on every internal specifier —
+// without it the module is fetched twice (versioned via app.js, bare here) and the
+// bare URL also escapes cache-busting, giving version skew on redeploy (US-19 AC3).
+import { computeSunTimes, daySequence, nightSequence } from './choghadiya.js?v=2.3.0';
 
 /** Frozen design-time constants (docs/04-architecture.md §7). */
 export const CONFIG = Object.freeze({

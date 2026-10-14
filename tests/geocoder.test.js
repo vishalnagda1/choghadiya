@@ -836,3 +836,182 @@ test('cacheStore: geocodeCity accepts a cacheStore directly and persists the res
     globalThis.localStorage = original;
   }
 });
+
+// --------------------- persisted-entry READ validation (v2.3.0 SEC F10, t_e8b818ea) ---
+// SEC F10: a persisted geocache entry is AT REST and therefore untrusted — devtools,
+// an extension, a shared device, or an entry written by an older release can all put a
+// record with an invalid IANA timezone or non-finite/out-of-range coordinates into the
+// store. geocoder.js re-runs `mapResult` on READ (persistGet), so such a record can
+// never reach app.js `selectResult`, where `Intl.DateTimeFormat` throws an UNCAUGHT
+// RangeError and blanks the render (empty date label, 0 rows) — live-proven in SEC-1
+// docs/09 §10.9. These probes seed the store DIRECTLY (no network write path) to prove
+// the read path alone drops the bad records.
+
+/** Seed a persisted geocache entry for `query`/`lang` exactly as geocoder.js keys it. */
+function seedEntry(lang, query, records) {
+  sessionStore.set(`geocache.entry.${lang}\u0000${query.toLowerCase()}`, records, { ttlMs: 60_000 });
+}
+
+/** The reader-side contract a served record must satisfy (what selectResult relies on). */
+function isRenderableRecord(record) {
+  if (!Number.isFinite(record.latitude) || Math.abs(record.latitude) > 90) return false;
+  if (!Number.isFinite(record.longitude) || Math.abs(record.longitude) > 180) return false;
+  if (record.timezone !== null && typeof record.timezone !== 'string') return false;
+  if (typeof record.timezone === 'string') {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: record.timezone });
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+test('F10: the crash class is real — an invalid IANA zone / non-finite coord makes the consumer throw', () => {
+  // Guards the premise of the fix: if Intl ever stopped throwing, the drop would be moot.
+  for (const bad of ['Not/AZone', 'Asia/Kolkatta', 'UTC+5:30', '']) {
+    assert.throws(() => new Intl.DateTimeFormat('en', { timeZone: bad }), RangeError, JSON.stringify(bad));
+  }
+  assert.equal(typeof (Number.NaN), 'number'); // NaN is a number, hence the explicit isFinite check
+});
+
+test('F10: a tampered persisted entry drops its bad records and keeps the valid ones (0 fetches)', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    seedEntry('en', 'tampered', [
+      { ...MUMBAI },                                    // valid — must survive
+      { ...PUNE, timezone: 'Not/AZone' },               // present-but-invalid IANA tz → dropped
+      { ...MUMBAI, latitude: Number.NaN, name: 'NaNCity' },   // non-finite lat → dropped
+      { ...PUNE, longitude: Number.POSITIVE_INFINITY, name: 'InfCity' }, // non-finite lon → dropped
+      { ...MUMBAI, latitude: 999, name: 'OutOfRange' },  // out-of-range lat → dropped
+      { ...PUNE, longitude: -181, name: 'OutOfRange2' }, // out-of-range lon → dropped
+      // NB: the NaN/Infinity records above reach the store as JSON `null`, and
+      // `Number(null) === 0` would "validate" them as (0, lon) — the read path requires
+      // real finite numbers, so both this explicit null and a numeric STRING are dropped.
+      { ...MUMBAI, latitude: null, name: 'NullCity' },
+      { ...PUNE, latitude: '18.5196', name: 'StringCity' },
+    ]);
+
+    const { impl, calls } = mockFetch(results([]));
+    const out = await geocodeCity('tampered', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 0, 'a partially-valid entry is still a cache HIT (no request)');
+    assert.deepEqual(out, [MUMBAI], 'only the valid record is served');
+    assert.ok(out.every(isRenderableRecord), 'every served record is safe for selectResult/Intl');
+    assert.equal(out.some((r) => /NaN|Inf|OutOfRange|Null|String/.test(r.name ?? '')), false);
+  } finally {
+    globalThis.localStorage = original;
+  }
+});
+
+test('F10: a wholly-invalid persisted entry is a MISS — it refetches and heals the entry', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    seedEntry('en', 'healme', [
+      { ...MUMBAI, timezone: 'Not/AZone' },
+      { ...PUNE, latitude: Number.NaN },
+    ]);
+
+    const { impl, calls } = mockFetch(results([PUNE_RAW]));
+    const out = await geocodeCity('healme', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 1, 'every record was invalid → treated as a miss, one refetch');
+    assert.deepEqual(out, [PUNE], 'the fresh network record is served');
+    assert.ok(out.every(isRenderableRecord));
+
+    // The refetch overwrote the bad entry: a brand-new geocoder now hits the cache.
+    const again = mockFetch(results([]));
+    const out2 = await geocodeCity('healme', { fetchImpl: again.impl, cacheStore: sessionStore });
+    assert.equal(again.calls.length, 0, 'the healed entry is served from the store');
+    assert.deepEqual(out2, [PUNE]);
+  } finally {
+    globalThis.localStorage = original;
+  }
+});
+
+test('F10: an absent/non-string timezone stays legal on read and is normalised to null', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    // mapResult's documented contract: an ABSENT or non-string tz is normalised to null
+    // and the record is kept — app.js then falls back to deviceTimeZone() (never Intl on
+    // the raw value), so this must NOT be treated as corruption.
+    seedEntry('en', 'nulltz', [
+      { ...MUMBAI, timezone: null },
+      { ...PUNE, timezone: 42 },
+    ]);
+
+    const { impl, calls } = mockFetch(results([]));
+    const out = await geocodeCity('nulltz', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 0, 'still a cache hit');
+    assert.equal(out.length, 2, 'a non-string tz normalises to null; the record is kept');
+    assert.deepEqual(out.map((r) => r.timezone), [null, null]);
+    assert.ok(out.every(isRenderableRecord));
+  } finally {
+    globalThis.localStorage = original;
+  }
+});
+
+test('F10: a healthy persisted entry round-trips unchanged and oversized strings are re-capped', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    seedEntry('en', 'mumbai', [MUMBAI, { ...PUNE, name: 'x'.repeat(MAX_STRING_LENGTH + 50) }]);
+
+    const { impl, calls } = mockFetch(results([]));
+    const out = await geocodeCity('mumbai', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 0);
+    assert.deepEqual(out[0], MUMBAI, 'a healthy record is byte-identical after the read re-map');
+    assert.equal(out[1].name.length, MAX_STRING_LENGTH, 'the read re-cap holds (SEC-11 on the read path)');
+  } finally {
+    globalThis.localStorage = original;
+  }
+});
+
+test('F10: a persisted EMPTY array (legit "no matches", §5.2) is still served as a hit', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    seedEntry('en', 'nope', []);
+
+    const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+    const out = await geocodeCity('nope', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 0, 'an empty cached result is a hit, not corruption');
+    assert.deepEqual(out, []);
+  } finally {
+    globalThis.localStorage = original;
+  }
+});
+
+test('F10: a tampered NON-array persisted value is a miss, not a crash', async () => {
+  const raw = new Map();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
+  try {
+    sessionStore.clear();
+    sessionStore.set('geocache.entry.en\u0000weird', { evil: true }, { ttlMs: 60_000 });
+
+    const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+    const out = await geocodeCity('weird', { fetchImpl: impl, cacheStore: sessionStore });
+
+    assert.equal(calls.length, 1, 'a non-array entry is a miss → refetch');
+    assert.deepEqual(out, [MUMBAI]);
+  } finally {
+    globalThis.localStorage = original;
+  }
+});

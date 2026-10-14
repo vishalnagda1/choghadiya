@@ -487,3 +487,47 @@ test('vendored suncalc 2.1.1 is byte-identical to the pinned checksum and expose
   assert.equal(typeof suncalc.getTimes, 'function');
   assert.equal(typeof suncalc.getPosition, 'function');
 });
+
+// --- Cache-busting on internal specifiers (SEC F12, v2.3.0 fix t_e8b818ea) ----
+// SEC-04 requires every same-origin asset reference to carry `?v=${ASSET_VERSION}`
+// (US-19 AC3). A bare relative specifier is fetched as a SECOND, unversioned URL —
+// e.g. `choghadiya.js?v=2.3.0` via app.js AND bare via inauspicious.js — and the bare
+// URL escapes cache-busting, so a redeploy can serve a stale module from the Pages CDN
+// (version skew). scripts/smoke.mjs asserts the token VALUE; this lock walks the shipped
+// import graph and asserts token PRESENCE on every internal specifier.
+test('every internal module specifier in the shipped graph carries a ?v= token (SEC F12)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const path = (await import('node:path')).default;
+  const ROOT = fileURLToPath(new URL('../', import.meta.url));
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+
+  const indexHtml = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const queue = [...indexHtml.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1].split('?')[0]);
+  assert.ok(queue.length >= 1, 'index.html must load at least one module');
+
+  const seen = new Set();
+  const specifiers = [];
+  while (queue.length) {
+    const rel = queue.shift();
+    if (!rel || seen.has(rel)) continue;
+    seen.add(rel);
+    const src = readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const m of src.matchAll(/\b(?:from|import)\s+['"](\.[^'"]+)['"]/g)) {
+      specifiers.push({ from: rel, spec: m[1] });
+      queue.push(path.relative(ROOT, path.resolve(ROOT, path.dirname(rel), m[1].split('?')[0])));
+    }
+  }
+
+  assert.ok(seen.size >= 6, `the shipped graph must reach every module — saw ${[...seen].join(', ')}`);
+  assert.ok(specifiers.length >= 6, `expected >= 6 internal specifiers, found ${specifiers.length}`);
+
+  const bare = specifiers.filter((s) => !s.spec.includes('?v=')).map((s) => `${s.from} -> ${s.spec}`);
+  assert.deepEqual(bare, [], `every internal specifier needs a ?v= token: ${bare.join(', ')}`);
+
+  const stale = specifiers
+    .map((s) => ({ ...s, version: (s.spec.match(/\?v=([A-Za-z0-9._-]+)/) ?? [])[1] }))
+    .filter((s) => s.version !== pkg.version)
+    .map((s) => `${s.from} -> ${s.spec}`);
+  assert.deepEqual(stale, [], `every ?v= token must equal the package version ${pkg.version}: ${stale.join(', ')}`);
+});

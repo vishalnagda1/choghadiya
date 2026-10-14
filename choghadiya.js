@@ -9,7 +9,12 @@
 // so a Schedule's night half belongs to the civil date it started on and may
 // extend past midnight into date+1.
 
-import { getTimes } from './vendor/suncalc-2.1.1.js';
+// SEC F12 follow-through (v2.3.0 fix): SEC-04 requires EVERY same-origin asset
+// reference to carry `?v=${ASSET_VERSION}` — this was the last relative specifier in
+// the shipped graph without one. The vendored library stays PINNED by its filename
+// plus the byte checksum asserted in tests/choghadiya.test.js (ADR-003); the `?v=`
+// token is the app's ASSET_VERSION and is swept by `make bump` like every other one.
+import { getTimes } from './vendor/suncalc-2.1.1.js?v=2.3.0';
 
 /** Frozen design-time constants (docs/04-architecture.md §7). */
 export const CONFIG = Object.freeze({

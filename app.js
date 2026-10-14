@@ -939,8 +939,11 @@ function selectResult(result) {
   state.location = {
     latitude: result.latitude,
     longitude: result.longitude,
-    // Fall back to the device zone only if the service omitted one (04-arch §5.2).
-    timezone: result.timezone || deviceTimeZone(),
+    // Fall back to the device zone only if the service omitted one (04-arch §5.2) —
+    // and never let a non-string/unknown zone through: Intl.DateTimeFormat throws an
+    // uncaught RangeError on it, which would blank the render (SEC F10). Defence in
+    // depth behind geocoder.js's read-path validation, mirroring normaliseStoredLocation.
+    timezone: isValidTimeZone(result.timezone) ? result.timezone : deviceTimeZone(),
     label: labelFor(result),
     source: 'city',
   };
