@@ -680,10 +680,10 @@ test('cacheStore: 24 h TTL constant is pinned', () => {
   assert.equal(CACHE_TTL_MS, 24 * 60 * 60 * 1000);
 });
 
-test('cacheStore: a query cached in one page session is a hit after a reload (0 fetches)', async () => {
+test('cacheStore: a query cached in one browser session is a hit after a restart (0 fetches)', async () => {
   const raw = new Map();
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = fakeStorage(raw);
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
   const realNow = Date.now;
   Date.now = () => 1_700_000_000_000;
   try {
@@ -696,9 +696,10 @@ test('cacheStore: a query cached in one page session is a hit after a reload (0 
     assert.deepEqual(out1, [MUMBAI]);
     assert.ok(raw.has(persistedKey('en', 'mumbai')), 'the result was persisted to the session store');
 
-    // Reload: a brand-new backing instance over the SAME raw map (sessionStorage
-    // survives a reload) plus a fresh geocoder — the cached entry must still serve.
-    globalThis.sessionStorage = fakeStorage(raw);
+    // Restart/reload: a brand-new localStorage backing instance over the SAME raw
+    // map (localStorage survives a browser restart) plus a fresh geocoder — the
+    // cached entry must still serve.
+    globalThis.localStorage = fakeStorage(raw);
     const second = mockFetch(results([PUNE_RAW]));
     const g2 = createGeocoder({ fetchImpl: second.impl, cacheStore: sessionStore });
     const out2 = await g2.searchNow('  mumbai  ');
@@ -707,14 +708,14 @@ test('cacheStore: a query cached in one page session is a hit after a reload (0 
     assert.notEqual(out2, out1, 'the hit is a fresh array');
   } finally {
     Date.now = realNow;
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });
 
 test('cacheStore: within the 24 h TTL is a hit; exactly at expiry refetches', async () => {
   const raw = new Map();
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = fakeStorage(raw);
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
   const realNow = Date.now;
   let now = 1_700_000_000_000;
   Date.now = () => now;
@@ -735,14 +736,14 @@ test('cacheStore: within the 24 h TTL is a hit; exactly at expiry refetches', as
     assert.equal(calls.length, 2, 'expired → refetch');
   } finally {
     Date.now = realNow;
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });
 
 test('cacheStore: cache keys normalise case/whitespace and are per language', async () => {
   const raw = new Map();
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = fakeStorage(raw);
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
   try {
     sessionStore.clear();
     const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
@@ -758,14 +759,14 @@ test('cacheStore: cache keys normalise case/whitespace and are per language', as
     assert.equal(calls.length, 2, 'language is part of the key');
     assert.ok(raw.has(persistedKey('hi', 'mumbai')));
   } finally {
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });
 
 test('cacheStore: persisted entries are capped at 64, FIFO eviction (SEC-12 consistency)', async () => {
   const raw = new Map();
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = fakeStorage(raw);
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
   try {
     sessionStore.clear();
     const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
@@ -787,7 +788,7 @@ test('cacheStore: persisted entries are capped at 64, FIFO eviction (SEC-12 cons
     await g.searchNow('city0');
     assert.equal(calls.length, 66, 'the evicted key re-fetches (proves it was dropped)');
   } finally {
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });
 
@@ -817,8 +818,8 @@ test('cacheStore: a throwing cacheStore degrades to a miss, never breaks geocodi
 
 test('cacheStore: geocodeCity accepts a cacheStore directly and persists the result', async () => {
   const raw = new Map();
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = fakeStorage(raw);
+  const original = globalThis.localStorage;
+  globalThis.localStorage = fakeStorage(raw);
   try {
     sessionStore.clear();
     const { impl, calls } = mockFetch(results([PUNE_RAW]));
@@ -832,6 +833,6 @@ test('cacheStore: geocodeCity accepts a cacheStore directly and persists the res
     assert.equal(again.calls.length, 0, 'served from the cacheStore, no request');
     assert.deepEqual(out2, [PUNE]);
   } finally {
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });

@@ -1,11 +1,14 @@
-// tests/session-store.test.js — session-store.js contract (v2.3.0 item 7b).
+// tests/session-store.test.js — session-store.js contract (v2.3.0 item 7).
 //
 // Covers the CTO-decided contract: JSON `{t,v}` envelopes, exact TTL expiry (±1 ms
-// boundary), session-lifetime entries, corruption tolerance, the silent in-memory
-// fallback when web storage is absent or throws, namespace isolation, and a
-// persistence round-trip that simulates a page reload (a NEW backing store instance
-// over the SAME raw map). No test touches the network, and none requires a real
-// browser storage object.
+// boundary), no-expiry entries, corruption tolerance, the silent in-memory fallback
+// when web storage is absent or throws, namespace isolation, and persistence that
+// survives a full browser restart (a NEW backing store instance over the SAME raw
+// map — exactly what localStorage does across a restart). No test touches the
+// network, and none requires a real browser storage object.
+//
+// v2.3.0 item-7 scope flip (client-confirmed): STORAGE_SCOPE is `'local'`, so the
+// backing object is `globalThis.localStorage` (the fakes below install there).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -40,20 +43,20 @@ function fakeStorage(raw = new Map(), { throwOnGet = false, throwOnSet = false }
   };
 }
 
-/** Install `store` as globalThis.sessionStorage; returns a restore function. */
+/** Install `store` as globalThis.localStorage; returns a restore function. */
 function installStorage(store) {
-  const original = globalThis.sessionStorage;
-  globalThis.sessionStorage = store;
+  const original = globalThis.localStorage;
+  globalThis.localStorage = store;
   return () => {
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   };
 }
 
 /** Parse the stored envelope for a logical key. */
 const envelope = (raw, key) => JSON.parse(raw.get(NAMESPACE + key));
 
-test('STORAGE_SCOPE is "session" — the single one-line flip point', () => {
-  assert.equal(STORAGE_SCOPE, 'session');
+test('STORAGE_SCOPE is "local" — the client-confirmed item-7 scope', () => {
+  assert.equal(STORAGE_SCOPE, 'local');
 });
 
 test('set/get/remove/clear round-trip; every key is namespaced choghadiya.*', () => {
@@ -87,14 +90,14 @@ test('set/get/remove/clear round-trip; every key is namespaced choghadiya.*', ()
   }
 });
 
-test('entries are stored as a {t,v} envelope; session-lifetime t is null', () => {
+test('entries are stored as a {t,v} envelope; no-expiry t is null', () => {
   const raw = new Map();
   const restore = installStorage(fakeStorage(raw));
   try {
     clear();
-    set('session', 'forever');
+    set('forever', 'value');
     set('ttl', 'brief', { ttlMs: 1000 });
-    assert.deepEqual(envelope(raw, 'session'), { t: null, v: 'forever' });
+    assert.deepEqual(envelope(raw, 'forever'), { t: null, v: 'value' });
     const e = envelope(raw, 'ttl');
     assert.equal(typeof e.t, 'number', 'ttlMs entry carries an epoch-ms expiry');
     assert.equal(e.v, 'brief');
@@ -125,7 +128,7 @@ test('TTL expiry is exact at the boundary (±1 ms)', () => {
   }
 });
 
-test('session-lifetime entries (no ttlMs) never expire', () => {
+test('no-expiry entries (no ttlMs) never expire — settings persist indefinitely', () => {
   const raw = new Map();
   const restore = installStorage(fakeStorage(raw));
   const realNow = Date.now;
@@ -211,14 +214,14 @@ test('a storage that throws on read AND write never throws at the call site', ()
 });
 
 test('with no web storage available (Node default) the in-memory fallback is the store', () => {
-  const original = globalThis.sessionStorage;
-  delete globalThis.sessionStorage;
+  const original = globalThis.localStorage;
+  delete globalThis.localStorage;
   try {
     clear();
     set('n', 7);
     assert.equal(get('n'), 7);
   } finally {
-    globalThis.sessionStorage = original;
+    globalThis.localStorage = original;
   }
 });
 
@@ -243,16 +246,16 @@ test('the namespace is idempotent: a fully-qualified key is not double-prefixed'
   }
 });
 
-test('persistence round-trip: a new backing instance over the same raw map serves the value (reload)', () => {
+test('persistence round-trip: a new backing instance over the same raw map serves the value (browser restart)', () => {
   const raw = new Map();
   const restore = installStorage(fakeStorage(raw));
   try {
     clear();
-    set('settings', { lang: 'en', hourCycle: 'h12' }, { ttlMs: 60_000 });
+    set('settings', { lang: 'en', hourCycle: 'h12' });
     assert.ok(raw.has(`${NAMESPACE}settings`), 'the value was written to the backing store');
 
-    // Simulated reload: a brand-new store instance over the SAME raw map — exactly
-    // what a page reload does to sessionStorage — then a fresh read.
+    // Simulated full browser restart: a brand-new localStorage instance over the SAME
+    // raw map — exactly what localStorage does across a restart/reload — then a read.
     installStorage(fakeStorage(raw));
     assert.deepEqual(get('settings'), { lang: 'en', hourCycle: 'h12' });
   } finally {

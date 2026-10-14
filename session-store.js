@@ -1,20 +1,21 @@
 // session-store.js — namespaced, bounded, TTL-capable web-storage wrapper.
 //
-// v2.3.0 change request item 7b (docs/00-brief.md change log, 2026-10-14) + the
-// storage substrate for item 7a (settings persistence). Supersedes ADR-007 in part
-// (the "no web storage at all" stance is relaxed to "no SERVER storage; a per-tab
-// local session cache only" — the architect card records the ADR amendment).
+// v2.3.0 change request item 7 (docs/00-brief.md change log, 2026-10-14, client-
+// confirmed): the storage substrate for item 7a (settings persistence) and item 7b
+// (geocode cache). Supersedes ADR-007 (the "no web storage at all" stance is relaxed
+// to "no SERVER storage; a local TTL-gated cache only" — the architect card records
+// the ADR amendment).
 //
 // Contract (CTO decisions, implement exactly):
 //   get(key)            -> value | null   (expired/malformed/unparsable/non-envelope
 //                                           entries are DELETED and reported as null)
-//   set(key, value, opts = { ttlMs })     ttlMs absent -> session-lifetime (no expiry)
+//   set(key, value, opts = { ttlMs })     ttlMs absent -> no expiry (persists indefinitely)
 //   remove(key)         -> void
 //   clear()             -> void           (only this module's `choghadiya.*` keys)
-//   STORAGE_SCOPE       -> 'session'      (the storage mechanism)
+//   STORAGE_SCOPE       -> 'local'        (the storage mechanism: localStorage)
 //
 // Entry envelope: `{ t, v }` where `v` is the caller's value and `t` is the expiry
-// instant in epoch ms, or `null` for a session-lifetime entry that never expires.
+// instant in epoch ms, or `null` for a no-expiry entry that never expires.
 // Everything is JSON-encoded; a value that is not a valid envelope is treated as
 // corrupt and dropped on read.
 //
@@ -25,17 +26,18 @@
 // touches no DOM global at import time (the backing store is resolved lazily, per
 // call, inside a try/catch).
 //
-// SCOPE FLIP: switching from sessionStorage (per-tab, cleared on tab close) to
-// localStorage (survives browser restarts) is a ONE-LINE change — edit the
-// STORAGE_SCOPE constant below. Nothing else in this file (or the codebase) needs
-// to change: the backing object is selected from STORAGE_SCOPE.
+// SCOPE (v2.3.0 item 7, client-confirmed): localStorage — entries survive a full
+// browser restart. Settings are written with no expiry (they persist indefinitely);
+// geocache entries carry a bounded TTL and expire. The backing object is selected
+// from the STORAGE_SCOPE constant below; `'session'` (sessionStorage, per-tab) is
+// the alternate.
 //
 // CONSTRAINT (security audit greps over shipped files depend on this): the tokens
 // `sessionStorage` and `localStorage` appear ONLY in this file. Every other shipped
 // module talks to storage exclusively through this module's get/set/remove/clear.
 
-/** Storage mechanism: `'session'` → sessionStorage, `'local'` → localStorage. */
-export const STORAGE_SCOPE = 'session';
+/** Storage mechanism: `'local'` → localStorage (survives browser restarts), `'session'` → sessionStorage (per-tab). */
+export const STORAGE_SCOPE = 'local';
 
 /** Key namespace; every physical key this module writes is prefixed with this. */
 const NAMESPACE = 'choghadiya.';
@@ -174,7 +176,7 @@ export function get(key) {
  *
  * @param {string} key
  * @param {*} value  Any JSON-serialisable value.
- * @param {{ ttlMs?: number }} [opts]  `ttlMs` absent → session-lifetime (no expiry).
+ * @param {{ ttlMs?: number }} [opts]  `ttlMs` absent → no expiry (persists indefinitely).
  */
 export function set(key, value, opts = {}) {
   const ttlMs = opts && typeof opts.ttlMs === 'number' && Number.isFinite(opts.ttlMs)
