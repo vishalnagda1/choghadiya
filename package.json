@@ -15,7 +15,12 @@
   },
   "scripts": {
     "dev": "python3 -m http.server 8080",
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test \"tests/**/*.test.js\"",
+    "smoke": "node scripts/smoke.mjs",
+    "axe": "node scripts/axe-check.mjs",
+    "check": "npm test && npm run smoke && npm run axe"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "axe-core": "4.10.2"
+  }
 }
