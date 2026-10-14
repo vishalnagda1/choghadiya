@@ -180,6 +180,76 @@
       <p class="periods__disclaimer" data-i18n="periods.disclaimer">ये पारंपरिक मान्यताएँ हैं, खगोलीय तथ्य नहीं।</p>
     </section>
 
+    <!-- ===== S9 choghadiya detail panel (v2.3.0 CR6, 03-ux §3.9) — FE-6.
+         Full-width card BELOW the S8 periods block and ABOVE the footer (page order
+         §1.1). Default content is the live current choghadiya (badge `panel.badge.
+         current`); tapping a slot row selects it into the panel with `aria-pressed`,
+         and tapping the same row again — or reloading the page — reverts to the
+         current slot (or the neutral `panel.selectPrompt` on an off-today date).
+         Selection is UI STATE ONLY and is never persisted (adr/009).
+         The panel is a labelled <section aria-labelledby> and deliberately NOT an
+         aria-live region: an entire card re-announcing on every tap is noise (§3.9).
+         A visually hidden `role="status"` carries `panel.status.updated` instead, and
+         the panel exposes no focusable control of its own (the row buttons are the
+         only way in and out — focus never moves into the panel). Hidden entirely while
+         there is no location or the schedule is not defined (S3 owns that screen).
+         Static labels are dictionary copy filled by app.js applyDictionary(); every
+         VALUE node is filled by renderPanel() with textContent only (NFR-S2). The
+         static fallback text below is the `hi` dictionary string (pinned by
+         tests/i18n.test.js). The ⚠ is decorative (aria-hidden) and always paired with
+         the dictionary warning sentence, so the overlap state is never carried by
+         colour alone (§4.9, US-15 AC1). #choghadiya-panel is the `aria-controls`
+         target of all 16 slot-row buttons. ===== -->
+    <section class="panel" id="choghadiya-panel" hidden aria-labelledby="panel-h">
+      <div class="panel__head">
+        <h2 id="panel-h" data-i18n="panel.heading">चौघड़िया का विवरण</h2>
+        <span class="panel__badge" id="panel-badge" hidden data-i18n="panel.badge.current">वर्तमान</span>
+      </div>
+      <p class="panel__prompt" id="panel-prompt" data-i18n="panel.selectPrompt">विवरण देखने के लिए कोई चौघड़िया चुनें</p>
+      <div class="panel__body" id="panel-body" hidden>
+        <p class="panel__slot">
+          <span class="panel__slot-name" id="panel-name"></span>
+          <span class="panel__slot-range" id="panel-range"></span>
+        </p>
+        <!-- Contextual notes. The overlap warning is inserted directly under the
+             name/range (03-ux §3.9 wireframe); its key is chosen by the slug
+             overlappingPeriod() returns: panel.note.overlay.<vaarVela|kaalVela|
+             kaalRatri> — three concrete keys, no {period} interpolation (§6.1 note 5). -->
+        <p class="panel__warn" id="panel-warn" role="note" hidden>
+          <span aria-hidden="true">⚠</span>
+          <span id="panel-warn-text"></span>
+        </p>
+        <p class="panel__note" id="panel-note"></p>
+        <p class="panel__tier" id="panel-tier-note"></p>
+        <!-- Field labels are always visible real text (03-ux §3.9): a screen reader
+             reads "अर्थ …" above each value instead of an unlabelled paragraph.
+             goodFor / badFor stay ONE wrapping paragraph each — the dictionary's ` · `
+             item separator is preserved verbatim (re-wording it is not allowed). -->
+        <dl class="panel__fields">
+          <div class="panel__field">
+            <dt class="panel__label" data-i18n="panel.label.meaning">अर्थ</dt>
+            <dd class="panel__value panel__value--sm" id="panel-meaning"></dd>
+          </div>
+          <div class="panel__field">
+            <dt class="panel__label" data-i18n="panel.label.goodFor">इसके लिए शुभ</dt>
+            <dd class="panel__value" id="panel-goodfor"></dd>
+          </div>
+          <div class="panel__field">
+            <dt class="panel__label" data-i18n="panel.label.badFor">इससे बचें</dt>
+            <dd class="panel__value" id="panel-badfor"></dd>
+          </div>
+          <div class="panel__field">
+            <dt class="panel__label" data-i18n="panel.label.nuance">दिन व रात</dt>
+            <dd class="panel__value panel__value--sm" id="panel-nuance"></dd>
+          </div>
+        </dl>
+      </div>
+      <!-- Polite announcement of a selection change (03-ux §3.9/§7.3). Filled by
+           app.js on tap only — never on a full render, so a language switch or a
+           poll tick does not re-announce the whole card. -->
+      <p class="sr" role="status" id="panel-status"></p>
+    </section>
+
     <!-- ===== S3 not-defined state — polar / no sunrise-sunset (03-ux §3 S3, US-9).
          Both languages are shown at once ON PURPOSE: a user at 70° N may be reading
          in a language they did not set, and a single hard-failure string is not worth

@@ -22,8 +22,9 @@
 //
 // FE-05 (t_fffccd6d): accessibility semantics, disclosure and the live highlight —
 // `aria-current` + the "अभी / Now" badge, the ≤ 60 s visibility-aware current-slot
-// poll, the `aria-expanded` meaning-line disclosure on every row, and the Alt+←/→
-// date shortcuts. It extends render()/slotRow() only; no state or fetch path changes.
+// poll and the Alt+←/→ date shortcuts. (The v1.0.1 `aria-expanded` meaning-line
+// disclosure it introduced was superseded by FE-6's detail panel — see below.) It
+// extends render()/slotRow() only; no state or fetch path changes.
 // The FE-03 failure seams (`onGeoUnavailable`, `setSheetError`) are now the real
 // S5/S6/S7 components; every degradation keeps the date bar and the language
 // toggle alive (03-ux §3 S3, §2 F3).
@@ -46,9 +47,22 @@
 // shortcuts keep working and clamp to the SAME window through one shared code path
 // (`setViewedDate`), and both nav buttons disable at the edges. No custom JS calendar,
 // no new dependency; `i18n.js` already carries `date.picker.label` / `date.picker.range`.
+//
+// FE-6 (t_778b1ea0, v2.3.0 item 6 / CR6): the S9 choghadiya detail panel. A slot row is
+// now a SELECTION control — `aria-pressed` + `aria-controls="choghadiya-panel"` — and
+// the v1.0.1 inline `.meaning` disclosure line is removed, because the panel supersedes
+// it (03-ux §3.9; showing the same copy twice on one screen is worse than one tap).
+// The panel defaults to the LIVE current choghadiya on today's view (or the neutral
+// `panel.selectPrompt` off-today), shows the slot name in both scripts, its range in
+// the active 12h/24h format, meaning / good-for / bad-for / day-night nuance, and the
+// contextual notes: the `overlappingPeriod` warning naming WHICH inauspicious period
+// overlaps, and the "this is running now" / "tap again to return" hints. It re-renders
+// on a language, time-format, date or location change; the selection is UI state only
+// and is deliberately never persisted (adr/009 — a reload always returns to current).
+// `aria-current` + the "अभी / Now" badge remain EXCLUSIVE to the live row (US-14).
 
 import { addDays, buildSchedule, formatDate, formatTime, resolveCurrentSlot, todayIn } from './choghadiya.js?v=2.2.0';
-import { computeInauspicious } from './inauspicious.js?v=2.2.0';
+import { computeInauspicious, overlappingPeriod } from './inauspicious.js?v=2.2.0';
 import { DEFAULT_LANG, t } from './i18n.js?v=2.2.0';
 import { createGeocoder, isAbortError } from './geocoder.js?v=2.2.0';
 import { get as storeGet, remove as storeRemove, set as storeSet } from './session-store.js?v=2.2.0';
@@ -62,6 +76,19 @@ const TIER_GLYPH = Object.freeze({
   auspicious: '✓',
   neutral: '○',
   inauspicious: '✕',
+});
+
+/**
+ * FE-6 (v2.3.0 CR6, 03-ux §3.9) — Slot.tier → the S9 tier-note key. The panel groups
+ * Amrit (mostAuspicious) with Shubh/Labh as the ONE `panel.note.auspicious` string and
+ * maps Char to `panel.note.neutral`, the three inauspicious names (Rog/Kaal/Udveg) to
+ * `panel.note.inauspicious` — exactly the three words the copy deck provides (§6).
+ */
+const TIER_NOTE_KEY = Object.freeze({
+  mostAuspicious: 'auspicious',
+  auspicious: 'auspicious',
+  neutral: 'neutral',
+  inauspicious: 'inauspicious',
 });
 
 /**
@@ -143,7 +170,11 @@ const state = {
     notice: null, // null | "geo-denied"        → FE-04 renders S5
     sheetError: null, // null | "query-required" | "geocode-empty" | "geocode-network" | "geocode-http" → FE-04 S6/S7
     query: '', // last submitted city query (FE-04 Retry re-submits it)
-    expandedSlot: null, // FE-05
+    // FE-6 — the S9 detail-panel selection: the `half:index` slotKey of the slot the
+    // user tapped, or null = "follow the live current slot" (today) / "show the
+    // neutral prompt" (off-today). UI state ONLY: never persisted, so a reload always
+    // returns to the current choghadiya (03-ux §3.9 selection model, adr/009).
+    selectedSlot: null,
     locRequesting: false, // CR2 — a manual getCurrentPosition is in flight (button disabled)
     locDenied: false, // CR2 — show the sheet-local loc.denied line (F8 step 4)
   },
@@ -225,6 +256,25 @@ function init() {
   dom.periods = document.getElementById('periods');
   dom.periodRows = document.getElementById('period-rows');
   dom.closeSheet = document.getElementById('close-sheet');
+
+  // --- FE-6: the S9 choghadiya detail panel (v2.3.0 CR6, 03-ux §3.9) --------------
+  // Every node here is filled by renderPanel() (values) or applyDictionary() (static
+  // labels); the panel carries no interactive control of its own.
+  dom.panel = document.getElementById('choghadiya-panel');
+  dom.panelBadge = document.getElementById('panel-badge');
+  dom.panelPrompt = document.getElementById('panel-prompt');
+  dom.panelBody = document.getElementById('panel-body');
+  dom.panelName = document.getElementById('panel-name');
+  dom.panelRange = document.getElementById('panel-range');
+  dom.panelWarn = document.getElementById('panel-warn');
+  dom.panelWarnText = document.getElementById('panel-warn-text');
+  dom.panelNote = document.getElementById('panel-note');
+  dom.panelTierNote = document.getElementById('panel-tier-note');
+  dom.panelMeaning = document.getElementById('panel-meaning');
+  dom.panelGoodFor = document.getElementById('panel-goodfor');
+  dom.panelBadFor = document.getElementById('panel-badfor');
+  dom.panelNuance = document.getElementById('panel-nuance');
+  dom.panelStatus = document.getElementById('panel-status');
 
   dom.bHi.addEventListener('click', () => setLang('hi'));
   dom.bEn.addEventListener('click', () => setLang('en'));
@@ -439,7 +489,7 @@ function clampToRange(dateISO, range) {
 function setViewedDate(dateISO) {
   if (!state.location || dateISO === state.viewedDate) return;
   state.viewedDate = dateISO;
-  collapseSlots(); // a different date is a fresh view: close any open disclosure line
+  clearSlotSelection(); // a different date is a fresh view: drop the S9 selection
   render();
 }
 
@@ -480,7 +530,7 @@ function onPickDate(event) {
 function goToToday() {
   if (!state.location) return;
   state.viewedDate = todayAtLocation();
-  collapseSlots();
+  clearSlotSelection();
   render();
 }
 
@@ -567,6 +617,7 @@ function applyDeviceLocation(position) {
   state.ui.loading = false;
   state.ui.notice = null;
   state.viewedDate = todayAtLocation();
+  clearSlotSelection(); // a new location is a fresh view (03-ux §3.9 selection model)
   persistSettings.location(); // FE-1: remember the device fix so a reload skips the prompt
 }
 
@@ -887,7 +938,7 @@ function selectResult(result) {
   state.ui.notice = null;
   dom.cityInput.value = '';
   state.viewedDate = todayAtLocation();
-  collapseSlots();
+  clearSlotSelection(); // a chosen city is a fresh view (03-ux §3.9)
   persistSettings.location(); // FE-1: a manual city choice overwrites the stored location
   render();
   dom.sheet.close(); // focus return happens in onSheetClose
@@ -909,7 +960,7 @@ function clearLocation() {
   state.viewedDate = null;
   state.ui.loading = false;
   state.ui.notice = null;
-  collapseSlots();
+  clearSlotSelection(); // no location → no rows, so no selection either
   persistSettings.location(); // FE-1: forget the stored location (session-store remove)
   render();
   openSheet();
@@ -924,27 +975,157 @@ function slotKey(slot) {
   return `${slot.half}:${slot.index}`;
 }
 
-/** Drop any open disclosure line (a schedule change rebuilds the rows). */
-function collapseSlots() {
-  state.ui.expandedSlot = null;
+/**
+ * Drop the user's S9 selection (a date or location change is a fresh view: 03-ux
+ * §3.9 — "selection does not survive a date change"). The row set is rebuilt by the
+ * following render(), so no in-place ARIA repair is needed here.
+ */
+function clearSlotSelection() {
+  state.ui.selectedSlot = null;
 }
 
 /**
- * Disclosure (03-ux §4.5 row-click behaviour, §7.2): every row `<button>` carries
- * `aria-expanded` and an `aria-controls` reference to its inline `.meaning` line.
+ * FE-6 (v2.3.0 CR6, 03-ux §3.9) — a slot-row tap SELECTS that slot into the S9 panel
+ * (and taps the same row again to deselect, returning the panel to the live current
+ * choghadiya / the off-today prompt).
  *
- * The meaning line is a SIBLING of the button inside the same `<li>`, not a
- * descendant: a `<button>` flattens its descendants in the accessibility tree, so a
- * nested meaning line would be unreachable for a screen-reader user. Toggling mutates
- * in place — it never calls render() — so focus and the open row both survive
- * (03-ux §7.2: focus only moves on sheet open/close).
+ * Deliberately an in-place update, never render(): the row list is not rebuilt, so the
+ * tapped button keeps focus and the user keeps their place in the list (§7.2 —
+ * focus only moves on sheet open/close). `aria-current` + the "अभी / Now" badge are
+ * NEVER touched here: they stay exclusive to the live row (US-14 AC1); the selection
+ * is carried by `aria-pressed` alone.
  */
-function toggleMeaning(button, item, slot) {
-  const next = button.getAttribute('aria-expanded') !== 'true';
-  button.setAttribute('aria-expanded', String(next));
-  const meaning = item.querySelector('.meaning');
-  if (meaning) meaning.hidden = !next;
-  state.ui.expandedSlot = next ? slotKey(slot) : null;
+function selectSlot(slot) {
+  const key = slotKey(slot);
+  state.ui.selectedSlot = state.ui.selectedSlot === key ? null : key;
+  applySelection();
+  renderPanel();
+  // One polite announcement per selection change — the panel itself is NOT a live
+  // region (03-ux §3.9: a whole card re-announcing on every tap is noise).
+  dom.panelStatus.textContent = t('panel.status.updated', state.lang);
+}
+
+/**
+ * Reconcile every row's `aria-pressed` with `state.ui.selectedSlot`. Rows are replaced
+ * wholesale by render(); this is the in-place counterpart used by selectSlot() and by
+ * syncCurrentSlot() when a boundary crossing retires a "follow the live slot"
+ * selection.
+ */
+function applySelection() {
+  const selected = state.ui.selectedSlot;
+  for (const list of [dom.dayList, dom.nightList]) {
+    if (!list) continue;
+    for (const button of list.querySelectorAll('button.slot')) {
+      button.setAttribute('aria-pressed', String(selected !== null && button.dataset.slot === selected));
+    }
+  }
+}
+
+/** The schedule slot carrying `key`, day half first, or null when there is none. */
+function findSlotByKey(key) {
+  if (!state.schedule) return null;
+  const slots = [...(state.schedule.daySlots || []), ...(state.schedule.nightSlots || [])];
+  return slots.find((slot) => slotKey(slot) === key) || null;
+}
+
+/**
+ * Blank every value node of S9 (used when the panel is hidden entirely or shows only
+ * the neutral prompt). The panel never leaves stale slot text in the DOM behind a
+ * hidden body.
+ */
+function clearPanelValues() {
+  for (const node of [
+    dom.panelName, dom.panelRange, dom.panelWarnText, dom.panelNote, dom.panelTierNote,
+    dom.panelMeaning, dom.panelGoodFor, dom.panelBadFor, dom.panelNuance,
+  ]) {
+    node.textContent = '';
+  }
+  dom.panelWarn.hidden = true;
+}
+
+/**
+ * S9 — the choghadiya detail panel (v2.3.0 CR6, 03-ux §3.9).
+ *
+ * What it shows, in the spec's own order of precedence:
+ *   1. the user's explicit selection (`state.ui.selectedSlot`), else
+ *   2. the LIVE current choghadiya when the viewed date is today at the viewed
+ *      location (`resolveCurrentSlot` returns non-null only then — US-13 AC3), else
+ *   3. the neutral `panel.selectPrompt` (off-today, nothing tapped).
+ *
+ * Hidden entirely while there is no location or the schedule is not defined — S3 owns
+ * that screen and the row buttons do not exist there either (§3.9 states table).
+ *
+ * Contextual notes: the overlap warning is emitted exactly when `overlappingPeriod()`
+ * returns a slug for the SHOWN slot, and its key is the slug's own concrete key
+ * (`panel.note.overlay.<slug>` — three keys, no interpolation, §6.1 note 5), so the
+ * sentence names WHICH period overlaps. The tier note is always present (current,
+ * selected and off-today-selected alike); `panel.note.current` / `panel.note.tapAgain`
+ * distinguish the live slot from a tapped one.
+ *
+ * Every value is written with textContent only (NFR-S2) and every string comes from the
+ * dictionary in the ACTIVE language, so a language or time-format toggle re-renders it
+ * correctly in the same pass (03-ux F7 step 2 / §3.9).
+ */
+function renderPanel() {
+  const ready = Boolean(state.location) && isRenderableSchedule(state.schedule);
+  if (!ready) {
+    dom.panel.hidden = true;
+    clearPanelValues();
+    return;
+  }
+  dom.panel.hidden = false;
+
+  const { lang } = state;
+  const { timezone } = state.location;
+  const current = resolveCurrentSlot(state.schedule, new Date());
+  const currentKey = current ? slotKey(current) : null;
+  const shown = state.ui.selectedSlot ? findSlotByKey(state.ui.selectedSlot) : current;
+
+  if (!shown) {
+    // Off-today, nothing selected: heading + the neutral prompt only — no badge, no
+    // tier note, no content fields (§3.9 "Off-today, nothing selected"). The value
+    // nodes are cleared too, so no stale slot text can linger in the DOM behind the
+    // hidden body (and a screen-reader user can never reach a leftover sentence).
+    dom.panelBody.hidden = true;
+    dom.panelPrompt.hidden = false;
+    dom.panelBadge.hidden = true;
+    clearPanelValues();
+    return;
+  }
+
+  dom.panelPrompt.hidden = true;
+  dom.panelBody.hidden = false;
+
+  const isLive = currentKey !== null && slotKey(shown) === currentKey;
+  dom.panelBadge.hidden = !isLive;
+
+  // Name in both scripts, matching the row's zone-2 convention: "अमृत · Amrit" (HI)
+  // or "Amrit" (EN). The range uses the active 12h/24h format and the location's zone
+  // through the same safe formatter as every other time on the page.
+  const latin = t(`quality.${shown.name}`, 'en');
+  const local = t(`quality.${shown.name}`, lang);
+  dom.panelName.textContent = lang === 'hi' ? `${local} · ${latin}` : latin;
+
+  const from = safeFormatTime(shown.start, timezone, lang, state.hourCycle);
+  const to = safeFormatTime(shown.end, timezone, lang, state.hourCycle);
+  dom.panelRange.textContent = from && to ? `${from} – ${to}` : '';
+
+  const slug = state.inauspicious ? overlappingPeriod(shown, state.inauspicious) : null;
+  if (slug) {
+    dom.panelWarnText.textContent = t(`panel.note.overlay.${slug}`, lang);
+    dom.panelWarn.hidden = false;
+  } else {
+    dom.panelWarnText.textContent = '';
+    dom.panelWarn.hidden = true;
+  }
+
+  dom.panelNote.textContent = t(isLive ? 'panel.note.current' : 'panel.note.tapAgain', lang);
+  dom.panelTierNote.textContent = t(`panel.note.${TIER_NOTE_KEY[shown.tier] || 'neutral'}`, lang);
+
+  dom.panelMeaning.textContent = t(`panel.${shown.name}.meaning`, lang);
+  dom.panelGoodFor.textContent = t(`panel.${shown.name}.goodFor`, lang);
+  dom.panelBadFor.textContent = t(`panel.${shown.name}.badFor`, lang);
+  dom.panelNuance.textContent = t(`panel.${shown.name}.nuance`, lang);
 }
 
 /**
@@ -1001,7 +1182,16 @@ function syncCurrentSlot(force) {
   const current = resolveCurrentSlot(state.schedule, new Date());
   const key = current ? slotKey(current) : null;
   if (!force && key === appliedCurrentKey) return;
+  const previousKey = appliedCurrentKey;
   appliedCurrentKey = key;
+
+  // FE-6 (03-ux §3.9 "Slot boundary crossed while the page is open"): a selection that
+  // IS the previously live slot (or the follow-the-live-slot default) keeps following
+  // the new current slot; an explicit selection of a DIFFERENT slot is preserved — the
+  // poll must never yank the panel away from a deliberate choice.
+  if (key !== previousKey && (state.ui.selectedSlot === null || state.ui.selectedSlot === previousKey)) {
+    state.ui.selectedSlot = null;
+  }
 
   for (const list of [dom.dayList, dom.nightList]) {
     if (!list) continue;
@@ -1009,13 +1199,16 @@ function syncCurrentSlot(force) {
       setCurrent(button, key !== null && button.dataset.slot === key);
     }
   }
+  applySelection(); // rows may be freshly built (force) — the selection ring must survive
+  renderPanel(); // …and S9 follows the live slot when the user has not selected one
 }
 
 /**
  * ≤ 60 s, visibility-aware poll (US-14 AC4, PRD Q2): the highlight advances while the
  * page stays open, no work happens in a hidden tab, and returning to the tab catches
  * up immediately instead of waiting a full interval. A tick never re-renders the
- * lists, so an open disclosure and the focused row survive it.
+ * lists, so the S9 selection, the focused row and the scroll position all survive it
+ * (syncCurrentSlot only repaints S9 when the live slot actually moved).
  */
 function startSlotPoll() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -1138,6 +1331,9 @@ function render() {
   renderSections();
   renderPeriods(); // CR5 — S8 renders from the *Periods arrays (all occurrences)
   syncCurrentSlot(true); // rows are freshly built — (re)apply the current-slot marker
+  // syncCurrentSlot() ends by repainting S9 (FE-6): the panel shows the user's
+  // selection, or follows the live slot when there is none, so a language /
+  // time-format / date / location change re-renders its content in the same pass.
 }
 
 /**
@@ -1532,11 +1728,18 @@ function setRows(list, slots) {
 /**
  * One slot row: a single <button> (whole row is the tap/keyboard target, ≥ 56 px)
  * with the 03-ux §3 zones — name (both scripts in the active language), time range in
- * the active format (12h default, v2.3.0 CR1), quality chip (tier word + glyph) — plus
- * the FE-05 disclosure line. Built with createElement/textContent only (NFR-S2).
+ * the active format (12h default, v2.3.0 CR1), quality chip (tier word + glyph).
+ * Built with createElement/textContent only (NFR-S2).
  *
- * The button carries `aria-expanded` + `aria-controls` for its `.meaning` line and
- * stages the accessible-name parts on `dataset`; `syncCurrentSlot()` completes the
+ * FE-6 (v2.3.0 CR6, 03-ux §3.9): the row is a SELECTION control for the S9 panel —
+ * `aria-pressed` mirrors `state.ui.selectedSlot` and `aria-controls="choghadiya-panel"`
+ * names what it drives. The v1.0.1 inline `.meaning` disclosure line (and its
+ * `aria-expanded`) is GONE: the panel now carries meaning / good-for / bad-for, and
+ * printing the same copy twice on one screen is worse than one tap. `aria-current` +
+ * the "अभी / Now" badge are applied separately by syncCurrentSlot() and stay EXCLUSIVE
+ * to the live row (US-14 AC1) — the two ARIA states are never conflated.
+ *
+ * The accessible name parts are staged on `dataset`; syncCurrentSlot() completes the
  * label with the current state when the row is live (03-ux §7.3 — name, time range,
  * tier, current state, in that order).
  */
@@ -1549,8 +1752,7 @@ function slotRow(slot) {
   const localName = t(`quality.${slot.name}`, lang);
   const tierWord = t(`tier.${slot.tier}`, lang);
   const key = slotKey(slot);
-  const expanded = state.ui.expandedSlot === key;
-  const meaningId = `meaning-${slot.half}-${slot.index}`;
+  const selected = state.ui.selectedSlot === key;
 
   const item = document.createElement('li');
   const button = document.createElement('button');
@@ -1562,8 +1764,8 @@ function slotRow(slot) {
   button.dataset.name = lang === 'hi' ? `${localName}, ${latinName}` : latinName;
   button.dataset.time = `${from} – ${to}`;
   button.dataset.tier = tierWord;
-  button.setAttribute('aria-expanded', String(expanded));
-  button.setAttribute('aria-controls', meaningId);
+  button.setAttribute('aria-pressed', String(selected));
+  button.setAttribute('aria-controls', 'choghadiya-panel');
 
   // Zone 2 — "लाभ · Labh" when HI, "Labh" when EN (03-ux §3 zone 2).
   const name = document.createElement('span');
@@ -1591,18 +1793,14 @@ function slotRow(slot) {
   meta.append(chip);
 
   button.append(name, time, meta);
-  button.addEventListener('click', () => toggleMeaning(button, item, slot));
+  // FE-6: a tap SELECTS (and a second tap deselects) this slot into the S9 panel. The
+  // update is in place, so the button keeps focus and the list does not jump (§3.9).
+  button.addEventListener('click', () => selectSlot(slot));
 
-  // Inline disclosure line: ONLY the already-known quality meaning, no new content
-  // and no request (03-ux §4.5). A <span> because it sits inside the <li> as flow
-  // content and is displayed as a block by `.meaning`.
-  const meaning = document.createElement('span');
-  meaning.className = 'meaning';
-  meaning.id = meaningId;
-  meaning.textContent = t(`meaning.${slot.name}`, lang);
-  meaning.hidden = !expanded;
-
-  item.append(button, meaning);
+  // The v1.0.1 inline `.meaning` disclosure line is REMOVED here (03-ux §3.9): the S9
+  // panel carries meaning / good-for / bad-for, so the row is once again just a row.
+  // The `meaning.*` dictionary keys stay in §6/i18n.js (the i18n contract locks them).
+  item.append(button);
   return item;
 }
 

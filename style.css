@@ -31,6 +31,11 @@
   --qual-inauspicious-fg: #8A1B1B;  --qual-inauspicious-bg: #FCE9E7;
   --current-bg:       #FFE8D6;
   --current-fg:       #7A2C0E;
+  /* 03-ux §4.7 — the v2.3.0 "selected (not current)" row state. Named separately from
+     --brand so the two states can never be confused in code; §4.8 verifies --text /
+     --text-muted on --selected-bg and the ring on --bg. */
+  --selected-bg:      #EFE6D9;
+  --selected-border:  #9A3412;
   --focus:            #9A3412;
   --danger:           #8A1B1B;
 
@@ -77,6 +82,8 @@
     --qual-inauspicious-fg: #FFB4AB;  --qual-inauspicious-bg: #3B1A1A;
     --current-bg: #4A2A10;
     --current-fg: #FFD9A3;
+    --selected-bg:     #2A2A2A;
+    --selected-border: #F0A868;
     --focus:      #8FB4FF;
     --danger:     #FFB4AB;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4);
@@ -101,6 +108,8 @@
   --qual-inauspicious-fg: #FFB4AB;  --qual-inauspicious-bg: #3B1A1A;
   --current-bg: #4A2A10;
   --current-fg: #FFD9A3;
+  --selected-bg:     #2A2A2A;
+  --selected-border: #F0A868;
   --focus:      #8FB4FF;
   --danger:     #FFB4AB;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
@@ -504,7 +513,10 @@ header.app {
      .slot-name  zone 2 — slot name, both scripts in the active language
      .slot .time zone 3 — 24-hour range, viewed location's tz
      .slot-meta  zone 4 — optional .badge-now + .quality chip (word + glyph)
-     .meaning    inline disclosure line, toggled by FE-05 (aria-expanded)
+   The v1.0.1 `.meaning` inline disclosure line is GONE (v2.3.0 CR6, 03-ux §3.9): the
+   S9 detail panel carries meaning / good-for / bad-for, and the row is now a SELECTION
+   control (`aria-pressed` + `aria-controls="choghadiya-panel"`) instead of a
+   disclosure (`aria-expanded`). The current-slot row is `.slot[aria-current="true"]`.
    ========================================================================== */
 
 .slot {
@@ -545,14 +557,16 @@ header.app {
   gap: var(--sp-2);
   min-width: 0;
 }
-/* Disclosure line, expanded by the row button (03-ux §4.5). It is a SIBLING of the
-   button inside the same <li> — a <button> flattens its descendants for assistive
-   tech — so it lays out as a block under the row, not as a fourth grid cell. */
-.meaning {
-  display: block;
-  padding: 0 var(--sp-4) var(--sp-3);
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
+/* Selected slot row — .slot[aria-pressed="true"] (v2.3.0 CR6, 03-ux §4.7/§4.9).
+   --selected-bg fill + a 2 px ALL-ROUND inset ring in --selected-border, so the
+   selected state is shape-distinct from the current state (which is a --current-bg
+   fill + a 2 px LEFT bar, §4.5). A row that is BOTH keeps the current fill and both
+   cues via the combined rule below; the live state also stays announced by
+   `aria-current` + the "अभी / Now" badge, so nothing here is colour-only. Hover uses
+   --surface-2, i.e. hover ≠ selected. */
+.slot[aria-pressed="true"] {
+  background: var(--selected-bg);
+  box-shadow: inset 0 0 0 2px var(--selected-border);
 }
 
 /* Current slot — .slot[aria-current="true"]: --current-bg fill, 2 px inset left border
@@ -560,6 +574,12 @@ header.app {
 .slot[aria-current="true"] {
   background: var(--current-bg);
   box-shadow: inset 2px 0 0 0 var(--current-fg);
+}
+
+/* An explicitly selected row that is ALSO the live row inherits the current fill but
+   keeps BOTH cues: the selection ring and the 2 px left current bar. */
+.slot[aria-current="true"][aria-pressed="true"] {
+  box-shadow: inset 2px 0 0 0 var(--current-fg), inset 0 0 0 2px var(--selected-border);
 }
 
 /* Quality chip — .quality: pill, fs-sm, tinted bg per tier, leading glyph.
@@ -982,6 +1002,128 @@ footer.app p { margin: 0 }
   .period__head { grid-template-columns: minmax(0, 1fr) }
   .period__range,
   .period__na { white-space: normal }
+}
+
+/* ==========================================================================
+   S9 choghadiya detail panel (v2.3.0 CR6, 03-ux §3.9, §4.9) — FE-6
+   One --surface card, --r-lg, --sp-4 padding, below the S8 periods block. The panel
+   is a labelled <section aria-labelledby>, is NOT an aria-live region and contains no
+   focusable control (the slot rows are the only way in/out). Field labels are real
+   text above each value, separated by --border rules. The overlap warning is the
+   shared inauspicious "avoid" class (--qual-inauspicious-fg on --surface, 9.32/9.82
+   per §4.8) with a 2 px inline-start bar, and its ⚠ glyph is decorative — the
+   dictionary sentence carries the meaning, so it is never colour-only. No new
+   transition: the panel content swap is instantaneous (§4.6).
+   ========================================================================== */
+
+.panel {
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-4);
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+.panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.panel__head h2 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  font-weight: 600;
+}
+.panel__badge {
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--current-bg);
+  color: var(--current-fg);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.panel__prompt {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+.panel__slot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin: var(--sp-3) 0 0;
+}
+.panel__slot-name {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+}
+.panel__slot-range {
+  font-size: var(--fs-base);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.panel__warn {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-inline-start: 2px solid var(--qual-inauspicious-fg);
+  border-radius: var(--r-sm);
+  background: var(--qual-inauspicious-bg);
+  color: var(--qual-inauspicious-fg);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.panel__note,
+.panel__tier {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.panel__fields {
+  margin: var(--sp-4) 0 0;
+}
+.panel__field + .panel__field {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.panel__label {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.panel__value {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--text);
+  /* Long unbroken words (a pasted URL-like city name is not possible here, but the
+     Hindi copy contains em-dash-joined clauses) wrap rather than push the page wide:
+     the panel must not introduce horizontal scroll at 320 px. */
+  overflow-wrap: anywhere;
+}
+.panel__value--sm {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* <=419 px (the slot-row two-zone band): the range drops under the name rather than
+   competing for the row's width (03-ux §3.9/§5). Nothing else changes — the field
+   labels and values are already a single column. */
+@media (max-width: 419px) {
+  .panel__slot-range { white-space: normal }
 }
 
 /* ==========================================================================
