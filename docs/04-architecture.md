@@ -229,7 +229,10 @@ export function tierFor(name)                     // -> Slot.tier
 export function resolveCurrentSlot(schedule, now /* Date */)
   // -> Slot | null  (null when schedule.date !== today-at-location or !schedule.defined)
 export function todayIn(timeZone, now = new Date())   // -> "YYYY-MM-DD"
-export function formatTime(date, timeZone, lang)      // -> "06:32" (24h, both locales)
+export function formatTime(date, timeZone, lang, opts = {})
+  // -> "06:32 am" (default, opts.hourCycle 'h12') | "06:32" (opts.hourCycle 'h23')
+  //    'h23' is byte-identical to v2.2.0; 'h12' uses Intl hourCycle:'h12' with
+  //    locale-appropriate am/pm ('hi-IN'/'en-IN') and Latin digits. v2.3.0 item 1.
 export function formatDate(dateISO, timeZone, lang)   // -> "बुधवार, 14 अक्टूबर 2026" | "Wednesday, 14 October 2026"
 export function addDays(dateISO, n)                   // -> "YYYY-MM-DD" (civil-date arithmetic, tz-safe)
 

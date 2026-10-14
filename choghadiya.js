@@ -224,16 +224,44 @@ export function resolveCurrentSlot(schedule, now = new Date()) {
   return null;
 }
 
-/** "HH:MM" 24-hour in the location's time zone (both locales). */
-export function formatTime(date, timeZone, lang) {
+/**
+ * "HH:MM" wall clock in the location's time zone.
+ *
+ * `opts.hourCycle` is `'h12'` (the product default when `opts` is omitted, e.g.
+ * "06:32 am") or `'h23'` (e.g. "06:32"); anything else throws a RangeError.
+ *
+ *  - `'h23'` is byte-identical to the v2.2.0 output: 24-hour is
+ *    locale-independent and always renders through `'en-GB'`, so `hi` and `en`
+ *    stay equal (03-ux §8).
+ *  - `'h12'` renders through Intl with `hourCycle: 'h12'`, so the day period is
+ *    the locale's own ("am"/"pm" for both `hi-IN` and `en-IN`) — never a
+ *    hand-rolled string — while `numberingSystem: 'latn'` keeps the digits Latin,
+ *    matching every string the app already shows.
+ *
+ * Pure: no DOM, no network, no storage.
+ */
+export function formatTime(date, timeZone, lang, opts = {}) {
   if (!isRealDate(date)) throw new RangeError('formatTime: invalid Date');
-  void lang; // 24-hour format is locale-independent (03-ux §8)
-  return new Intl.DateTimeFormat('en-GB', {
+  const { hourCycle = 'h12' } = opts ?? {};
+  if (hourCycle === 'h23') {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      hourCycle: 'h23',
+    }).format(date);
+  }
+  if (hourCycle !== 'h12') {
+    throw new RangeError(`formatTime: unknown hourCycle ${JSON.stringify(hourCycle)}`);
+  }
+  const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
-    hourCycle: 'h23',
+    hourCycle: 'h12',
+    numberingSystem: 'latn',
   }).format(date);
 }
 

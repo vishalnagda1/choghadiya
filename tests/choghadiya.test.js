@@ -34,6 +34,9 @@ const istMinutes = (hhmm, dateISO = MUMBAI_DATE) => {
   return Date.UTC(y, mo - 1, d, h, m) - 5.5 * 3600 * 1000; // IST = UTC+5:30
 };
 const ONE_MIN = 60 * 1000;
+// BE-05: every pre-v2.3.0 expectation was 24-hour output, so each now states the
+// cycle explicitly; 'h12' is the default and needs no opts.
+const H23 = { hourCycle: 'h23' };
 
 test('buildSchedule(Mumbai 2026-10-14) is the 03-ux §8 fixture', () => {
   const schedule = buildSchedule({ location: MUMBAI, date: MUMBAI_DATE });
@@ -206,10 +209,10 @@ test('todayIn / addDays / formatTime / formatDate obey the §5.1 contract', () =
   assert.equal(addDays('2026-02-28', 1), '2026-03-01');
   assert.throws(() => addDays('14-10-2026', 1), TypeError);
 
-  // formatTime: 24-hour, location time zone, both locales.
+  // formatTime: explicit 24-hour, location time zone, both locales.
   const sunrise = buildSchedule({ location: MUMBAI, date: MUMBAI_DATE }).sunrise;
-  assert.match(formatTime(sunrise, 'Asia/Kolkata', 'en'), /^0[56]:3[0-9]$/);
-  assert.equal(formatTime(sunrise, 'Asia/Kolkata', 'hi'), formatTime(sunrise, 'Asia/Kolkata', 'en'));
+  assert.match(formatTime(sunrise, 'Asia/Kolkata', 'en', H23), /^0[56]:3[0-9]$/);
+  assert.equal(formatTime(sunrise, 'Asia/Kolkata', 'hi', H23), formatTime(sunrise, 'Asia/Kolkata', 'en', H23));
   assert.throws(() => formatTime(new Date('nope'), 'Asia/Kolkata', 'en'), RangeError);
 
   // formatDate: localised full date.
@@ -235,24 +238,24 @@ test('formatTime renders in the location IANA zone, 24-hour, identical in both l
   const instant = new Date('2026-10-14T01:02:00Z');
 
   // One instant -> three wall clocks, decided by the IANA zone alone (none by the device).
-  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en'), '06:32');
-  assert.equal(formatTime(instant, 'Europe/London', 'en'), '02:02');
-  assert.equal(formatTime(instant, 'UTC', 'en'), '01:02');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', H23), '06:32');
+  assert.equal(formatTime(instant, 'Europe/London', 'en', H23), '02:02');
+  assert.equal(formatTime(instant, 'UTC', 'en', H23), '01:02');
 
   // 24-hour in both locales, in every zone; never an AM/PM marker.
   for (const [tz, expected] of [['Asia/Kolkata', '06:32'], ['Europe/London', '02:02'], ['UTC', '01:02']]) {
-    assert.equal(formatTime(instant, tz, 'hi'), expected, `${tz}: hi === en`);
-    assert.doesNotMatch(formatTime(instant, tz, 'en'), /[AP]\.?M/i, `${tz}: no AM/PM`);
+    assert.equal(formatTime(instant, tz, 'hi', H23), expected, `${tz}: hi === en`);
+    assert.doesNotMatch(formatTime(instant, tz, 'en', H23), /[AP]\.?M/i, `${tz}: no AM/PM`);
   }
 
   // hourCycle h23: local midnight is "00:00", never the "24:00" artefact.
-  assert.equal(formatTime(new Date('2026-10-14T18:30:00Z'), 'Asia/Kolkata', 'en'), '00:00');
+  assert.equal(formatTime(new Date('2026-10-14T18:30:00Z'), 'Asia/Kolkata', 'en', H23), '00:00');
 });
 
 test('formatTime renders every slot on the location clock (US-7 AC1)', () => {
   const schedule = buildSchedule({ location: LONDON, date: '2026-03-29' });
   for (const slot of [...schedule.daySlots, ...schedule.nightSlots]) {
-    const rendered = formatTime(slot.start, LONDON.timezone, 'en');
+    const rendered = formatTime(slot.start, LONDON.timezone, 'en', H23);
     assert.match(rendered, /^\d{2}:\d{2}$/);
     assert.equal(
       rendered,
@@ -264,7 +267,7 @@ test('formatTime renders every slot on the location clock (US-7 AC1)', () => {
       }).format(slot.start),
       'slot time is the location-zone rendering of the same instant',
     );
-    assert.notEqual(rendered, formatTime(slot.start, 'Asia/Kolkata', 'en'), 'a London view is never IST');
+    assert.notEqual(rendered, formatTime(slot.start, 'Asia/Kolkata', 'en', H23), 'a London view is never IST');
   }
 });
 
@@ -294,8 +297,8 @@ test('todayIn returns the location civil date, not the device date (US-3 AC3)', 
 test('DST fixture: London renders GMT before and BST after the spring transition (US-7 AC2)', () => {
   // UK DST begins 01:00 GMT on 2026-03-29 (clocks -> 02:00 BST), so the same UTC
   // wall time renders one hour later in the zone. No fixed offsets anywhere.
-  assert.equal(formatTime(new Date('2026-03-28T12:00:00Z'), 'Europe/London', 'en'), '12:00');
-  assert.equal(formatTime(new Date('2026-03-29T12:00:00Z'), 'Europe/London', 'en'), '13:00');
+  assert.equal(formatTime(new Date('2026-03-28T12:00:00Z'), 'Europe/London', 'en', H23), '12:00');
+  assert.equal(formatTime(new Date('2026-03-29T12:00:00Z'), 'Europe/London', 'en', H23), '13:00');
 
   const winter = buildSchedule({ location: LONDON, date: '2026-03-28' }); // Saturday, GMT
   const spring = buildSchedule({ location: LONDON, date: '2026-03-29' }); // Sunday, BST
@@ -308,8 +311,8 @@ test('DST fixture: London renders GMT before and BST after the spring transition
   // one solar day early would render 03-28's ~05:45 GMT for the 03-29 schedule).
   assert.equal(todayIn(LONDON.timezone, winter.sunrise), '2026-03-28');
   assert.equal(todayIn(LONDON.timezone, spring.sunrise), '2026-03-29');
-  const drift = localMinutes(formatTime(spring.sunrise, LONDON.timezone, 'en'))
-    - localMinutes(formatTime(winter.sunrise, LONDON.timezone, 'en'));
+  const drift = localMinutes(formatTime(spring.sunrise, LONDON.timezone, 'en', H23))
+    - localMinutes(formatTime(winter.sunrise, LONDON.timezone, 'en', H23));
   assert.ok(drift >= 50 && drift <= 61, `sunrise jumps ~57 min across the transition (got ${drift})`);
 
   // Weekday driving both sequences is the viewed civil date's (Sunday 2026-03-29).
@@ -319,12 +322,103 @@ test('DST fixture: London renders GMT before and BST after the spring transition
   assert.equal(winter.weekday, 6); // Saturday
 
   // Autumn: clocks go back at 01:00 BST on 2026-10-25.
-  assert.equal(formatTime(new Date('2026-10-24T12:00:00Z'), 'Europe/London', 'en'), '13:00');
-  assert.equal(formatTime(new Date('2026-10-25T12:00:00Z'), 'Europe/London', 'en'), '12:00');
+  assert.equal(formatTime(new Date('2026-10-24T12:00:00Z'), 'Europe/London', 'en', H23), '13:00');
+  assert.equal(formatTime(new Date('2026-10-25T12:00:00Z'), 'Europe/London', 'en', H23), '12:00');
   const autumn = buildSchedule({ location: LONDON, date: '2026-10-25' });
   assert.equal(autumn.defined, true);
   assert.equal(todayIn(LONDON.timezone, autumn.sunrise), '2026-10-25');
   assert.match(offsetLabel(autumn.sunrise, LONDON.timezone), /GMT\+00:00/);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BE-05 — hour-cycle contract (v2.3.0 change request item 1, docs/00-brief.md
+// change log). formatTime gains `opts.hourCycle` ∈ {'h12','h23'}; 'h12' is the
+// product default, 'h23' is byte-identical to the v2.2.0 output. Every string
+// below is a real Intl rendering pinned as a literal, so an accidental change of
+// cycle, locale or numbering system fails loudly instead of drifting.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const H12 = { hourCycle: 'h12' };
+
+test('formatTime defaults to 12-hour; h23 reproduces the v2.2.0 24-hour string (v2.3.0 item 1)', () => {
+  const instant = new Date('2026-10-14T01:02:00Z'); // 06:32 IST
+
+  // The 3-arg call (opts omitted) renders 12-hour — the product default.
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en'), '06:32 am');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'hi'), '06:32 am');
+  assert.equal(
+    formatTime(instant, 'Asia/Kolkata', 'en'),
+    formatTime(instant, 'Asia/Kolkata', 'en', H12),
+    'omitting opts === hourCycle h12',
+  );
+  // …and the explicit 24-hour cycle is the pre-v2.3.0 output, unchanged.
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', H23), '06:32');
+
+  // An empty / null / undefined-cycle opts object behaves as "omitted".
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', {}), '06:32 am');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', { hourCycle: undefined }), '06:32 am');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', null), '06:32 am');
+
+  // 12-hour carries a day period; 24-hour never does.
+  assert.match(formatTime(instant, 'Asia/Kolkata', 'en'), /[ap]m$/);
+  assert.doesNotMatch(formatTime(instant, 'Asia/Kolkata', 'en', H23), /[ap]m/i);
+
+  // Out-of-contract cycles are rejected, never silently ignored.
+  assert.throws(() => formatTime(instant, 'Asia/Kolkata', 'en', { hourCycle: 'h24' }), RangeError);
+  assert.throws(() => formatTime(instant, 'Asia/Kolkata', 'en', { hourCycle: '12h' }), RangeError);
+});
+
+test('formatTime 12-hour: pinned strings per locale and cycle, Asia/Kolkata (v2.3.0 item 1)', () => {
+  // [label, UTC instant, 12-hour, 24-hour]
+  const table = [
+    ['00:00', '2026-10-14T18:30:00Z', '12:00 am', '00:00'],
+    ['00:30', '2026-10-14T19:00:00Z', '12:30 am', '00:30'],
+    ['11:59', '2026-10-15T06:29:00Z', '11:59 am', '11:59'],
+    ['12:00', '2026-10-15T06:30:00Z', '12:00 pm', '12:00'],
+    ['12:01', '2026-10-15T06:31:00Z', '12:01 pm', '12:01'],
+    ['18:17', '2026-10-15T12:47:00Z', '06:17 pm', '18:17'],
+    ['23:59', '2026-10-15T18:29:00Z', '11:59 pm', '23:59'],
+  ];
+  for (const [label, iso, h12, h23] of table) {
+    const instant = new Date(iso);
+    for (const lang of ['en', 'hi']) {
+      assert.equal(formatTime(instant, 'Asia/Kolkata', lang, H12), h12, `${label} IST ${lang} h12`);
+      assert.equal(formatTime(instant, 'Asia/Kolkata', lang, H23), h23, `${label} IST ${lang} h23`);
+      assert.equal(formatTime(instant, 'Asia/Kolkata', lang), h12, `${label} IST ${lang} default`);
+    }
+  }
+  // Latin digits (never Devanagari) and the locale's own day period — the string
+  // is an Intl rendering, not a hand-rolled concatenation.
+  for (const lang of ['en', 'hi']) {
+    assert.match(
+      formatTime(new Date('2026-10-15T12:47:00Z'), 'Asia/Kolkata', lang, H12),
+      /^[0-9]{2}:[0-9]{2} [ap]m$/,
+      `${lang}: Latin digits + am/pm`,
+    );
+  }
+});
+
+test('formatTime 12-hour across the Europe/London DST transition, both cycles (US-7 AC2, v2.3.0 item 1)', () => {
+  // UK DST begins 01:00 GMT on 2026-03-29 (clocks -> 02:00 BST).
+  const table = [
+    ['2026-03-29T00:30:00Z', 'GMT', '12:30 am', '00:30'],
+    ['2026-03-29T01:30:00Z', 'BST', '02:30 am', '02:30'],
+    ['2026-03-29T12:00:00Z', 'BST', '01:00 pm', '13:00'],
+    ['2026-03-28T12:00:00Z', 'GMT', '12:00 pm', '12:00'],
+  ];
+  for (const [iso, label, h12, h23] of table) {
+    const instant = new Date(iso);
+    for (const lang of ['en', 'hi']) {
+      assert.equal(formatTime(instant, 'Europe/London', lang, H12), h12, `${iso} ${label} ${lang} h12`);
+      assert.equal(formatTime(instant, 'Europe/London', lang, H23), h23, `${iso} ${label} ${lang} h23`);
+    }
+  }
+  // Same instant, two zones, both cycles: the zone still decides the wall clock.
+  const instant = new Date('2026-03-29T00:30:00Z');
+  assert.equal(formatTime(instant, 'Europe/London', 'en'), '12:30 am');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en'), '06:00 am');
+  assert.equal(formatTime(instant, 'Europe/London', 'en', H23), '00:30');
+  assert.equal(formatTime(instant, 'Asia/Kolkata', 'en', H23), '06:00');
 });
 
 test('resolveCurrentSlot keeps the after-midnight slot in the previous day list (US-14 AC2, US-3 AC1)', () => {
