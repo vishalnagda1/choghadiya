@@ -161,6 +161,18 @@ and the pre-release security audit ([docs/09-security-audit.md](docs/09-security
 were both re-verified green at HEAD `d9a7b89` (QA: tests 64/64, smoke 31/31, axe clean;
 security: 0 Critical / 0 High, all F1–F3 fixes landed).
 
+### Post-deploy verification (deployed URL — closes QA KI-2 / US-19 AC2)
+
+Executed by the release step against the live <https://time.gitick.com/> after
+the v2.2.0 push and Pages rebuild:
+
+| Check | Result |
+|-------|--------|
+| Pages build for the release commit `b3b3164` | **built** (GitHub Pages API) |
+| Deployed shell is the new build | `?v=2.2.0` on `favicon.svg`/`style.css`/`app.js` + 3 internal module `?v=2.2.0` specifiers; all 7 assets **HTTP 200**; 21 `data-i18n` nodes (legacy page had none) |
+| Deployed smoke (real browser) | **16 rows** (8 day + 8 night) for a searched city, current-slot "Now" badge, sunrise 06:32 / sunset 18:16, **EN/HI toggle both render**, **no `NaN` / `Invalid Date`** |
+| M6 mobile FCP gate (Lighthouse 12.8.2, mobile + simulated throttling) | **1.34 s / 0.91 s / 1.34 s** over 3 runs → **max 1.34 s < 1.5 s gate: PASS** (QA's release-candidate run was 1.13 s local) |
+
 ---
 
 ## Deploy / rollback
