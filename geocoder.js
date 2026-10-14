@@ -24,6 +24,17 @@
 // A request cancelled by supersession rejects with the native AbortError (name
 // "AbortError") so callers can tell "superseded" apart from "geocoder failed";
 // the createGeocoder wrapper turns that into a quiet `null` resolution.
+//
+// Hardening (docs/06-threat-model.md §6.3):
+//   SEC-08  validateQuery also rejects control characters (C0 range + DEL) as
+//           `bad-query` with no request.
+//   SEC-11  mapResult DROPS a record whose latitude/longitude is non-finite or
+//           outside [-90, 90]/[-180, 180], or whose present-but-invalid IANA
+//           `timezone` fails `new Intl.DateTimeFormat('en', { timeZone })`;
+//           name/admin1/country are length-capped (≤ 200 chars). An absent tz is
+//           normalised to null and the record is kept.
+//   SEC-12  every cache write goes through setCapped(): ≤ 64 entries, FIFO
+//           eviction, shared by the module defaultCache and any caller Map.
 
 /** Design-time constants (docs/04-architecture.md §7). */
 export const DEBOUNCE_MS = 400;
@@ -31,6 +42,17 @@ export const GEOCODE_COUNT = 8;
 export const GEOCODE_ENDPOINT = 'https://geocoding-api.open-meteo.com/v1/search';
 export const MIN_QUERY_LENGTH = 2;
 export const MAX_QUERY_LENGTH = 64;
+
+/**
+ * SEC-12 hardening constants (docs/06-threat-model.md §6.3 / CH4). Kept OUT of
+ * the frozen §7 `CONFIG` mirror on purpose — that object is a pinned contract.
+ */
+
+/** In-memory cache cap; FIFO eviction beyond this (§6.3 SEC-12). */
+export const MAX_CACHE_ENTRIES = 64;
+
+/** Every third-party string is length-capped to this many chars (§6.3 SEC-11). */
+export const MAX_STRING_LENGTH = 200;
 
 /** Frozen mirror of the §7 constants (same shape as choghadiya.js CONFIG). */
 export const CONFIG = Object.freeze({
@@ -91,6 +113,14 @@ export function validateQuery(query) {
   if (trimmed.length > MAX_QUERY_LENGTH) {
     throw badQuery(`geocodeCity: query must be at most ${MAX_QUERY_LENGTH} characters`);
   }
+  // SEC-08: reject control characters (C0 range + DEL) — a real city name never
+  // contains them, and they must never reach the request URL or the DOM.
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const code = trimmed.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) {
+      throw badQuery('geocodeCity: query must not contain control characters');
+    }
+  }
   return trimmed;
 }
 
@@ -111,26 +141,75 @@ function cacheKey(query, lang) {
 }
 
 /**
- * Internal: map one Open-Meteo record to the §5.1 GeocodeResult. Records without
- * finite coordinates are dropped (the schedule engine needs them; "no NaN ever",
- * §8.1) — everything else is normalised to null rather than left undefined.
+ * Internal: true when `timeZone` is a real IANA name the platform accepts.
+ * `new Intl.DateTimeFormat` throws RangeError otherwise (§6.3 SEC-11 / RK9).
+ */
+function isValidTimeZone(timeZone) {
+  try {
+    // Constructing the formatter is the validation; the value itself is unused.
+    // eslint-disable-next-line no-new
+    new Intl.DateTimeFormat('en', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Internal: length-cap a third-party string to MAX_STRING_LENGTH (§6.3 SEC-11). */
+function capString(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  return value.length > MAX_STRING_LENGTH ? value.slice(0, MAX_STRING_LENGTH) : value;
+}
+
+/**
+ * Internal: map one Open-Meteo record to the §5.1 GeocodeResult. A record is
+ * DROPPED (returns null) — never crashed on — when (§6.3 SEC-11 / RK9):
+ *   - `latitude`/`longitude` are not finite, or fall outside [-90, 90]/[-180, 180];
+ *   - `timezone` is present as a string but is not a valid IANA name.
+ * Absent/non-string optional fields are normalised to null, and every string is
+ * length-capped before it can reach storage or the DOM.
  */
 function mapResult(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const latitude = Number(raw.latitude);
   const longitude = Number(raw.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null;
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+
+  // Absent tz → null (kept); a present-but-invalid string tz → drop the result.
+  let timezone = null;
+  if (typeof raw.timezone === 'string') {
+    if (!isValidTimeZone(raw.timezone)) return null;
+    timezone = raw.timezone;
+  }
+
   return {
-    name: typeof raw.name === 'string' ? raw.name : '',
-    admin1: typeof raw.admin1 === 'string' ? raw.admin1 : null,
-    country: typeof raw.country === 'string' ? raw.country : null,
+    name: capString(raw.name, ''),
+    admin1: capString(raw.admin1, null),
+    country: capString(raw.country, null),
     latitude,
     longitude,
-    timezone: typeof raw.timezone === 'string' ? raw.timezone : null,
+    timezone,
     population: raw.population == null || !Number.isFinite(Number(raw.population))
       ? null
       : Number(raw.population),
   };
+}
+
+/**
+ * Internal: capped, FIFO cache write shared by the module `defaultCache` and any
+ * caller-supplied Map (createGeocoder). Map preserves insertion order, so the
+ * first key is always the oldest; beyond MAX_CACHE_ENTRIES it is evicted first
+ * (§6.3 SEC-12). A cache HIT returns early and never re-inserts, keeping FIFO
+ * (not LRU) semantics exact.
+ */
+function setCapped(store, key, value) {
+  if (!store) return;
+  if (!store.has(key) && store.size >= MAX_CACHE_ENTRIES) {
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) store.delete(oldest);
+  }
+  store.set(key, value);
 }
 
 /** Module-level default cache so the plain `geocodeCity` path caches too (§5.2). */
@@ -211,7 +290,7 @@ export async function geocodeCity(query, { fetchImpl, signal, lang = 'en', cache
   // Absent/empty results is a normal, non-error outcome → S7 (§5.2, US-5 AC5).
   if (!payload || !Array.isArray(payload.results)) return [];
   const results = payload.results.map(mapResult).filter((r) => r !== null);
-  if (store) store.set(key, results.slice());
+  setCapped(store, key, results.slice());
   return results;
 }
 

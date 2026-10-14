@@ -18,6 +18,8 @@ import {
   GEOCODE_ENDPOINT,
   GEOCODER_ERROR_CODES,
   GeocoderError,
+  MAX_CACHE_ENTRIES,
+  MAX_STRING_LENGTH,
   buildGeocodeUrl,
   clearCache,
   createGeocoder,
@@ -506,4 +508,134 @@ test('buildGeocodeUrl is the single source of the request URL', () => {
     'https://geocoding-api.open-meteo.com/v1/search?name=New%20York&count=8&language=hi',
   );
   assert.equal(buildGeocodeUrl('Mumbai', 'xx'), buildGeocodeUrl('Mumbai', 'en'));
+});
+
+// ------------------------------------------- SEC-08/11/12 hardening (t_cc4f2f25) ---
+// docs/06-threat-model.md §6.3: query control-char rejection (SEC-08), range/type
+// + tz validity + string caps on third-party records (SEC-11), and a bounded FIFO
+// cache (SEC-12). Every probe below is offline (injected fetchImpl).
+
+test('SEC-11: out-of-range latitude/longitude drop the result; boundaries are kept', async () => {
+  const rec = (over) => ({ name: 'X', latitude: 0, longitude: 0, timezone: 'Asia/Kolkata', ...over });
+  const { impl } = mockFetch(
+    results([
+      rec({ name: 'LatHigh', latitude: 91 }),
+      rec({ name: 'LatLow', latitude: -91 }),
+      rec({ name: 'LonHigh', longitude: 181 }),
+      rec({ name: 'LonLow', longitude: -181 }),
+      rec({ name: 'LatNan', latitude: 'not-a-number' }),
+      rec({ name: 'EdgeNE', latitude: 90, longitude: 180 }),
+      rec({ name: 'EdgeSW', latitude: -90, longitude: -180 }),
+    ]),
+  );
+  const out = await geocodeCity('Edges', { fetchImpl: impl, cache: new Map() });
+  assert.deepEqual(
+    out.map((r) => r.name),
+    ['EdgeNE', 'EdgeSW'],
+    'only in-range finite coords survive; ±90/±180 are valid',
+  );
+});
+
+test('SEC-11: an invalid IANA timezone drops the whole result (RK9)', async () => {
+  const rec = (name, timezone) => ({ name, latitude: 10, longitude: 20, timezone });
+  const { impl } = mockFetch(
+    results([
+      rec('Evil', 'Evil/Zone'),
+      rec('Garbage', 'not a time zone'),
+      rec('Empty', ''),
+      rec('Good', 'America/New_York'),
+      { name: 'Absent', latitude: 5, longitude: 6 }, // no timezone field → kept, null
+    ]),
+  );
+  const out = await geocodeCity('Tz', { fetchImpl: impl, cache: new Map() });
+  assert.deepEqual(out.map((r) => r.name), ['Good', 'Absent']);
+  assert.equal(out[0].timezone, 'America/New_York');
+  assert.equal(out[1].timezone, null, 'absent tz normalises to null, result kept');
+
+  // The exact downstream crash path (todayIn) can no longer be reached: any tz
+  // that survives this map is a constructible Intl time zone.
+  assert.doesNotThrow(() => new Intl.DateTimeFormat('en', { timeZone: out[0].timezone }));
+});
+
+test('SEC-11: name/admin1/country are length-capped to exactly 200 chars', async () => {
+  const long = (c) => c.repeat(500);
+  const { impl } = mockFetch(
+    results([
+      {
+        name: long('n'),
+        admin1: long('a'),
+        country: long('c'),
+        latitude: 1,
+        longitude: 2,
+        timezone: 'Asia/Kolkata',
+      },
+    ]),
+  );
+  const [out] = await geocodeCity('Long', { fetchImpl: impl, cache: new Map() });
+  assert.equal(MAX_STRING_LENGTH, 200);
+  assert.equal(out.name.length, 200);
+  assert.equal(out.admin1.length, 200);
+  assert.equal(out.country.length, 200);
+  assert.equal(out.name, 'n'.repeat(200), 'truncated from the front, same content');
+});
+
+test('SEC-08: control characters in a query reject bad-query with zero requests', async () => {
+  const { impl, calls } = mockFetch(results([]));
+  const cache = new Map();
+  for (const bad of ['a\u0000\u0007b', 'Mumbai\u007f', '\u0001\u0002', 'ok\u000e']) {
+    await assert.rejects(
+      geocodeCity(bad, { fetchImpl: impl, cache }),
+      (error) => error instanceof GeocoderError && error.code === 'bad-query',
+      `expected bad-query for ${JSON.stringify(bad)}`,
+    );
+  }
+  assert.equal(calls.length, 0, 'validation failure never touches fetch');
+
+  // Both createGeocoder entry points reject without a request or a stray timer.
+  const g = createGeocoder({ fetchImpl: impl, debounceMs: 5 });
+  await assert.rejects(g.search('a\u0000b'), { code: 'bad-query' });
+  await assert.rejects(g.searchNow('x\u0007y'), { code: 'bad-query' });
+  await sleep(30);
+  assert.equal(calls.length, 0, 'no request from either entry point');
+
+  assert.equal(validateQuery('Santa Fe'), 'Santa Fe', 'plain queries still pass');
+});
+
+test('SEC-12: caller-supplied cache is capped at 64 entries, FIFO eviction', async () => {
+  assert.equal(MAX_CACHE_ENTRIES, 64);
+  const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+  const cache = new Map();
+  const key = (q) => `en\u0000${q}`;
+
+  for (let i = 0; i < 65; i += 1) {
+    await geocodeCity(`city${i}`, { fetchImpl: impl, cache });
+  }
+  assert.equal(calls.length, 65, 'each distinct query is a fresh request');
+  assert.equal(cache.size, 64, 'the cache never exceeds the 64-entry cap');
+  assert.equal(cache.has(key('city0')), false, 'the oldest key was evicted first (FIFO)');
+  assert.equal(cache.has(key('city1')), true, 'the second-oldest survived');
+  assert.equal(cache.has(key('city64')), true, 'the newest key is kept');
+
+  await geocodeCity('city64', { fetchImpl: impl, cache });
+  assert.equal(calls.length, 65, 'a still-cached query is a hit (no request)');
+  await geocodeCity('city0', { fetchImpl: impl, cache });
+  assert.equal(calls.length, 66, 'the evicted key re-fetches (proves it was dropped)');
+});
+
+test('SEC-12: the module default cache shares the same capped write helper', async () => {
+  clearCache();
+  const { impl, calls } = mockFetch(results([MUMBAI_RAW]));
+  for (let i = 0; i < 65; i += 1) {
+    await geocodeCity(`dcity${i}`, { fetchImpl: impl }); // default module cache
+  }
+  const filled = calls.length;
+  assert.equal(filled, 65);
+
+  // Oldest evicted → a re-query is a miss and issues a request.
+  await geocodeCity('dcity0', { fetchImpl: impl });
+  assert.equal(calls.length, filled + 1, 'oldest default-cache key was evicted');
+  // Newest still present → a re-query is a hit.
+  await geocodeCity('dcity64', { fetchImpl: impl });
+  assert.equal(calls.length, filled + 1, 'newest default-cache key is still cached');
+  clearCache();
 });
