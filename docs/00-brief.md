@@ -100,11 +100,11 @@ tag (semantic version bump from current package.json 2.1.0, e.g. v2.2.0).
      Default = the current ongoing choghadiya; tapping any other slot shows that one;
      tapping the same slot again (or reload) reverts to the current slot. Bilingual
      (EN/HI, Hindi default); meanings need authentic content research.
-  7. **Persistence & caching via sessionStorage** — use `sessionStorage` to persist
-     user settings (time format 12h/24h, language, last selected location) across
-     reloads, and to cache geocoding API responses for a bounded TTL so the same
-     city-name query is not re-hit repeatedly. NOTE: `sessionStorage` survives reload
-     but clears on tab close (per-tab); if persistence across browser restarts is
-     wanted, that is `localStorage` — team to confirm with client which is intended.
+  7. **Persistence & caching via localStorage (client-confirmed)** — use `localStorage`
+     to persist user settings (time format 12h/24h, language, last selected location)
+     across full browser restarts, and cache geocoding API responses with a bounded TTL
+     so the same city-name query is not re-hit repeatedly AND stale cached data expires
+     (does not linger in the browser forever). Settings (language / time format /
+     location) persist indefinitely with no expiry; API response cache expires on TTL.
      This relaxes the v2.2.0 "no storage ever" stance to "no server storage; local
-     session cache only" — update the privacy disclosure accordingly.
+     TTL-gated cache only" — update the privacy disclosure accordingly.
