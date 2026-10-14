@@ -294,3 +294,212 @@ measurement + QA Lighthouse; M7 (axe) → DO-02 `make check`; M8 (release) → G
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | architect | M1–M4 milestones, 11 plan tickets + referenced release card `t_169d64f7`, file-ownership lanes, US coverage map. |
 | v1.0.1 | 2026-10-14 | architect | Folded in CTO release constraints (t_8347643d, client-authorized): gh CLI deploy to `vishalnagda1/choghadiya` (main) → Pages `time.gitick.com`; semver tag from package.json 2.1.0, next release v2.2.0; M4 references the single pre-existing devops card `t_169d64f7` behind GATE 2 instead of a separate publish step. |
+| v1.1 | 2026-10-14 | architect | Appended **§8 v2.3.0 addendum**: milestone **M5** whose ticket list mirrors the v2.3.0 board graph (RS-1..3, ARCH-1, UX-1, BE-A/B/C, FE-0..FE-6, DO-1, TL/QA/SEC/TW/DO-2/GATE 2/DO-3) with board card IDs, owners, files, acceptance criteria and dependencies; §6 non-goals amended (inauspicious-period detail + storage pulled into scope by change items 5 & 7). |
+
+---
+
+## 8. v2.3.0 addendum — milestone M5 "v2.3.0 enhancements" (APPENDED)
+
+Source: `docs/00-brief.md` change log 2026-10-14, items 1–7 (target **v2.3.0**).
+Contracts: `04-architecture.md` **§16** + `docs/adr/009`. Research: `docs/01-research.md`
+§11 (inauspicious periods), the RS-2/RS-3 addenda (meanings, attribution).
+This section is appended to the v1.x plan; M1–M4 above remain the as-built record.
+
+### 8.1 Amendment to §6 (explicit non-goals)
+
+**Retired from the non-goals list — pulled into scope by the client change
+request (see the brief's change log for the exact wording):**
+- *Panchang detail: Rahu Kaal / Yamagandam / Gulika* — now in scope as the three
+  inauspicious periods Vaar Vela / Kaal Vela / Kaal Ratri (item 5; naming
+  corrected per RS-1 — `04-architecture.md` §16.2) + the detail panel with
+  contextual notes (item 6).
+- *Storage ("no cookies / localStorage / sessionStorage")* — now session-scoped
+  storage for settings + a TTL geocode cache (item 7; ADR-009).
+
+All other §6 non-goals stand (countdown timer, shareable URLs, favourites,
+PWA/offline, notifications, Gujarati, Nominatim, webfonts, framework, bundler).
+
+### 8.2 Milestone
+
+| # | Name | Intent | Exit criteria |
+|---|------|--------|---------------|
+| **M5** | v2.3.0 enhancements | Deliver change items 1–7 on top of the v2.2.0 release: 12h default + toggle, manual location button, calendar picker, inauspicious periods, detail panel, attribution/privacy copy, session persistence | `make check` green on the integrated tree (incl. new smoke/axe/greps coverage); QA-1 verdict + SEC-1 re-audit green; GATE 2 client approval; tag **v2.3.0** + deploy (`package.json`/`ASSET_VERSION`/tag move together) |
+
+The ticket list below **mirrors the v2.3.0 board graph** (CTO card `t_6886a974`);
+board card IDs are authoritative and in parentheses after each plan ID.
+
+### 8.3 Ticket list
+
+#### Research lane
+
+- **RS-1 · Inauspicious periods research** (`t_f4a46203`, researcher) — **DONE**.
+  Files: `docs/01-research.md` §11. Deps: none.
+  Pinned definitions + per-weekday tables (§11.2), Vedic-day handling (§11.3),
+  polar shape (§11.4), live cross-check 23/23 intervals within ±2 min of Drik.
+- **RS-2 · Choghadiya meaning content** (`t_f27d12cf`, researcher).
+  Files: `docs/01-research.md` addendum. Deps: none.
+  AC: 7 names × (meaning, goodFor, badFor, day/night nuance) in natural HI + EN,
+  contextual-note phrasings, every claim sourced; ready for verbatim copy-deck
+  transcription (item 6 content).
+- **RS-3 · Geocoder attribution terms** (`t_52ad6c7b`, researcher).
+  Files: `docs/01-research.md` addendum. Deps: none.
+  AC: Open-Meteo (CC-BY) + GeoNames clauses quoted with URLs; options A (remove)
+  / B (minimal compliant wording) / C (different geocoder) with recommendation
+  and exact EN+HI replacement copy; if recommendation ≠ A, flag "client must
+  confirm at GATE 2" (item 3).
+
+#### Architecture
+
+- **ARCH-1 · v2.3.0 architecture addendum** (`t_f425af24`, architect) — **DONE
+  by this document**. Files: `docs/adr/009-session-scoped-storage.md`,
+  `docs/adr/007` (status note), `docs/04-architecture.md` §16, this §8.
+  Deps: RS-1. AC: the module contracts of `04` §16.2, ADR-009, M5 list; the
+  three docs consistent with each other and the change log.
+
+#### UX
+
+- **UX-1 · v2.3.0 UX spec + bilingual copy deck** (`t_b7dd5ede`, ux-designer).
+  Files: `docs/03-ux.md` (§6.1 new table + component specs; §6's 58 keys
+  untouched). Deps: **RS-1, RS-2, RS-3**.
+  AC: §6.1 rows in the exact §6 format covering time-format toggle, location
+  button, calendar picker, periods block, detail panel (7×3 content + notes),
+  privacy/disclosure copy; component/interaction specs for the four new surfaces
+  (tokens, 44×44, WCAG 2.2 AA, 320 px); `node --test tests/i18n.test.js` still
+  green (58-key contract intact).
+
+#### Backend lane (pure modules)
+
+- **BE-B · formatTime hour-cycle** (`t_3d1c5170`, backend-dev) — **DONE**.
+  Files: `choghadiya.js`, `tests/choghadiya.test.js`, `04` §5.1. Deps: none.
+  `opts.hourCycle ∈ {'h12','h23'}`, default `'h12'`; `'h23'` byte-identical to
+  v2.2.0 (items 1). 67/67 tests green at completion.
+- **BE-C · session-store.js + geocoder TTL cache** (`t_a46a447b`, backend-dev).
+  Files: `session-store.js` (new), `geocoder.js`, `tests/session-store.test.js`
+  (new), `tests/geocoder.test.js`. Deps: none.
+  AC: contract `04` §16.2/ADR-009 (envelope `{t,v}`, TTL, fallback, `choghadiya.*`
+  keys, `STORAGE_SCOPE='session'`); `createGeocoder({fetchImpl, cacheStore})`
+  with default FIFO-64 behaviour unchanged (existing tests green unmodified),
+  session-backed TTL 24 h / cap 64 / key = normalized query + language (item 7b).
+- **BE-A · Inauspicious-periods engine** (`t_ae7c48a6`, backend-dev).
+  Files: `inauspicious.js` (new), `tests/inauspicious.test.js` (new). Deps:
+  **RS-1**.
+  AC: contract `04` §16.2 (`computeInauspicious`, `overlappingPeriod`; imports
+  `computeSunTimes`, does not edit `choghadiya.js`); RS-1 §11.2 tables pinned for
+  7 weekdays × 3 periods (21+ assertions); Mumbai 2026-10-14 ±2 min; DST
+  (Europe/London); polar `defined:false`; overlap boundary cases (item 5 calc).
+  NOTE: Saturday double-period question — `04` §16.6 Q2 (CTO call).
+
+#### Frontend lane (serial: each extends `app.js`/`index.html`/`style.css` after the previous)
+
+- **FE-0 · i18n dictionary expansion** (`t_c62f0530`, frontend-dev).
+  Files: `docs/03-ux.md` (§6 merge), `i18n.js`, `tests/i18n.test.js`. Deps:
+  **UX-1**.
+  AC: every §6.1 row merged into §6 byte-identically (58 rows untouched);
+  DICT hi+en complete; all i18n-test hardcodes updated 58 → N, gate not weakened;
+  one atomic commit.
+- **FE-1 · 12h default + toggle + settings persistence** (`t_8d2651f9`,
+  frontend-dev). Files: `app.js`, `index.html`, `style.css`. Deps: **FE-0, BE-B,
+  BE-C**.
+  AC: 12h default everywhere; aria-pressed toggle re-renders all times < 100 ms;
+  settings persisted via `session-store.js` (`choghadiya.settings.timeFormat|lang|location`;
+  viewedDate not persisted); stored location suppresses the auto-prompt; reload
+  survives in-tab, tab close clears; no storage API outside `session-store.js`
+  (items 1, 7a).
+- **FE-2 · "Use my current location" button** (`t_24eee6a8`, frontend-dev).
+  Files: `app.js`, `index.html`, `style.css`. Deps: **FE-1**.
+  AC: button per UX-1 (in the location sheet), 44×44, bilingual; re-triggers
+  geolocation on demand (works after denied auto-prompt and after stored-location
+  load); S4 while resolving, S5 on denial; idempotent while in flight; chip ✕
+  clears stored location (item 2).
+- **FE-3 · Calendar date picker ±10 days** (`t_d7975f6c`, frontend-dev).
+  Files: `app.js`, `index.html`, `style.css`. Deps: **FE-2**.
+  AC: native `<input type="date">` with `min`/`max` = location-civil-date ±10;
+  ‹/› + Today pill + Alt+←/→ all clamp to the range with perceivable disabled
+  states; selection re-renders both lists; location change re-clamps (item 4).
+- **FE-4 · Attribution & privacy-disclosure reconciliation** (`t_bf7bfef8`,
+  frontend-dev). Files: `index.html`, `style.css`, `app.js` (if needed),
+  `i18n.js`/`tests/i18n.test.js`/`docs/03-ux.md` §6 (only if new keys needed).
+  Deps: **FE-3**.
+  AC: apply RS-3's recommended option exactly (do not drop required attribution);
+  disclosure truthful re "no server storage; local session cache only"; no stale
+  references to the removed lines; `make greps` green (items 3, 7-disclosure).
+- **FE-5 · Inauspicious-periods display** (`t_4d08f3fd`, frontend-dev).
+  Files: `app.js`, `index.html`, `style.css`. Deps: **FE-4, BE-A**.
+  AC: periods block (name, range in the current time format, one-line
+  explanation from the dictionary) for the viewed date + location; rerenders on
+  date/location/language/time-format changes; polar → hidden gracefully beside
+  S3; null period → "not applicable" state; Mumbai 2026-10-14 values ±1 min;
+  a11y per 03-ux §7 (item 5).
+- **FE-6 · Current-choghadiya detail panel** (`t_778b1ea0`, frontend-dev).
+  Files: `app.js`, `index.html`, `style.css`. Deps: **FE-5**.
+  AC: panel shows name, range, meaning/good-for/bad-for (RS-2 content via the
+  deck) + contextual notes; default = current slot (today) or "select a slot"
+  prompt (off-today); tap selects, same-tap or reload reverts (selection never
+  persisted); overlap warning names the period via `overlappingPeriod`; "Now"
+  badge/`aria-current` stay exclusive to the live slot; 12h/24h + language
+  re-render; axe clean with the panel open (item 6).
+
+#### Quality-gate tooling
+
+- **DO-1 · v2.3.0 quality-gate tooling** (`t_ed1c4b8c`, devops-engineer).
+  Files: `scripts/**`, `Makefile`, `package.json` (+lockfile), CI yml if needed.
+  Deps: **BE-A, BE-B, BE-C, FE-6** (i.e. after the implementation wave).
+  AC: `make check` EXIT 0 on the integrated tree; smoke updated for the 12h
+  default (keep a 24h check by toggling) + new surfaces (toggle, picker
+  min/max ±10, periods block, panel default/tap/revert/reload, settings
+  persistence, location button); axe covers the new states (M7 gate kept);
+  security greps gain the `sessionStorage|localStorage`-only-in-`session-store.js`
+  rule WITH a proven negative control; `make bump` covers the new `?v=` tokens.
+
+#### Review & release (mirrors the board's tail)
+
+- **TL-1 · Review & integrate v2.3.0** (`t_e38223d2`, tech-lead). Deps: **DO-1,
+  FE-6, BE-A, BE-B, BE-C**. Integration review of items 1–7; `make check` green.
+- **QA-1 · Test plan addendum + regression** (`t_e4d61d3a`, qa-engineer).
+  Deps: **TL-1**. `docs/07` addendum + `docs/08` regression for the new
+  surfaces; release verdict.
+- **SEC-1 · Security & privacy re-audit** (`t_174049d9`, security-engineer).
+  Deps: **TL-1**. Storage surface (ADR-009), attribution, new surfaces;
+  `docs/09` update.
+- **TW-1 · v2.3.0 docs** (`t_73e63d17`, tech-writer). Deps: **TL-1**.
+  README/CHANGELOG/RELEASE_NOTES incl. the privacy stance update.
+- **DO-2 · v2.3.0 release packaging** (`t_f9dd82b5`, devops-engineer).
+  Deps: **QA-1, SEC-1, TW-1**. Bump 2.3.0 (`package.json` + `ASSET_VERSION`),
+  tag candidate, deploy prep.
+- **GATE 2 — Client release approval (v2.3.0)** (`t_5b740a52`, cto).
+  Deps: **DO-2**. Must surface: the sessionStorage-vs-localStorage question
+  (`04` §16.6 Q1), the Saturday double-period question (§16.6 Q2), and the RS-3
+  attribution option applied if it is not full removal.
+- **DO-3 · Tag & publish v2.3.0** (`t_0a7a35b6`, devops-engineer).
+  Deps: **GATE 2**. Tag `v2.3.0`, `gh` push to `vishalnagda1/choghadiya` main,
+  Pages smoke (same release definition as M4).
+
+### 8.4 Dependency lanes (mirrors the board's `task_links`)
+
+```text
+RS-1 ─┬─→ ARCH-1 (this doc)
+      ├─→ BE-A ──────────────┬─→ FE-5 ─→ FE-6 ─┬─→ DO-1 ─→ TL-1 ─┬─→ QA-1 ─┐
+RS-2 ─┼─→ UX-1 ─→ FE-0 ─→ FE-1 ─→ FE-2 ─→ FE-3 ─→ FE-4 ─┘        │         ├─→ DO-2 ─→ GATE 2 ─→ DO-3
+RS-3 ─┘        ↑        ↑                                         │   SEC-1 ─┤
+           BE-B ────────┤                                         │   TW-1 ──┘
+           BE-C ────────┘                    BE-A/BE-B/BE-C ──────┘
+```
+
+Rules unchanged from §3.2's spirit: BE owns pure modules + their tests; FE owns
+`app.js`/`index.html`/`style.css` (serial wave, plus FE-0's i18n files); DO owns
+tooling/vendor/assets. Two structural notes for the CTO when creating/steering:
+the FE wave is **strictly serial** (FE-0 → FE-1 → … → FE-6) to keep the shared
+`app.js`/`index.html`/`style.css` out of parallel merge conflicts, and DO-1 is
+the integration point where `make check` must go green before TL-1.
+
+### 8.5 Coverage map (change items → tickets)
+
+| Change item | Tickets |
+|-------------|---------|
+| 1 Time format 12h default + toggle | BE-B, UX-1, FE-0, FE-1, DO-1 |
+| 2 Manual location button | UX-1, FE-0, FE-2 |
+| 3 Attribution lines removal | RS-3, UX-1, FE-0, FE-4 |
+| 4 Calendar date picker ±10 days | UX-1, FE-0, FE-3, DO-1 |
+| 5 Inauspicious periods | RS-1, BE-A, UX-1, FE-0, FE-5 |
+| 6 Detail panel + contextual notes | RS-2, UX-1, FE-0, FE-6 |
+| 7 Settings persistence + geocode cache | BE-C, FE-1, FE-4 (disclosure), SEC-1 |

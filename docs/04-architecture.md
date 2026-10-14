@@ -126,8 +126,9 @@ Rejected alternatives are recorded per-decision in `docs/adr/` — see §3.1.
 | [004](adr/004-geocoding-open-meteo-only.md) | Open-Meteo as the only geocoder in v1 | Accepted |
 | [005](adr/005-timezone-and-date-boundary-handling.md) | Location IANA timezone + sunrise→sunrise Vedic day | Accepted |
 | [006](adr/006-i18n-hand-rolled-dictionary.md) | Single hand-rolled dictionary file | Accepted |
-| [007](adr/007-no-persistent-storage.md) | No cookies / localStorage / sessionStorage in v1 | Accepted |
+| [007](adr/007-no-persistent-storage.md) | No cookies / localStorage / sessionStorage in v1 | Accepted — superseded in part by 009 |
 | [008](adr/008-testing-tooling.md) | `node --test` + headless Chromium/axe | Accepted |
+| [009](adr/009-session-scoped-storage.md) | Session-scoped storage for settings + geocode cache (v2.3.0) | Accepted (scope question open for GATE 2) |
 
 ---
 
@@ -504,3 +505,178 @@ throughput.
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | architect | Initial architecture: module surface, runtime data model, internal + geocoder contracts, CSP/origin list, error taxonomy, testing strategy, deploy/local-dev, 8 ADRs, plan in `05-plan.md`. |
 | v1.0.1 | 2026-10-14 | architect | §7/§11: folded in client-authorized release definition (brief 2026-10-14) — `gh` CLI deploy to `github.com/vishalnagda1/choghadiya` (main) → Pages `time.gitick.com`; semver git tag from `package.json` 2.1.0 (next: v2.2.0); release step = single devops card `t_169d64f7` behind GATE 2. No deploy workflow; CI is test-only. |
+| v1.1 | 2026-10-14 | architect | Appended **§16 v2.3.0 addendum** (brief change log items 1–7): `session-store.js` + `inauspicious.js` module contracts, `formatTime` hour-cycle and `createGeocoder({fetchImpl, cacheStore})` surfaces, persisted-settings data model, privacy stance change ("no server storage; local session cache only", ADR-009), GATE 2 open questions. §3.1 ADR index updated; §1–§15 otherwise unchanged — where §16 conflicts with §2–§13, §16 governs v2.3.0 (superseded statements listed in the §16 intro). |
+
+---
+
+## 16. v2.3.0 addendum — module contracts for change items 1–7 (APPENDED)
+
+Source: `docs/00-brief.md` change log 2026-10-14 (items 1–7), CTO-settled API
+shapes (board cards BE-A/B/C), `docs/01-research.md` §11 (inauspicious periods).
+This section is appended, not merged: **where it conflicts with §1–§13, §16
+governs v2.3.0**. Superseded statements: the §3 "Storage: None" row and §4
+"There is no database and no persistence" (now ADR-009 session-scoped storage);
+§8.2's privacy stance wording ("no storage") — everything else stands. The
+§5.1 `formatTime` signature was already updated in place by BE-B and is
+restated below for the record.
+
+### 16.1 Module surface additions (extends the §2.3 table)
+
+| File | Owner lane | Responsibility | Must NOT do |
+|------|-----------|----------------|-------------|
+| `session-store.js` | backend-dev | The **only** file allowed to touch web storage: TTL-bounded key/value persistence with envelope + in-memory fallback (contract §16.2) | No DOM, no business logic, no direct use by any other module's storage access |
+| `inauspicious.js` | backend-dev | Pure Vaar Vela / Kaal Vela / Kaal Ratri computation + overlap helper (contract §16.2) | No DOM/network/storage; must not edit `choghadiya.js` (imports `computeSunTimes` only) |
+| `choghadiya.js` (extended) | backend-dev | `formatTime` gains `opts.hourCycle` (done, BE-B `t_3d1c5170`) | unchanged |
+| `geocoder.js` (extended) | backend-dev | `createGeocoder` gains `cacheStore` (BE-C) | unchanged otherwise |
+
+v2.3.0 file-ownership additions (full ticket list in `05-plan.md` §8, milestone M5):
+`tests/inauspicious.test.js` (BE-A), `tests/session-store.test.js` + `tests/geocoder.test.js` (BE-C),
+`i18n.js` + `tests/i18n.test.js` + `03-ux` §6 merge (FE-0), `app.js`/`index.html`/`style.css`
+(FE-1..FE-6, serial), `scripts/**`/`Makefile`/`package.json` (DO-1).
+
+### 16.2 Internal module contracts (v2.3.0 additions to §5.1)
+
+```js
+// session-store.js — the ONLY module allowed to reference sessionStorage/localStorage
+export const STORAGE_SCOPE = 'session';   // 'session' (decision) — flip to 'local' is a
+                                          // one-line change (ADR-009, GATE 2 open question)
+export function get(key)                          // -> value | null
+export function set(key, value, opts = {})        // opts.ttlMs optional; absent = session lifetime
+export function remove(key)
+export function clear()
+```
+
+Semantics (BE-C `t_a46a447b`): entries are a JSON envelope
+`{ t: <epoch ms>, v: <value> }`; `get` returns `null` **and deletes the entry**
+when expired (`now > t + ttlMs`), malformed, unparsable, or not an envelope;
+all storage access is try/catch-wrapped with a silent in-memory `Map` fallback
+(private mode / quota / disabled storage → app keeps working, zero throws);
+keys namespaced `choghadiya.*`.
+
+```js
+// inauspicious.js — pure, Node-importable (no DOM / network / storage)
+export function computeInauspicious(dateISO, location)
+  // location = { latitude, longitude, timeZone }
+  // -> { defined: boolean, reason?: 'solar-undefined',
+  //      vaarVela:  { start: Date, end: Date } | null,
+  //      kaalVela:  { start: Date, end: Date } | null,
+  //      kaalRatri: { start: Date, end: Date } | null }
+  // Polar / undefined sun -> { defined:false, reason:'solar-undefined', all three null };
+  // never throws (mirrors buildSchedule).
+export function overlappingPeriod(slot, periods)
+  // slot = { start: Date, end: Date } (a Slot or any interval)
+  // periods = the computeInauspicious return value
+  // -> 'vaarVela' | 'kaalVela' | 'kaalRatri' | null
+  // half-open containment, boundary conventions consistent with resolveCurrentSlot.
+```
+
+**Calculation source of truth: `docs/01-research.md` §11** (RS-1, live-verified):
+§11.2 — Vaar Vela = one fixed day eighth per weekday (Sun 4th, Mon 7th, Tue 2nd,
+Wed 5th, Thu 8th, Fri 3rd, Sat 6th of `sunset−sunrise`; constant table, cannot be
+derived from the schedule); Kaal Vela = the day's `"kaal"` Choghadiya eighth(s);
+Kaal Ratri = the night's `"labh"` Choghadiya eighth(s). §11.3 — Kaal Ratri is an
+eighth of `sunset(date) → nextSunrise`, so its clock time may fall after midnight
+on `date+1`; this is exactly the sunrise-anchored Vedic day of §4.2/ADR-005.
+§11.4 — per-period `defined:false, reason:'solar-undefined'` handling (Kaal
+Ratri's anchors are `sunset` + `nextSunrise` and are evaluated independently of
+the day half). Sun times come from `computeSunTimes` (suncalc convention,
+ADR-003).
+
+**Naming note (RS-1 §11.0 correction):** the brief's parenthetical mapping
+(Vaar Vela = Yamagandam, Kaal Vela = Gulika Kaal, Kaal Ratri = night Rahu Kaal)
+is **not supported by the sources and is wrong on 6/7 weekdays**. Code, API and
+data keys use the correct names (`vaarVela`/`kaalVela`/`kaalRatri`); display copy
+must not equate them with Yamagandam/Gulika/Rahu Kaal (UX-1/FE-5 note).
+
+```js
+// choghadiya.js — v2.3.0 signature (implemented, BE-B t_3d1c5170; = §5.1)
+export function formatTime(date, timeZone, lang, opts = { hourCycle: 'h12' })
+  // opts.hourCycle: 'h12' (DEFAULT) | 'h23'; 'h23' byte-identical to v2.2.0 output.
+
+// geocoder.js — v2.3.0 cache surface (BE-C t_a46a447b)
+export function createGeocoder({ fetchImpl, cacheStore } = {})
+  // cacheStore OPTIONAL: default (omitted) = in-memory FIFO-64 Map — v2.2.0
+  // behaviour unchanged. Session-backed cacheStore (session-store.js):
+  // TTL 24 h, FIFO cap 64, cache key = normalized query + language; same query
+  // within TTL costs zero fetches across a reload; expired -> refetch.
+```
+
+### 16.3 Data-model additions (extends §4.1)
+
+```text
+StoredEnvelope { t: number /* epoch ms */, v: any }    // session-store.js wire format (JSON)
+
+Settings — persisted keys (change item 7a), all via session-store.js:
+  choghadiya.settings.timeFormat: "12h" | "24h"        // default "12h" (item 1)
+  choghadiya.settings.lang:       "hi" | "en"          // default "hi"
+  choghadiya.settings.location:   { lat, lon, timezone, label } | null
+  // viewedDate is NOT persisted — reload always returns to today.
+
+Geocode cache entries (change item 7b): key = choghadiya.geocode.<normalized-query>.<lang>,
+  value = GeocodeResult[], TTL 24 h, FIFO cap 64.
+
+Inauspicious { runtime, produced by inauspicious.js }:
+  { defined, reason?, vaarVela: {start,end}|null, kaalVela: {start,end}|null,
+    kaalRatri: {start,end}|null }                      // see §16.6 open question 2
+```
+
+### 16.4 Config & constants additions (extends §7)
+
+| Constant | Value | Where |
+|----------|-------|-------|
+| `STORAGE_SCOPE` | `'session'` | session-store.js |
+| Geocode cache TTL | `24 * 60 * 60 * 1000` ms | geocoder.js / session-store.js |
+| `MAX_CACHE_ENTRIES` | `64` (unchanged) | geocoder.js |
+| Settings defaults | `'12h'`, `'hi'`, no location | app.js |
+
+### 16.5 Privacy & security deltas (handoff to SEC-1 / `docs/06`)
+
+- Privacy stance: **"no server storage; local session cache only"** (was "no
+  storage" — ADR-007, superseded in part by ADR-009). Disclosure copy update is
+  owned by FE-4/TW-1 and must stay truthful about the session cache.
+- US-17's "Location is never stored" is no longer literally true (last selected
+  location + recent city queries persist per tab); coordinates still never leave
+  the device — the §5.2 origin list and the §5.3 CSP are **unchanged** (no new
+  network origins, `connect-src` untouched).
+- New hygiene rule for the security greps gate (DO-1):
+  `sessionStorage`/`localStorage` may appear **only** in `session-store.js`.
+- Storage contents: three settings keys + geocode results (city names) + last
+  location coords — on-device, per-tab, cleared on tab close; no cookies, no
+  server writes.
+
+### 16.6 Open questions
+
+1. **GATE 2 — `sessionStorage` vs `localStorage`** (the brief's own note):
+   `sessionStorage` is per-tab and clears on tab close (the client's literal
+   words); `localStorage` survives browser restart. `STORAGE_SCOPE` isolates the
+   flip to one line in `session-store.js` (plus disclosure copy + ADR-009 status).
+   Default shipped value until the client answers: `'session'` (ADR-009).
+2. **Saturday's double periods vs the single-interval contract** (flagged, not
+   re-litigated): RS-1 §11.2/§11.3 shows Saturday's day sequence contains
+   `"kaal"` twice (1st and 8th eighths) and its night sequence `"labh"` twice —
+   so on Saturday, Kaal Vela and Kaal Ratri each occur **twice**, which the
+   settled `{start,end}|null` fields cannot represent. The CTO-settled contract
+   above is documented as-is; the CTO should choose (a) widen the three fields
+   to arrays per RS-1 §11.4's recommended shape, or (b) accept a documented
+   Saturday limitation (first interval only). Either way the change is confined
+   to `computeInauspicious`'s return construction, `overlappingPeriod`'s
+   iteration, and the FE-5/FE-6 render of a period list — BE-A should build from
+   RS-1's tables so the widening is trivial.
+3. **Carried over from RS-1's follow-ups (scope, item 6 copy):** the detail
+   panel's "Rahu Kaal overlaps this choghadiya" note needs Rahu Kalam as a 4th
+   period (daytime-only, table ready in RS-1 §11.6) — CTO scope call. The
+   item-5 parenthetical naming correction (§16.2 note) also needs the copy deck
+   (UX-1) to follow.
+
+### 16.7 Testing impact (details in `05-plan.md` §8 / `docs/07`)
+
+- `tests/session-store.test.js`: TTL boundary ±1 ms, session-lifetime entries,
+  envelope corruption/unparsable tolerated (deleted → `null`), storage throwing
+  on read **and** write → fallback keeps working, simulated-reload round trip,
+  64-entry FIFO cap, query normalization in keys.
+- `tests/inauspicious.test.js`: all 7 weekdays × 3 periods pinned to RS-1 §11.2
+  tables (21+ assertions), Mumbai 2026-10-14 fixture ±2 min, DST (Europe/London),
+  polar (`defined:false`, no `Invalid Date`), `overlappingPeriod` boundary cases
+  (inside / straddling / adjacent / disjoint).
+- i18n contract count 58 → N (FE-0 updates all hardcodes in `tests/i18n.test.js`);
+  smoke/axe/greps extended to the new surfaces (DO-1).
