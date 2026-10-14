@@ -53,11 +53,16 @@ The version bump, the `?v=` cache-busting change and the git tag ship in the
 **same** release commit (docs/04-architecture.md §11.4/§11.5).
 
 ```sh
-make bump VERSION=2.2.0     # rewrites package.json + every ?v= in index.html/app.js
+make bump VERSION=2.3.0     # rewrites package.json + every ?v= token
+                            # (index.html + all shipped JS modules)
 make check                  # smoke asserts every ?v= == package.json version
-git commit -am "chore(release): v2.2.0"
-git tag -a v2.2.0 -m "Choghadiya v2.2.0"
+git commit -am "chore(release): v2.3.0"
+git tag -a v2.3.0 -m "Choghadiya v2.3.0"
 ```
+
+(Replace `2.3.0` with the version being released. `make bump` covers the whole
+shipped module graph — `index.html` plus every root/vendor JS file — so a new
+module is always cache-busted with the rest.)
 
 `ASSET_VERSION` (`package.json` `version`) must equal the tag. GitHub Pages'
 shared CDN keys by full URL, so the `?v=` bump is what busts the cache on the
@@ -70,7 +75,7 @@ next deploy — there are no hashed filenames.
 ```sh
 git remote add origin https://github.com/vishalnagda1/choghadiya.git   # if absent
 git push origin main
-git push origin v2.2.0
+git push origin v2.3.0
 ```
 
 Never rewrite history and **never force-push** to `main`.
@@ -94,7 +99,7 @@ gh api repos/vishalnagda1/choghadiya/pages --jq '{status,html_url,build_type,sou
 gh api repos/vishalnagda1/choghadiya/pages/builds/latest --jq '{status,commit,created_at}'
 
 # Tag visible on the remote
-gh api repos/vishalnagda1/choghadiya/git/refs/tags/v2.2.0 --jq '.ref,.object.sha'
+gh api repos/vishalnagda1/choghadiya/git/refs/tags/v2.3.0 --jq '.ref,.object.sha'
 ```
 
 Then confirm the **deployed** site serves the new build (not a cached legacy

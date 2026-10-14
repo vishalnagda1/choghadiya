@@ -9,10 +9,11 @@ location, and displays them in **Hindi (default) or English**.
 Unlike the previous version of this app, the slot boundaries are **not hardcoded**
 to 06:00–18:00 — they are derived client-side from the actual solar day, so the
 timings are correct in every season and for every latitude. See
+[What changed in v2.3.0](#what-changed-in-v230) and
 [What changed in v2.2.0](#what-changed-in-v220).
 
 - **Docs language:** these docs are English. The **UI is Hindi by default** with a
-  one-tap EN toggle — every user-facing string ships in both languages (58 keys,
+  one-tap EN toggle — every user-facing string ships in both languages (122 keys,
   contract-tested). See [docs/02-prd.md](docs/02-prd.md) §5 and
   [docs/03-ux.md](docs/03-ux.md) §6 for the bilingual copy deck.
 
@@ -22,24 +23,54 @@ timings are correct in every season and for every latitude. See
 
 - **Dynamic day & night schedule** — day = sunrise → sunset ÷ 8; night = sunset →
   next sunrise ÷ 8, computed from real solar times (not fixed blocks).
-- **Today view** with day + night lists (8 + 8 rows, name + `HH:MM – HH:MM`).
-- **Prev / next date navigation** — step to any day; a **Today** pill resets.
+- **Today view** with day + night lists (8 + 8 rows, name + time range).
+- **Date navigation** — a **calendar picker** selects any date within **±10 civil
+  days** of today (past and future, clamped at the edges), and **‹ / ›** buttons
+  plus the **Alt + ← / →** shortcut step a day at a time; a **Today** pill resets.
+  (New in [v2.3.0](#what-changed-in-v230).)
+- **12-hour clock by default** — every time is shown as `06:32 am`; a **12h / 24h
+  toggle** in the header switches the whole app (`06:32`) with no reload. The
+  choice is remembered for the tab. (New in [v2.3.0](#what-changed-in-v230).)
 - **Location-aware** — asks the browser Geolocation API first; if that is
   unavailable or denied, search any city by name.
+- **Use-my-current-location button** — an explicit button inside the location
+  sheet re-triggers geolocation on demand (useful after a denial or on a device
+  that needs a fresh prompt). (New in [v2.3.0](#what-changed-in-v230).)
 - **City search** — free, keyless **Open-Meteo Geocoding** lookup (city, region,
   country + the city's local time), using the **city's own IANA timezone** and
   DST rules (e.g. London renders on `Europe/London`, not your device clock).
+- **Inauspicious periods** — for the selected date and location the app computes
+  and lists **Vaar Vela**, **Kaal Vela** and **Kaal Ratri** below the slot lists,
+  each with its time range in the active clock and a one-line explanation, and
+  says plainly in the UI that these are traditional beliefs, not astronomical
+  facts. A period that crosses midnight carries the civil-date suffix so the night
+  it belongs to is unambiguous. (New in [v2.3.0](#what-changed-in-v230).)
+- **Choghadiya detail panel** — a card below the lists shows the details of a
+  slot: what it is **good for**, what to **avoid**, its **meaning**, and a
+  contextual note. It defaults to the **current** choghadiya; tapping any other
+  row shows that one, and tapping it again (or reloading) returns to the current
+  slot. When an inauspicious period falls inside the shown slot, the panel warns
+  and **names the overlapping period**. (New in
+  [v2.3.0](#what-changed-in-v230).)
 - **Bilingual EN ⇄ HI toggle** — instant, no page reload; updates `<html lang>`,
-  labels and every rendered string.
+  labels and every rendered string, including the periods and the detail panel.
 - **Current-slot highlight** — the slot containing "now" (on the viewed
   location's clock) is marked with `aria-current` + a visible "अभी / Now" badge,
-  refreshed every ≤ 60 s (paused while the tab is hidden).
+  refreshed every ≤ 60 s (paused while the tab is hidden). The highlight stays
+  exclusive to the live slot even when another row is selected in the panel.
 - **Qualities legible without colour** — every row carries a quality *word* and a
-  glyph (✓✓ Amrit / ✓ auspicious / ○ neutral / ✕ inauspicious), and can be
-  expanded in place to read what the slot is good for.
+  glyph (✓✓ Amrit / ✓ auspicious / ○ neutral / ✕ inauspicious), and selecting a
+  row opens its detail panel.
+- **Remembers your settings (per tab)** — the time format, language and last
+  chosen location survive a **reload** (in-tab `sessionStorage`), and successful
+  city searches are cached for **24 hours**, so a reload or a repeat search does
+  not re-hit the geocoder. Nothing is written to a server, and the cache clears
+  when the tab closes. See [Privacy & data](#privacy--data). (New in
+  [v2.3.0](#what-changed-in-v230).)
 - **Graceful degradations** — geolocation denied, geocoder failure (with Retry),
   no city found, and polar locations with no sunrise/sunset all show a clear
-  message; the app never renders `NaN`, `Invalid Date` or an empty row.
+  message; the periods block hides when the sun data is undefined. The app never
+  renders `NaN`, `Invalid Date` or an empty row.
 - **Responsive, mobile-first** — no horizontal scroll from 320 px up; full
   keyboard operability and WCAG 2.2 AA baseline.
 
@@ -85,7 +116,7 @@ so `make test` needs **no install**.
 make test           # unit + contract suites (Node's built-in runner)
 ```
 
-The full pre-release gate adds the SEC-05/03/14 source greps, a
+The full pre-release gate adds the SEC-05/03/14/STORAGE source greps, a
 headless-Chromium render smoke test and an axe-core accessibility scan. The
 smoke/axe steps need dev-only tooling (`axe-core` is pinned in `package.json`
 and is **never shipped** — the deployed page keeps `script-src 'self'`); the
@@ -121,9 +152,9 @@ fully static and keyless:
 - To cut a release, bump the version everywhere in one step, re-check, and tag:
 
   ```bash
-  make bump VERSION=2.2.0    # rewrites package.json + every ?v= in index.html/app.js
+  make bump VERSION=2.3.0    # rewrites package.json + every ?v= token (index.html + all shipped JS)
   make check                 # smoke asserts every ?v= == package.json version
-  git commit -am "chore(release): v2.2.0" && git tag -a v2.2.0
+  git commit -am "chore(release): v2.3.0" && git tag -a v2.3.0
   ```
 
 - The Content-Security-Policy is a `<meta>` tag in `index.html`; the only allowed
@@ -139,11 +170,29 @@ fully static and keyless:
 - The **only outbound user-derived data** is the city name you type into the
   search sheet, which is sent to the **Open-Meteo Geocoding API** to resolve a
   location. Sunrise/sunset math itself is fully offline (vendored `suncalc`).
+- **No server storage — local session cache only.** Since v2.3.0 the app keeps a
+  small amount of data in the browser's **`sessionStorage`** under the
+  `choghadiya.*` namespace. Nothing is ever sent to us; there is no server to
+  send it to.
+  - **What is cached:** (1) your **settings** — time format (12h/24h), language,
+    and the last chosen location (coordinates + timezone + label); and (2) the
+    **geocode responses** for city names you have searched.
+  - **Geocode cache TTL: 24 hours** — a cached search is reused for 24 h and then
+    refetched; the cache holds at most 64 entries (oldest evicted first).
+  - **Cleared on tab close:** `sessionStorage` is per-tab and per-session, so the
+    settings and the geocode cache are gone when the tab (or browser) is closed.
+    They survive a **reload**, not a fresh visit.
+  - The app degrades silently to an in-memory cache if the browser blocks or
+    disables web storage, and every access is wrapped so nothing ever throws.
 - Grep-able in the UI: the footer and the search sheet both carry the disclosure
-  line ("A searched city name is sent to Open-Meteo/GeoNames. Location is never
-  stored.") and the geocoder credit.
+  line — "Your searched city name is sent to Open-Meteo to find coordinates. No
+  server storage — settings and recent searches stay only in this browser tab." —
+  and the geocoder credit. The old v2.2.0 "location is never stored" wording was
+  retired in v2.3.0, because it was no longer true.
 
-See [docs/02-prd.md](docs/02-prd.md) §6.3 for the privacy requirements.
+See [docs/02-prd.md](docs/02-prd.md) §6.3 for the privacy requirements and
+[docs/adr/009-session-scoped-storage.md](docs/adr/009-session-scoped-storage.md)
+for the storage decision.
 
 ---
 
@@ -153,7 +202,8 @@ WCAG 2.2 AA is the target and a quality gate, not an afterthought:
 
 - Semantic landmarks, a single `<h1>`, headings per section.
 - Full keyboard operation (the city sheet is a native `<dialog>`; `Esc` closes
-  it; `Alt` + `←`/`→` steps days), visible focus, and 44×44 px touch targets.
+  it; the date picker is a native `<input type="date">`; `Alt` + `←`/`→` steps
+  days), visible focus, and 44×44 px touch targets.
 - Quality is never conveyed by colour alone (word + glyph).
 - `<html lang>` flips with the language toggle; live regions announce status.
 - Respects `prefers-reduced-motion` and text zoom up to 200 %.
@@ -179,10 +229,13 @@ accessibility notes are in [docs/03-ux.md](docs/03-ux.md) §7.
   using `Intl.DateTimeFormat` (no fixed UTC offsets, DST-correct). Geolocation
   uses the device's resolved timezone.
 - **Module split:** `index.html` + `style.css` + `app.js` (state/render) +
-  `choghadiya.js` (pure solar/schedule math, Node-importable) + `geocoder.js`
-  (Open-Meteo client) + `i18n.js` (dictionary + `t()`).
-- **Performance:** shipped JS is ~32 KB gzip (upper bound), inside the 60 KB
-  min+gzip budget (NFR-P3); the smoke test prints the measured figure.
+  `choghadiya.js` (pure solar/schedule math, Node-importable) +
+  `inauspicious.js` (pure Vaar Vela / Kaal Vela / Kaal Ratri math) +
+  `geocoder.js` (Open-Meteo client) + `session-store.js` (namespaced
+  `sessionStorage` wrapper) + `i18n.js` (dictionary + `t()`).
+- **Performance:** shipped JS is **177.8 KB raw / 55.8 KB gzip** (upper bound,
+  7 files), inside the 60 KB min+gzip budget (NFR-P3); the smoke test prints the
+  measured figure.
 - **Dev-only tooling:** `axe-core@4.10.2` (MPL-2.0), pinned exact, used only by
   `make check` and never referenced from any shipped file.
 
@@ -200,15 +253,17 @@ choghadiya/                     # repo root — deployed verbatim to GitHub Page
 ├── style.css                   # design tokens, responsive bands, [hidden] reset
 ├── app.js                      # app state, orchestration, rendering (DOM access)
 ├── choghadiya.js               # pure solar + schedule math (Node-importable, no DOM)
+├── inauspicious.js             # pure Vaar Vela / Kaal Vela / Kaal Ratri engine
 ├── geocoder.js                 # Open-Meteo geocoding client (cache, debounce, abort)
-├── i18n.js                     # 58-key Hindi/English dictionary + t()
+├── session-store.js            # namespaced, TTL-capable sessionStorage wrapper
+├── i18n.js                     # 122-key Hindi/English dictionary + t()
 ├── vendor/
 │   └── suncalc-2.1.1.js        # vendored ESM build, checksum-pinned
 ├── favicon.svg                 # minimal, emoji-free sun icon
 ├── CNAME                       # time.gitick.com (GitHub Pages custom domain)
 ├── package.json                # version (ASSET_VERSION), scripts, dev-only axe-core
 ├── Makefile                    # dev / test / smoke / axe / check / bump
-├── .github/workflows/ci.yml    # CI: `make test` on every push and PR
+├── .github/workflows/ci.yml    # CI: `make test` + `make greps` on every push and PR
 ├── tests/                      # unit + contract suites (fixtures, sequences, i18n)
 ├── scripts/                    # smoke.mjs, axe-check.mjs, security-greps.mjs (dev-only tooling)
 └── docs/                       # brief, research, PRD, UX, architecture, ADRs, plan,
@@ -226,11 +281,11 @@ All via the `Makefile` (equivalents exist as `npm run <name>` for
 |---------|--------------|
 | `make dev` | Serve the repo root at `http://localhost:8080` (`PORT=…` to override). |
 | `make test` | Run the Node built-in test runner over `tests/` (unit + contract suites; no install, no network). |
-| `make smoke` | Headless-Chromium render smoke: 16 rows from the deterministic Mumbai fixture, EN/HI toggle, no `NaN`, no horizontal scroll, cache-busting + perf budget. |
+| `make smoke` | Headless-Chromium render smoke: 16 rows from the deterministic Mumbai fixture, EN/HI toggle, the S8 periods block, the S9 detail panel, the ±10-day picker, the 12h/24h toggle + session persistence, no `NaN`, no horizontal scroll, cache-busting + perf budget. |
 | `make axe` | axe-core accessibility scan (fails on any critical/serious violation). |
-| `make greps` | SEC-05/03/14 source gate: fails on any HTML sink, inline style/handler, or non-allow-listed origin in shipped code (pure Node, no deps). |
+| `make greps` | SEC-05/03/14/STORAGE source gate: fails on any HTML sink, inline style/handler, non-allow-listed origin, or a web-storage token outside `session-store.js` (pure Node, no deps). |
 | `make check` | The full gate: `test` + `greps` + `smoke` + `axe` (needs `npm ci` once). |
-| `make bump VERSION=x.y.z` | Set `ASSET_VERSION` in `package.json` and every `?v=` in `index.html`/`app.js`. |
+| `make bump VERSION=x.y.z` | Set `ASSET_VERSION` in `package.json` and every `?v=` token in `index.html` and all shipped JS modules. |
 | `make help` | List targets. |
 | `node --test tests/<file>` | Run one suite (e.g. `tests/geocoder.test.js`) during a fix. |
 
@@ -255,9 +310,38 @@ Pages verification, post-deploy smoke + Lighthouse FCP gate, and rollback — is
 - **Sunrise/sunset:** [`suncalc`](https://github.com/mourner/suncalc) 2.1.1 —
   BSD-2-Clause (vendored, checksum-pinned).
 - **Geocoding:** [Open-Meteo](https://open-meteo.com/) Geocoding API — data from
-  [GeoNames](https://www.geonames.org/), **CC-BY 4.0**. In-app credit:
-  "Geocoding by Open-Meteo / GeoNames".
+  [GeoNames](https://www.geonames.org/), both under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Both licences
+  require attribution while the location data is displayed, so the app ships one
+  minimal visible credit line in the footer:
+  "Location search by Open-Meteo · Data from GeoNames · CC BY 4.0". Attribution
+  cannot be removed (the v2.2.0 two-line wording was reduced, not dropped, in
+  v2.3.0). The in-app credit is plain text in v2.3.0; the licence hyperlinks are
+  a deferred follow-up (adding them would extend the CSP origin allow-list).
 - **Project licence:** MIT (see `package.json`).
+
+---
+
+## What changed in v2.3.0
+
+The v2.3.0 release adds features and relaxes the privacy stance:
+
+- **12-hour clock by default**, with a **12h / 24h toggle** in the header.
+- An explicit **"Use my current location"** button in the location sheet.
+- A **calendar date picker** with a selectable range of **±10 civil days**
+  (replacing prev/next-only navigation).
+- **Inauspicious periods** — **Vaar Vela**, **Kaal Vela** and **Kaal Ratri** —
+  computed per date and location and shown with explanations (with an honest
+  "traditional beliefs, not astronomical facts" disclaimer).
+- A **choghadiya detail panel** showing each slot's meaning, what it is good for,
+  what to avoid, and a contextual note — with an overlap warning naming the
+  inauspicious period that falls inside the shown slot.
+- **Session persistence of settings** (time format, language, last location) and
+  a **24-hour geocode cache**, both per-tab `sessionStorage`.
+- **Privacy stance updated:** from v2.2.0's "no storage ever" to **"no server
+  storage; local session cache only"** (see [Privacy & data](#privacy--data) and
+  [ADR-009](docs/adr/009-session-scoped-storage.md), which supersedes ADR-007 in
+  part).
 
 ---
 

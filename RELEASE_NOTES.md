@@ -1,194 +1,192 @@
-# Release Notes — Choghadiya v2.2.0
+# Release Notes — Choghadiya v2.3.0
 
-**Release:** v2.2.0 (semver minor, bumping the `package.json` baseline `2.1.0`)
+**Release:** v2.3.0 (semver minor, bumping the `package.json` baseline `2.2.0`)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** released — GATE 2 client sign-off 2026-10-14; tagged `v2.2.0` and pushed to `vishalnagda1/choghadiya` `main`
+**Status:** pre-release — prepared on `main`; **not yet tagged or deployed**. The
+version bump, the annotated `v2.3.0` tag and the Pages deploy are cut by the
+release step after client sign-off (GATE 2).
 **Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
-> **Versioning note.** The package baseline was `2.1.0`; this release is cut as
-> **`v2.2.0`**. The release step bumped `package.json` to `2.2.0`, updated every
-> asset `?v=` token, re-ran the full `make check` gate green on the release
-> commit, and created the annotated tag `v2.2.0` in the same commit (which was
-> pushed to `main` alongside it). The integrity figure below is the measured
-> shipped-JS budget; it is independent of the `?v=` string and is unchanged by
-> the bump.
+> **Versioning note.** The package baseline is `2.2.0`; this release is cut as
+> **`v2.3.0`**. The release step bumps `package.json` to `2.3.0`, updates every
+> asset `?v=` token (now covering all shipped JS modules), re-runs the full
+> `make check` gate green on the release commit, and creates the annotated tag
+> `v2.3.0` in the same commit.
+
+> **Earlier release notes.** v2.2.0 notes are preserved in git history and in
+> [CHANGELOG.md](CHANGELOG.md); this file describes the current release.
 
 ---
 
 ## What this release is
 
-A refactor of the existing Choghadiya page from a **static, hardcoded-timing**
-app into a **dynamic, location-aware, bilingual** tool. Slots are now computed
-from the **real sunrise/sunset** at the user's location and date, the timings are
-correct for any city and season, and the whole UI is available in **Hindi
-(default) and English**.
+The **v2.3.0 feature wave** on top of the v2.2.0 refactor. It makes the clock
+**12-hour by default** with a toggle, reworks date selection into a **calendar
+picker (±10 days)**, adds a **manually re-triggerable location button**, computes
+and explains the **inauspicious periods** (Vaar Vela / Kaal Vela / Kaal Ratri),
+adds a **choghadiya detail panel** explaining each slot, and — for the first time
+— **persists settings and caches geocode results in the browser** (per-tab
+`sessionStorage`). That last item relaxes the v2.2.0 "no storage ever" stance to
+**"no server storage; local session cache only"**.
 
 ---
 
 ## Highlights
 
-- **Real solar timings, not fixed blocks.** Day slots = sunrise → sunset ÷ 8;
-  night slots = sunset → next sunrise ÷ 8, computed client-side with the
-  vendored `suncalc` 2.1.1. At Mumbai the day slots are ≈82 min in mid-December
-  and ≈98 min in mid-June.
-- **Location-aware.** Uses browser geolocation, with a **city search** fallback
-  (free, keyless Open-Meteo Geocoding) that renders each city on **its own IANA
-  timezone and DST rules** (e.g. London on `Europe/London`, not the device clock).
-- **Bilingual, instant.** Hindi by default, one-tap EN toggle, no reload — all
-  **58 user-facing strings** ship in both languages.
-- **Today view with navigation.** 8 + 8 rows for any date, with prev / next and a
-  **Today** reset; the **current slot is highlighted** (`aria-current` + "Now"
-  badge) and refreshed at most every 60 s.
-- **Readable without colour.** Each slot shows a quality word + glyph and can be
-  expanded to read what the slot is good for.
-- **Never breaks.** Geolocation denied, geocoder failure (with Retry), no city
-  found, and polar locations all show a clear message; `NaN` / `Invalid Date` /
-  empty rows are impossible by construction.
-- **Accessible & responsive.** WCAG 2.2 AA baseline (keyboard, focus, landmarks,
-  live regions, 200 % zoom, reduced-motion) and no horizontal scroll from 320 px.
-- **Privacy by design.** No accounts, cookies, analytics or backend; coordinates
-  never leave the device; only a typed city name reaches the geocoder, and that
-  is disclosed in the UI.
+- **12-hour by default (new), 24-hour on demand.** Every time reads `06:32 am`;
+  a header 12h/24h toggle switches the whole app to `06:32` instantly, and the
+  choice is remembered for the tab.
+- **Calendar date picker (±10 civil days).** The date label itself is the picker:
+  any date from 10 days before to 10 days after the viewed location's today,
+  clamped at the edges. `‹ / ›`, `Alt + ← / →` and the polar escape hatch all
+  share the same clamp.
+- **"Use my current location" button.** A button inside the location sheet
+  re-triggers geolocation on demand — handy after a denial or when switching back
+  to the device fix. Its own denied/timeout state is reported inline in the sheet.
+- **Inauspicious periods, explained.** **Vaar Vela**, **Kaal Vela** and **Kaal
+  Ratri** are computed for the selected date and location and listed below the
+  slot lists with their ranges and a one-line explanation. Definitions follow the
+  verified research tables (§11 — Vaar Vela is *not* Yamagandam, Kaal Ratri is
+  *not* Rahu Kaalam on 6 of 7 weekdays). A cross-midnight period carries the
+  civil-date suffix; Saturday's legitimate double periods render in full. The UI
+  states these are traditional beliefs, not astronomical facts.
+- **Choghadiya detail panel.** Below the periods block, a card shows the shown
+  slot's meaning, what it is good for, what to avoid, a day/night nuance and a
+  contextual note. It defaults to the **current** slot; tapping another row
+  selects it, tapping it again (or reloading) returns to the current slot. If an
+  inauspicious period overlaps the shown slot, the panel warns and **names it**.
+- **Remembers your settings, caches your searches.** Time format, language and
+  last location survive a **reload**; successful city searches are cached for
+  **24 hours** so a repeat search or reload does not re-hit the geocoder. All of
+  it is per-tab `sessionStorage`, cleared when the tab closes — **nothing is ever
+  sent to a server**.
+- **Everything from v2.2.0 still holds.** Real solar timings, location awareness
+  with correct IANA timezone/DST rendering, bilingual Hindi-default UI (now
+  **122 keys**), colour-independent quality tiers, the current-slot highlight,
+  graceful degradations, and the WCAG 2.2 AA / responsive baseline.
+- **Attribution reduced, not removed.** Full removal of the geocoder attribution
+  would breach Open-Meteo's and GeoNames' CC BY 4.0 terms, so v2.3.0 keeps **one
+  minimal footer credit** ("Location search by Open-Meteo · Data from GeoNames ·
+  CC BY 4.0") and rewrites the privacy line to the new storage stance. The credit
+  is plain text in this release; licence hyperlinks are a deferred follow-up.
 
 ---
 
 ## Notable fixes
 
-- **Date-boundary correctness:** an after-midnight slot is attributed to the
-  previous Vedic day's *night* list, and solar times are anchored at the
-  location's local noon so distant timezones resolve to the correct solar day.
-- **Geocoder input hardening:** control characters rejected without a request,
-  out-of-range coordinates / invalid IANA timezones dropped, string lengths
-  capped, and the query cache bounded (64 entries, FIFO).
-- **Strict CSP + text-only rendering** of third-party/user-supplied strings.
+- **Geocode cache wiring (item 7b).** The 24 h geocode cache shipped in code but
+  `app.js` initially never handed the cache store to the geocoder, so repeat
+  searches still refetched. The cache store is now injected — verified live: the
+  cache survives a reload and a repeat query sends no request.
+- **CI/gate honesty carried forward** from v2.2.0: the SEC-05/03/14 source greps
+  now include a **SEC-STORAGE** gate (web-storage tokens allowed only in
+  `session-store.js`), so the new storage path is held to the same standard.
 
 ---
 
 ## Known issues & limitations
 
-Honest state as of these notes, reconciled with the **published** QA report
-([docs/08-test-report.md](docs/08-test-report.md), verdict **PASS-WITH-KNOWN-ISSUES**)
-and security audit ([docs/09-security-audit.md](docs/09-security-audit.md), verdict
-**PASS-with-accepted-risks**), and with the **CTO dispositions approved at GATE 2**
-(client approved 2026-10-14, no feedback). Items 1–4 are carried as **known issues, not
-defects** — every MVP acceptance criterion (US-1…US-19) passes, there is **no open
-Critical/High/Medium defect**, and there is **no open High/Critical security finding**.
+> **Reconciliation status — PLACEHOLDER.** The v2.3.0 QA report
+> ([docs/08-test-report.md](docs/08-test-report.md)) and security audit
+> ([docs/09-security-audit.md](docs/09-security-audit.md)) **have not yet been run
+> for v2.3.0** (those documents still describe v2.2.0). The items below are the
+> known state from the **integration review (TL-1)** and must be reconciled with
+> the QA-1 / SEC-1 verdicts by the release step before publishing.
 
-1. **Real-browser manual checks.** QA executed the human gates in
-   [docs/08-test-report.md](docs/08-test-report.md) §5–§7: panchang accuracy **max Δ 1 min**
-   vs Drik Panchang across 5 city-date combos (gate ±2 min), mobile **FCP 1.13 s**
-   (gate < 1.5 s), contrast ≥ 6.26:1 light / 7.43:1 dark, 200 % zoom and reduced-motion
-   clean, and a full network/privacy inspection. Two items remain **unexecuted** and are
-   declared honestly in docs/08 §8: the real-device geolocation *grant* path (MAN-03) and
-   a live screen-reader pass (MAN-05 — an accessibility-tree proxy was used instead). Both
-   are post-release verification items, not defects.
-2. **City-sheet polish — cut from v2.2.0 (GATE 2 disposition).** The UX spec's city-sheet
-   *loading* submit state (`aria-busy` + spinner) and *"3 recent cities"* empty state
-   (`docs/03-ux.md` §S2) are **not implemented**. **Formally CUT from v2.2.0 and deferred
-   to the post-release backlog** — neither has a PRD acceptance criterion behind it
-   (outside US-1…US-19), "3 recent cities" has no key in the 58-key copy deck (so
-   implementing it needs a coordinated copy-deck change), and search itself works
-   correctly (results / no-results / error + Retry all verified). There is no inline
-   spinner and no recent-cities shortcut; that is the whole gap.
-3. **`<dialog>` close-event edge case — deferred post-release hardening (accepted residual
-   risk).** In a browser build that does **not** fire the native `close` event on the city
-   sheet (reproduced only in the headless test browser; spec-correct browsers are
-   unaffected), the app's internal sheet-open flag can remain set, which leaves the `Alt` +
-   `←`/`→` day shortcuts disabled until reload. Not observed in any reviewed evergreen
-   browser; routed as a post-release hardening item.
-4. **Geocoder defense-in-depth — deferred post-release hardening (accepted residual risk).**
-   The geocoder validates and drops bad coordinates/timezones at its boundary (the crash
-   path is closed and covered by tests); a redundant guard at the app's day-aggregation
-   call site was intentionally left out to avoid a code collision and remains a low-priority
-   post-release item.
+1. **Manual/browser checks pending QA-1.** Real-browser exploratory checks for the
+   new surfaces (picker, periods, panel, geolocation button) and their
+   accessibility are carried by the QA-1 card; the integration review's live
+   Chromium spot-runs passed, but the formal QA report has not landed.
+2. **Security re-audit pending SEC-1.** The hyperlink half of the attribution
+   credit is **deferred** — Open-Meteo's terms ask for a link *next to* displayed
+   location data, but adding three `http(s)` hyperlink origins would extend the
+   shipped CSP origin allow-list, which the SEC-14 gate and the current audit
+   scope freeze. The credit therefore ships as **plain text**; the hyperlinks are
+   an open item for SEC-1 / GATE 2.
+3. **Storage scope is session-based (client-confirmed change pending).** Shipped
+   behaviour is per-tab **`sessionStorage`** (cleared on tab close). The client's
+   confirmed change request describes `localStorage` (settings surviving full
+   browser restarts); that is a one-line flip in `session-store.js` plus copy/ADR
+   updates and is sequenced against the QA-1 / SEC-1 / TW-1 cards at GATE 2. If it
+   lands before release, the privacy copy and these notes need a delta pass.
+4. **`panel.note.overlay.*` copy defect (UX-1, low).** The overlap-warning copy
+   reads "within this *auspicious* choghadiya" even when the overlapped slot is
+   inauspicious; the front-end implemented the UX spec verbatim. Routed as a UX
+   copy fix.
 5. **±1–2 min vs a printed panchang.** Expected and disclosed in the UI footer;
    suncalc uses the upper-limb + refraction convention.
-6. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg / Shubh` are
-   deliberately shorter than Drik Panchang's long forms (`Labha / Amrita / Kala / …`) — a
-   product decision fixed by `docs/02-prd.md` US-2 AC5 / US-11 AC4 and `docs/03-ux.md` §6.
+6. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg /
+   Shubh` are deliberately shorter than Drik Panchang's long forms — a product
+   decision fixed by [docs/02-prd.md](docs/02-prd.md) US-2 AC5 / US-11 AC4 and
+   [docs/03-ux.md](docs/03-ux.md) §6.
 
-Deferred by design (not defects) in this release: countdown to the next slot,
-shareable URLs, favourites, PWA/offline, notifications, panchang detail, Rahu
-Kaal, and languages beyond Hindi/English. See
-[docs/02-prd.md](docs/02-prd.md) §4.2 and [docs/05-plan.md](docs/05-plan.md) §6.
+Items carried from v2.2.0 that remain open as post-release verification (not
+defects): the real-device geolocation *grant* path (MAN-03) and a live
+screen-reader pass (MAN-05); the city-sheet loading/`recent cities` polish was
+formally **cut** at the v2.2.0 GATE 2 and remains on the post-release backlog.
 
 ---
 
 ## Security
 
-Pre-release audit: [docs/09-security-audit.md](docs/09-security-audit.md) —
-**PASS-with-accepted-risks (0 Critical · 0 High · 1 Medium · 2 Low)** at the release
-commit; **no open High/Critical finding** (the audit's FAIL trigger). All three fix
-cards **landed before the release** (HEAD `d9a7b89`):
+Pre-release audit for v2.3.0: **PENDING (SEC-1)**. The v2.2.0 audit
+([docs/09-security-audit.md](docs/09-security-audit.md), **PASS-with-accepted-risks**,
+0 Critical / 0 High) is the last completed audit. What is already known for
+v2.3.0:
 
-- **F1 (Medium)** — GitHub Actions pinned to full commit SHAs instead of mutable tags
-  in `.github/workflows/ci.yml` (SEC-18 / RK10) — **landed** (`t_899c4547`).
-- **F2 (Low)** — the city input's `name` attribute removed (SEC-07 DOM-clobbering
-  hygiene; the form is JS-only) — **landed** (`t_9ec675d1`).
-- **F3 (Low)** — the SEC-05/03/14 source greps are now a persistent failing gate
-  (`scripts/security-greps.mjs`, wired into `make check` as `make greps`) — **landed**
-  (`t_899c4547`).
-
-Accepted residuals, documented in docs/09 §7–§8: **F4** the privacy one-liner
-under-describes the request's fixed `count`/`language` params (a copy-deck item, no
-user-identifying data), plus informational **F5** (SVG namespace identifier), **F6**
-(dev-only `axe-core` is MPL-2.0, never shipped) and **F7** (release-push ops notes —
-remote config + branch-protection recommendation). CSP is byte-exact with a provably
-enforcing `script-src 'self'`, all dynamic text renders via `textContent`, the core
-calculation is network-free, and the only outbound call is the user-initiated geocode.
+- The **CSP is unchanged** (`script-src 'self'`); the session cache adds no
+  network origin and never transmits stored data.
+- A new **SEC-STORAGE** grep gate fails `make check` if a web-storage token
+  appears outside `session-store.js`.
+- The **SSR/attribution hyperlink** item (see Known issues #2) is the main open
+  security-adjacent decision.
 
 ---
 
 ## Verification summary
 
-Re-run on the **release commit** (post-bump, `?v=2.2.0`) — every command below was executed and passed:
+> **Numbers marked "placeholders" are expected to be re-confirmed on the release
+> commit by the packaging step.** The figures below are the last measured values
+> on the integrated v2.3.0 tree (integration review **TL-1** at `9693f10`, plus
+> this docs card's own re-runs of `make test` / `make greps` / `make smoke` /
+> `make axe`).
 
 | Check | Command | Result |
 |-------|---------|--------|
-| Unit + contract suites | `make test` | **64 tests / 64 pass / 0 fail** (≈0.6 s) |
-| Headless render smoke | `make smoke` | **31 / 31 checks pass** (16 rows from the Mumbai fixture, EN/HI toggle, no `NaN`/`Invalid Date`, no horizontal scroll at 320/390/430/1024 px, favicon 200, cache-busting) |
-| Accessibility gate | `make axe` | **0 critical/serious** and **0 moderate/minor** across base @1024 px, city dialog open, slot row expanded, base @320 px (axe-core 4.10.2) |
-| Full gate | `make check` | **exit 0** (test + greps + smoke + axe) |
-| Perf budget | (printed by smoke) | shipped JS **98.4 KB raw / 32.3 KB gzip** upper bound < 60 KB min+gzip (NFR-P3) |
-| Cache-busting | (asserted by smoke) | every `?v=` token == `package.json` version |
-| Local serve | `make dev` | `index.html`, `style.css`, `app.js`, `favicon.svg`, `i18n.js`, `choghadiya.js`, `geocoder.js` all served **200** |
+| Unit + contract suites | `make test` | **100 tests / 100 pass / 0 fail** (≈0.57 s; includes the 122-key §6 vertical-slice i18n contract) |
+| Headless render smoke | `make smoke` | **54 / 54 checks pass** (16 rows from the Mumbai fixture, 12h default + 24h toggle, S8 periods fixture, S9 panel default/select/revert/reload, ±10-day picker, settings persistence across reload, cache-busting) |
+| Accessibility gate | `make axe` | **0 critical/serious** and **0 moderate/minor** across 5 states (base, city dialog, row selected with panel, off-today + picker focused, base @320 px) |
+| Security greps | `make greps` | **PASS — 0 hits across 4 gates** (SEC-05 HTML sinks, SEC-03 inline styles/handlers, SEC-14 origins, SEC-STORAGE) |
+| Full gate | `make check` | **exit 0** on the integrated tree (re-confirm on the release commit) |
+| Perf budget | (printed by smoke) | shipped JS **177.8 KB raw / 55.8 KB gzip** upper bound (7 files) < 60 KB min+gzip (NFR-P3) |
 
-Milestone reviews REV-M1, REV-M2 and REV-M3 all returned **PASS** (REV-M2 with a
-required geocoder fix that has since landed and is covered by the green
-integrated run above). The QA execution ([docs/08-test-report.md](docs/08-test-report.md))
-and the pre-release security audit ([docs/09-security-audit.md](docs/09-security-audit.md))
-were both re-verified green at HEAD `d9a7b89` (QA: tests 64/64, smoke 31/31, axe clean;
-security: 0 Critical / 0 High, all F1–F3 fixes landed).
+### Post-deploy verification (deployed URL)
 
-### Post-deploy verification (deployed URL — closes QA KI-2 / US-19 AC2)
-
-Executed by the release step against the live <https://time.gitick.com/> after
-the v2.2.0 push and Pages rebuild:
-
-| Check | Result |
-|-------|--------|
-| Pages build for the release commit `b3b3164` | **built** (GitHub Pages API) |
-| Deployed shell is the new build | `?v=2.2.0` on `favicon.svg`/`style.css`/`app.js` + 3 internal module `?v=2.2.0` specifiers; all 7 assets **HTTP 200**; 21 `data-i18n` nodes (legacy page had none) |
-| Deployed smoke (real browser) | **16 rows** (8 day + 8 night) for a searched city, current-slot "Now" badge, sunrise 06:32 / sunset 18:16, **EN/HI toggle both render**, **no `NaN` / `Invalid Date`** |
-| M6 mobile FCP gate (Lighthouse 12.8.2, mobile + simulated throttling) | **1.34 s / 0.91 s / 1.34 s** over 3 runs → **max 1.34 s < 1.5 s gate: PASS** (QA's release-candidate run was 1.13 s local) |
+**Placeholder** — to be executed by the release step against the live
+<https://time.gitick.com/> after the v2.3.0 push and Pages rebuild: confirm the
+Pages build for the release commit, that the deployed shell serves the new
+`?v=2.3.0` assets (all HTTP 200), a live smoke of the new surfaces, and the
+mobile Lighthouse FCP gate (**FCP < 1.5 s**). Record the results in the release
+task metadata.
 
 ---
 
 ## Deploy / rollback
 
 Deployed to GitHub Pages (`vishalnagda1/choghadiya`, `main`) with the annotated
-tag `v2.2.0`. The full runbook — pre-flight gate, release bump/tag/push
-commands, Pages verification, the post-deploy smoke + Lighthouse FCP gate, and
-rollback — is [`docs/DEPLOY.md`](docs/DEPLOY.md). This app is a static bundle,
-so rollback is a `git revert` of the release commit plus a redeploy (the `?v=`
-bump busts the Pages cache on the next deploy).
+tag `v2.3.0`, after GATE 2. The full runbook — pre-flight gate, release
+bump/tag/push commands, Pages verification, the post-deploy smoke + Lighthouse
+FCP gate, and rollback — is [`docs/DEPLOY.md`](docs/DEPLOY.md). This app is a
+static bundle, so rollback is a `git revert` of the release commit plus a
+redeploy (the `?v=` bump busts the Pages cache on the next deploy).
 
 ---
 
 ## Attribution & licence
 
 - `suncalc` 2.1.1 — BSD-2-Clause (vendored, checksum-pinned).
-- Open-Meteo Geocoding API — data from GeoNames, CC-BY 4.0. Credit:
-  "Geocoding by Open-Meteo / GeoNames".
+- Open-Meteo Geocoding API — data from GeoNames, **CC BY 4.0**. In-app credit
+  (plain text in v2.3.0): "Location search by Open-Meteo · Data from GeoNames ·
+  CC BY 4.0". Hyperlinks deferred (see Known issues #2).
 - Project licence: MIT.
