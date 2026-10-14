@@ -11,8 +11,12 @@ full in git history and [CHANGELOG.md](CHANGELOG.md)).
 **Release:** v2.3.1 (semver *patch* on the v2.3.0 baseline)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** prepared on `main`; the version bump, the annotated tag, the GitHub
-Release and the Pages deploy are cut by the release step after client sign-off.
+**Status:** **published** — client-approved at GATE (`t_3b2c54e5`); annotated tag
+`v2.3.1` created on the post-gate HEAD `f8d8690`, pushed to
+`vishalnagda1/choghadiya` `main` (fast-forward `1404f63..f8d8690`, no force),
+GitHub Release `v2.3.1` published (Latest), GitHub Pages rebuilt for `f8d8690`
+and the deployed build verified live (see *Post-deploy verification* below and
+[docs/releases/v2.3.1-publish-staged.md](docs/releases/v2.3.1-publish-staged.md)).
 **Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ### What this release is
@@ -71,12 +75,15 @@ Unchanged:
 
 ### Verification & known issues
 
-- The v2.3.1 gate and the independent QA re-test are run by the release step; the
-  authoritative verdict lands in [docs/08-test-report.md](docs/08-test-report.md)
-  (v2.3.1 section) and the security sign-off in
-  [docs/09-security-audit.md](docs/09-security-audit.md). This section therefore
-  states no v2.3.1 figures yet. The v2.3.0 gate (below) was **green** — `make
-  check` exit 0, tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS.
+- The v2.3.1 gate was re-run green on the release commit `f8d8690` by the publish
+  card (`t_ac3060ad`) — `make check` **exit 0**: tests **108/108** (incl. the i18n
+  contract at **119 keys / 238 assertions**), security greps **0 hits / 4 gates**,
+  smoke **67/67**, axe **PASS** (5 states). The independent QA verdict is
+  **PASS-WITH-KNOWN-ISSUES** (no open Critical/High/Medium; one Low *documentation*
+  finding, `QA231-F1`, already fixed by `t_5bcedccd`) —
+  [docs/08-test-report.md](docs/08-test-report.md) §15; the security sign-off is in
+  [docs/09-security-audit.md](docs/09-security-audit.md). Registry: shipped JS
+  186.1 KB raw / 59.0 KB gzip (NFR-P3 budget 60 KB).
 - **Known issues carried from v2.3.0** (still true on v2.3.1; none is a code
   defect):
   1. **±1–2 min vs a printed panchang.** Expected; `suncalc` uses the upper-limb +
@@ -87,6 +94,25 @@ Unchanged:
      decision fixed by the PRD and the UX spec.
 - Post-release verification still open (not defects): the real-device geolocation
   *grant* path and a live screen-reader pass.
+
+#### Post-deploy verification (v2.3.1, deployed URL)
+
+Executed by the publish card (`t_ac3060ad`) against the live
+<https://time.gitick.com/> after the v2.3.1 push and the Pages rebuild:
+
+| Check | Result |
+|-------|--------|
+| Pages build for the release commit `f8d8690` | **built** (GitHub Pages API: `status=built`, `duration=83 161 ms`, no error) |
+| Tag on the remote | `refs/tags/v2.3.1` → annotated object `793b217…` → commit `f8d8690` |
+| Deployed assets | `favicon.svg`, `style.css`, `app.js`, `choghadiya.js`, `inauspicious.js`, `i18n.js`, `geocoder.js`, `session-store.js`, `vendor/suncalc-2.1.1.js` — **all HTTP 200** at `?v=2.3.1`, none versionless |
+| Deployed bytes are the release tree | SHA-256 of all 10 served files **byte-identical** to the repo at the tagged commit (e.g. `app.js` `0201b2bb…02eb`, `index.html` `2a1fabc1…52d9`) |
+| Removed copy gone from the served DOM | **0 hits** in the served `index.html` / `i18n.js` / `app.js` (static, JS-off) **and** in the live DOM for the removed `privacy.line` sentence, the "No account · no tracking · no backend" note and the date-picker range hint — **in both Hindi (default) and English**, including the location sheet that carried the second `privacy.line` render site |
+| Attribution credit kept | footer credit present live in both languages with its **3 anchors** (open-meteo.com / geonames.org / creativecommons.org/licenses/by/4.0/), each `rel="noopener noreferrer" target="_blank"` |
+| Date picker opens live | location "Mumbai" selected via a real geocoder search → `#datepicker` enabled with `min=2026-10-04 / max=2026-10-24 / value=2026-10-14` (today ∓10); a **trusted** click on the field called `showPicker()` **once** with `ok: true`; a `change` to `2026-10-16` re-rendered the label and the 16 slot rows |
+| Console errors | **0** on a fresh load (listeners installed pre-navigation) and after the picker commit |
+| M6 mobile FCP gate (Lighthouse 12.8.2, mobile + simulated throttling) | **1420 / 1131 / 904 ms** over 3 runs → **max 1420 ms < 1500 ms gate: PASS**; LCP 1.54/1.28/1.28 s, TBT 10/0/0 ms, CLS 0/0.084/0.084, performance score 1.00/0.98/0.98. This closes the re-measure that v2.3.0 carried as known. |
+
+Full record, commands and rollback: [docs/releases/v2.3.1-publish-staged.md](docs/releases/v2.3.1-publish-staged.md).
 
 ---
 
