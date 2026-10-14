@@ -1,45 +1,129 @@
-# Release Notes — Choghadiya v2.3.0
+# Release Notes — Choghadiya
 
-**Release:** v2.3.0 (semver minor, bumping the `package.json` baseline `2.2.0`)
+**Current release: v2.3.1 (2026-10-14).** Previous release: v2.3.0. This file
+describes the current release in full; the v2.3.0 notes are kept below (and in
+full in git history and [CHANGELOG.md](CHANGELOG.md)).
+
+---
+
+## v2.3.1 — 2026-10-14 (current)
+
+**Release:** v2.3.1 (semver *patch* on the v2.3.0 baseline)
 **Date:** 2026-10-14
 **Target:** GitHub Pages — <https://time.gitick.com/>
-**Status:** released — GATE 2 rev 2 client sign-off 2026-10-14; tagged `v2.3.0`
-(release commit `1a13519`) and pushed to `vishalnagda1/choghadiya` `main`; GitHub
-Pages rebuilt for that commit and <https://time.gitick.com/> serves the new build
-(post-deploy verification below).
+**Status:** prepared on `main`; the version bump, the annotated tag, the GitHub
+Release and the Pages deploy are cut by the release step after client sign-off.
 **Deploy runbook:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
-> **Versioning note.** The package baseline is `2.2.0`; this release is cut as
-> **`v2.3.0`**. The release step bumps `package.json` to `2.3.0`, updates every
-> asset `?v=` token (now covering all shipped JS modules), re-runs the full
-> `make check` gate green on the release commit, and creates the annotated tag
-> `v2.3.0` in the same commit.
+### What this release is
+
+A small, client-requested copy tidy-up plus one bug fix. Beyond the three removed
+copy lines and the picker fix below, the app is **unchanged from v2.3.0**:
+12-hour by default with a 24-hour toggle, the ±10-day calendar picker, the
+inauspicious periods (Vaar Vela / Kaal Vela / Kaal Ratri), the choghadiya detail
+panel, and browser-local `localStorage` settings + a 24 h search cache.
+
+### Removed
+
+- **The privacy disclosure line.** This sentence appeared in **two** places —
+  the page footer **and** the location search sheet; **both are gone**:
+
+  > Your searched city name is sent to Open-Meteo to find coordinates. No server
+  > storage — settings stay in this browser with no expiry; recent searches and
+  > cached results expire after 24 hours.
+
+- **The "No account · no tracking · no backend" footer note.**
+- **The date-picker range hint** ("You can pick from 10 days before to 10 days
+  after today"). The **±10-day selectable range itself is unchanged** — the
+  picker still accepts any date from 10 days before to 10 days after today; only
+  the explanatory hint text was removed.
+
+### Deliberately kept — the licence credit
+
+The geocoder attribution credit **stays** in the footer:
+
+> Location search by Open-Meteo · Data from GeoNames · CC BY 4.0
+
+with its three licence links (Open-Meteo, GeoNames, CC BY 4.0). Open-Meteo's and
+GeoNames' **CC BY 4.0** terms require attribution while their data is displayed,
+so this single footer credit is the licence-required minimum and is **not** part
+of the removal — there is no lawful version of this app without it.
+
+### Fixed
+
+- **The date picker now opens.** Tapping the displayed date previously did not
+  bring up the calendar. Tapping it now opens the browser's **native calendar
+  picker**, and choosing a date updates the day/night lists and the
+  inauspicious-periods block for that date. The ±10-day range, the `‹ / ›` and
+  `Alt + ← / →` navigation, the keyboard path and the no-location disabled state
+  are unchanged.
+  *(Date pickers are supplied by the browser: the calendar is the operating
+  system's own UI, so its exact appearance — and whether it needs a direct tap on
+  the date — varies a little by browser.)*
+
+### How to run
+
+Unchanged:
+
+- `make dev` — serve the repo root locally at <http://localhost:8080>.
+- `make check` — the full quality gate (unit/contract tests + security greps +
+  headless render smoke + axe-core accessibility scan).
+
+### Verification & known issues
+
+- The v2.3.1 gate and the independent QA re-test are run by the release step; the
+  authoritative verdict lands in [docs/08-test-report.md](docs/08-test-report.md)
+  (v2.3.1 section) and the security sign-off in
+  [docs/09-security-audit.md](docs/09-security-audit.md). This section therefore
+  states no v2.3.1 figures yet. The v2.3.0 gate (below) was **green** — `make
+  check` exit 0, tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS.
+- **Known issues carried from v2.3.0** (still true on v2.3.1; none is a code
+  defect):
+  1. **±1–2 min vs a printed panchang.** Expected; `suncalc` uses the upper-limb +
+     refraction convention (QA measured a max **1 min** delta for the three new
+     periods vs live Drik Panchang).
+  2. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg /
+     Shubh` are deliberately shorter than Drik Panchang's long forms — a product
+     decision fixed by the PRD and the UX spec.
+- Post-release verification still open (not defects): the real-device geolocation
+  *grant* path and a live screen-reader pass.
+
+---
+
+## v2.3.0 — 2026-10-14 (previous release)
+
+> **Historical.** Superseded by v2.3.1 (2026-10-14), which removed the
+> `privacy.line` disclosure, the "no account · no tracking · no backend" footer
+> note and the date-picker range hint (the CC BY 4.0 credit deliberately stays),
+> and fixed the date picker not opening. The notes below describe v2.3.0 as it
+> shipped.
+
+> **Versioning note.** The package baseline was `2.2.0`; v2.3.0 was cut as
+> **`v2.3.0`** with the release step bumping `package.json` to `2.3.0`, updating
+> every asset `?v=` token, re-running the full `make check` gate green on the
+> release commit, and creating the annotated tag `v2.3.0` in the same commit.
 
 > **Earlier release notes.** v2.2.0 notes are preserved in git history and in
-> [CHANGELOG.md](CHANGELOG.md); this file describes the current release.
+> [CHANGELOG.md](CHANGELOG.md).
 
----
+### What v2.3.0 was
 
-## What this release is
-
-The **v2.3.0 feature wave** on top of the v2.2.0 refactor. It makes the clock
-**12-hour by default** with a toggle, reworks date selection into a **calendar
-picker (±10 days)**, adds a **manually re-triggerable location button**, computes
-and explains the **inauspicious periods** (Vaar Vela / Kaal Vela / Kaal Ratri),
-adds a **choghadiya detail panel** explaining each slot, and — for the first time
-— **persists settings and caches geocode results in the browser** (`localStorage`:
+The **v2.3.0 feature wave** on top of the v2.2.0 refactor. It made the clock
+**12-hour by default** with a toggle, reworked date selection into a **calendar
+picker (±10 days)**, added a **manually re-triggerable location button**, computed
+and explained the **inauspicious periods** (Vaar Vela / Kaal Vela / Kaal Ratri),
+added a **choghadiya detail panel** explaining each slot, and — for the first time
+— **persisted settings and cached geocode results in the browser** (`localStorage`:
 settings survive a full browser restart; the geocode cache keeps a 24 h TTL). That
-last item relaxes the v2.2.0 "no storage ever" stance to **"no server storage;
+last item relaxed the v2.2.0 "no storage ever" stance to **"no server storage;
 local TTL-gated cache only"**.
 
----
-
-## Highlights
+### Highlights
 
 - **12-hour by default (new), 24-hour on demand.** Every time reads `06:32 am`;
   a header 12h/24h toggle switches the whole app to `06:32` instantly, and the
   choice is remembered across browser restarts.
-- **Calendar date picker (±10 civil days).** The date label itself is the picker:
+- **Calendar date picker (±10 civil days).** The date label itself is the picker;
   any date from 10 days before to 10 days after the viewed location's today,
   clamped at the edges. `‹ / ›`, `Alt + ← / →` and the polar escape hatch all
   share the same clamp.
@@ -64,23 +148,23 @@ local TTL-gated cache only"**.
   re-hit the geocoder. Settings never expire; cached searches expire after 24 h.
   All of it is browser-local `localStorage` — **nothing is ever sent to a
   server**.
-- **Everything from v2.2.0 still holds.** Real solar timings, location awareness
-  with correct IANA timezone/DST rendering, bilingual Hindi-default UI (now
-  **122 keys**), colour-independent quality tiers, the current-slot highlight,
-  graceful degradations, and the WCAG 2.2 AA / responsive baseline.
-- **Attribution reduced, not removed — and now linked.** Full removal of the
+- **Everything from v2.2.0 still held.** Real solar timings, location awareness
+  with correct IANA timezone/DST rendering, bilingual Hindi-default UI (then
+  **122 keys**; **119 keys as of v2.3.1**), colour-independent quality tiers, the
+  current-slot highlight, graceful degradations, and the WCAG 2.2 AA / responsive
+  baseline.
+- **Attribution reduced, not removed — and linked.** Full removal of the
   geocoder attribution would breach Open-Meteo's and GeoNames' CC BY 4.0 terms, so
-  v2.3.0 keeps **one minimal footer credit** ("Location search by Open-Meteo ·
-  Data from GeoNames · CC BY 4.0") and rewrites the privacy line to the new
-  storage stance. The three key words are **real hyperlinks** — `Open-Meteo` →
+  v2.3.0 kept **one minimal footer credit** ("Location search by Open-Meteo ·
+  Data from GeoNames · CC BY 4.0") and rewrote the privacy line to the new
+  storage stance. The three key words were **real hyperlinks** — `Open-Meteo` →
   open-meteo.com, `GeoNames` → geonames.org, `CC BY 4.0` →
   `creativecommons.org/licenses/by/4.0/` — each with
   `rel="noopener noreferrer" target="_blank"`, built with DOM APIs only (never
-  `innerHTML`).
+  `innerHTML`). *(The rewritten `privacy.line` half of this bullet was **removed
+  in v2.3.1**; the CC BY 4.0 credit half stays.)*
 
----
-
-## Notable fixes
+### Notable fixes (v2.3.0)
 
 - **Geocode cache wiring (item 7b).** The 24 h geocode cache shipped in code but
   `app.js` initially never handed the cache store to the geocoder, so repeat
@@ -99,7 +183,8 @@ fixed on `main`:
   keeps its **24 h TTL** (F2 / SEC F9).
 - **Privacy disclosure reworded** so it stays truthful under `localStorage` — the
   now-false "only in this browser tab" claim is gone, and the copy discloses
-  settings-no-expiry plus the 24 h cache TTL (F9).
+  settings-no-expiry plus the 24 h cache TTL (F9). *(This disclosure line was
+  removed entirely in v2.3.1.)*
 - **Attribution credit rendered with 3 live licence links** (SEC F8, above).
 - **Overlap-warning copy made tier-neutral** — no longer calls an inauspicious
   slot "otherwise-good" (QA F3).
@@ -113,9 +198,7 @@ fixed on `main`:
   licence hosts with a non-`href` guard, and the smoke gate now asserts every
   internal specifier has a `?v=` token.
 
----
-
-## Known issues & limitations
+### Known issues & limitations (v2.3.0)
 
 > **Reconciliation.** The GATE 2 rev 2 fix wave landed on `main` after the first
 > gate: the client confirmed item 7 as `localStorage`, the attribution credit was
@@ -126,9 +209,9 @@ fixed on `main`:
 > no open Critical/High/Medium) and the SEC-1 delta re-sign-off,
 > [docs/09-security-audit.md](docs/09-security-audit.md) (**PASS-with-accepted-risks**,
 > 0 Critical / 0 High / 0 Medium).
-> The gate is green on the post-wave tree — `make check` **exit 0** at HEAD
+> The gate was green on the post-wave tree — `make check` **exit 0** at HEAD
 > `61282a8` (tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS 5 states).
-> No QA finding remains open above Informational; the informational residuals
+> No QA finding remained open above Informational; the informational residuals
 > (F13/F14/F15) are carried to the post-release backlog.
 
 Remaining known issues (no open code defect; both are product decisions, not bugs):
@@ -154,9 +237,7 @@ the footer-link dark-theme contrast defect the wave fixed in `style.css`; the
 footer link colour is a one-rule product change a follow-up UX card may replace
 with a design-system token.
 
----
-
-## Security
+### Security (v2.3.0)
 
 Pre-release audit for v2.3.0: **PASS-with-accepted-risks** (SEC-1,
 [docs/09-security-audit.md](docs/09-security-audit.md) §10) — **0 Critical · 0 High
@@ -166,7 +247,7 @@ commits). Both Medium findings — the attribution hyperlinks (F8) and the
 storage-scope disclosure (F9) — were the audit's **GATE 2 conditions** and were
 **landed by the fix wave**, as were the Low finding (F10, geocode-cache read path)
 and the Informational item (F12, bare-`?v=`-less import). The SEC-1 delta
-re-sign-off updates [docs/09](docs/09-security-audit.md). What is relevant to
+re-sign-off updates [docs/09](docs/09-security-audit.md). What was relevant to
 v2.3.0:
 
 - The **CSP is unchanged** (`script-src 'self'`); the local cache adds no network
@@ -181,11 +262,9 @@ v2.3.0:
 - The geocode cache **re-validates persisted entries on read** (F10), so a
   tampered or legacy entry cannot reach the renderer.
 
----
+### Verification summary (v2.3.0)
 
-## Verification summary
-
-> **Gate re-run on the post-wave tree.** The fix-wave gate is green at HEAD
+> **Gate re-run on the post-wave tree.** The fix-wave gate was green at HEAD
 > `61282a8` — `make check` **exit 0**: tests **108/108**, security greps **0 hits
 > across 4 gates**, smoke **67/67**, axe **PASS (5 states)**, 0 critical/serious.
 > These figures supersede QA-1's (§13, HEAD `d45fef1`, 100/100 · 66/66), which
@@ -207,7 +286,7 @@ v2.3.0:
 | Secret scan | `gitleaks detect --source .` | **no leaks found** (87 commits) |
 | Perf budget | (printed by smoke) | shipped JS **184.9 KB raw / 58.5 KB gzip** upper bound (7 files) < 60 KB min+gzip (NFR-P3) |
 
-### Post-deploy verification (deployed URL)
+#### Post-deploy verification (v2.3.0, deployed URL)
 
 Executed by the release step (`DO-3`, `t_0a7a35b6`) against the live
 <https://time.gitick.com/> after the v2.3.0 push and Pages rebuild:
@@ -223,9 +302,7 @@ Executed by the release step (`DO-3`, `t_0a7a35b6`) against the live
 | Deployed smoke | The `scripts/smoke.mjs` harness serves the repo files from its own local static server and pins a fixture clock/geolocation, so it has **no remote-URL mode**; the shipped-file gate was re-run green on the release commit (`make check` **exit 0** @ `1a13519` — tests 108/108, greps 0 hits/4 gates, smoke 67/67, axe PASS 5 states) and the deployed URL was covered by the live browser probe above instead |
 | M6 mobile FCP gate (Lighthouse 12.8.2, mobile + simulated throttling) | **1496 ms / 1127 ms / 1127 ms** over 3 runs → **max 1496 ms < 1500 ms gate: PASS**; LCP 1.60/1.28/1.28 s, TBT 20/0/0 ms, performance score 0.99/0.92/0.92. (Informational: CLS 0 in run 1, 0.178 in runs 2–3 — the geolocation-prompt layout shift on a first visit; not a v2.3.0 gate, flagged as a possible follow-up.) |
 
----
-
-## Deploy / rollback
+### Deploy / rollback (v2.3.0)
 
 Deployed to GitHub Pages (`vishalnagda1/choghadiya`, `main`) with the annotated
 tag `v2.3.0`, after GATE 2. The full runbook — pre-flight gate, release
@@ -234,9 +311,7 @@ FCP gate, and rollback — is [`docs/DEPLOY.md`](docs/DEPLOY.md). This app is a
 static bundle, so rollback is a `git revert` of the release commit plus a
 redeploy (the `?v=` bump busts the Pages cache on the next deploy).
 
----
-
-## Attribution & licence
+### Attribution & licence (v2.3.0)
 
 - `suncalc` 2.1.1 — BSD-2-Clause (vendored, checksum-pinned).
 - Open-Meteo Geocoding API — data from GeoNames, **CC BY 4.0**. In-app credit

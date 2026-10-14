@@ -10,6 +10,46 @@ written in English.
 
 ---
 
+## [2.3.1] — 2026-10-14
+
+A client-requested copy tidy-up plus one bug fix. App behaviour is otherwise
+unchanged from v2.3.0 (12-hour default with a 24-hour toggle, the ±10-day
+calendar picker, the inauspicious periods, the detail panel and the browser-local
+`localStorage` settings + search cache all stay as shipped).
+
+### Removed
+
+- **Privacy disclosure line (`privacy.line`) removed.** The sentence
+  "Your searched city name is sent to Open-Meteo to find coordinates. No server
+  storage — settings stay in this browser with no expiry; recent searches and
+  cached results expire after 24 hours." was rendered by **two** elements sharing
+  one dictionary key — the page footer **and** the location-sheet disclosure.
+  Both elements and the key are gone; the i18n contract shrinks from 122 to
+  **119 keys**.
+- **"No account · no tracking · no backend" footer note (`footer.noTracking`)
+  removed.**
+- **Date-picker range hint (`date.picker.range`) removed** — the small print
+  "You can pick from 10 days before to 10 days after today". The **±10-day
+  selectable range itself is unchanged**: the picker still accepts any date from
+  10 days before to 10 days after the viewed location's today, and the
+  `‹ / ›` and `Alt + ← / →` navigation is untouched.
+
+The CC BY 4.0 geocoder credit (`attribution.geocoding`, "Location search by
+Open-Meteo · Data from GeoNames · CC BY 4.0") **stays** — it is the
+licence-required minimum while Open-Meteo/GeoNames data is displayed and is
+deliberately **not** part of this removal.
+
+### Fixed
+
+- **The date picker now opens when the date is tapped.** Tapping the displayed
+  date previously did not bring up the calendar; tapping it now opens the
+  browser's native calendar picker, and choosing a date updates the day/night
+  lists and the inauspicious-periods block for that date. The ±10-day clamp, the
+  `‹ / ›` and `Alt + ← / →` navigation, the keyboard path and the no-location
+  disabled state are unchanged.
+
+---
+
 ## [2.3.0] — 2026-10-14 (pre-release)
 
 This release is the **v2.3.0 feature wave** on top of the v2.2.0 refactor. It is
@@ -93,6 +133,7 @@ describe what is on `main` for this release.
     shipped `i18n.js` value: "Your searched city name is sent to Open-Meteo to
     find coordinates. **No server storage** — settings stay in this browser with
     no expiry; recent searches and cached results expire after 24 hours."
+    (**This disclosure line was removed in v2.3.1** — see [2.3.1].)
 - **Storage posture (ADR-007 → ADR-009).** The v2.2.0 "no web storage at all"
   stance is **relaxed**: [ADR-009](docs/adr/009-session-scoped-storage.md)
   supersedes ADR-007 in part, adopting **"no server storage; local TTL-gated
@@ -113,7 +154,9 @@ describe what is on `main` for this release.
   `session-store.js` `STORAGE_SCOPE` flipped `'session'` → `'local'`; the `{t,v}`
   envelope, the `choghadiya.*` namespace, no-expiry settings and the 24 h geocode
   TTL are unchanged. `privacy.line` and the ADR/doc wording were corrected in the
-  same wave so the disclosure stays truthful.
+  same wave so the disclosure stays truthful. (`privacy.line` was subsequently
+  **removed in v2.3.1** — see [2.3.1]; the storage behaviour it described is
+  unchanged.)
 - **Geocode-cache read path re-validates persisted entries (F10).** A tampered or
   legacy stored entry (invalid IANA timezone / non-finite coordinates) could reach
   the renderer and blank the page. `geocoder.js` now re-validates every persisted
@@ -188,7 +231,9 @@ describe what is on `main` for this release.
 - **Responsive, mobile-first layout** with no horizontal scroll from 320 px up.
 - **Privacy & attribution lines:** a disclosure that a searched city name is sent
   to the geocoder (coordinates never leave the device), a geocoder credit, and a
-  "no account / no tracking / no backend" note.
+  "no account / no tracking / no backend" note. (**Both the disclosure and the
+  "no account / no tracking / no backend" note were later removed — in v2.3.1**;
+  the geocoder credit remains.)
 - **Delivery & tooling:** a zero-dependency Makefile (`dev` / `test` / `smoke` /
   `axe` / `check` / `bump`) and `npm` scripts; a GitHub Actions workflow running
   the test suite on every push and PR; a vendored, checksum-pinned `suncalc`
@@ -242,5 +287,6 @@ The original single-page app: a static, mobile page that displayed a
 awareness or language toggle. Kept here as the version baseline (`package.json`
 `2.1.0`) that `v2.2.0` bumps from; it predates this repository's history.
 
-[Unreleased]: https://github.com/vishalnagda1/choghadiya/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/vishalnagda1/choghadiya/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/vishalnagda1/choghadiya/compare/v2.2.0...v2.3.0

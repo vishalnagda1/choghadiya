@@ -9,11 +9,12 @@ location, and displays them in **Hindi (default) or English**.
 Unlike the previous version of this app, the slot boundaries are **not hardcoded**
 to 06:00–18:00 — they are derived client-side from the actual solar day, so the
 timings are correct in every season and for every latitude. See
+[What changed in v2.3.1](#what-changed-in-v231),
 [What changed in v2.3.0](#what-changed-in-v230) and
 [What changed in v2.2.0](#what-changed-in-v220).
 
 - **Docs language:** these docs are English. The **UI is Hindi by default** with a
-  one-tap EN toggle — every user-facing string ships in both languages (122 keys,
+  one-tap EN toggle — every user-facing string ships in both languages (119 keys,
   contract-tested). See [docs/02-prd.md](docs/02-prd.md) §5 and
   [docs/03-ux.md](docs/03-ux.md) §6 for the bilingual copy deck.
 
@@ -186,16 +187,13 @@ fully static and keyless:
     disables web storage, and every access is wrapped so nothing ever throws.
   - Clearing this origin's site data (via your browser's storage settings) is what
     removes it — these are not cookies, and there is no toggle for them in the app.
-- Grep-able in the UI: the footer and the search sheet both carry the disclosure
-  line, verbatim from `i18n.js`:
-
-  > Your searched city name is sent to Open-Meteo to find coordinates. No server
-  > storage — settings stay in this browser with no expiry; recent searches and
-  > cached results expire after 24 hours.
-
-  The same surfaces carry the geocoder credit — see
-  [Attribution & licence](#attribution--licence). The old v2.2.0 "location is
-  never stored" wording was retired in v2.3.0, because it was no longer true.
+- The v2.3.0 **privacy disclosure line** — the "your searched city name is sent
+  to Open-Meteo … cached results expire after 24 hours" sentence that appeared in
+  **both** the footer and the location search sheet — was **removed in v2.3.1** at
+  the client's request. The only third-party attribution that remains in the UI is
+  the geocoder credit (see [Attribution & licence](#attribution--licence)); it
+  cannot be removed because Open-Meteo's and GeoNames' **CC BY 4.0** terms require
+  attribution while their data is displayed.
 
 See [docs/02-prd.md](docs/02-prd.md) §6.3 for the privacy requirements and
 [docs/adr/009-session-scoped-storage.md](docs/adr/009-session-scoped-storage.md)
@@ -263,7 +261,7 @@ choghadiya/                     # repo root — deployed verbatim to GitHub Page
 ├── inauspicious.js             # pure Vaar Vela / Kaal Vela / Kaal Ratri engine
 ├── geocoder.js                 # Open-Meteo geocoding client (cache, debounce, abort)
 ├── session-store.js            # namespaced, TTL-capable localStorage wrapper
-├── i18n.js                     # 122-key Hindi/English dictionary + t()
+├── i18n.js                     # 119-key Hindi/English dictionary + t()
 ├── vendor/
 │   └── suncalc-2.1.1.js        # vendored ESM build, checksum-pinned
 ├── favicon.svg                 # minimal, emoji-free sun icon
@@ -329,6 +327,24 @@ Pages verification, post-deploy smoke + Lighthouse FCP gate, and rollback — is
   with `rel="noopener noreferrer" target="_blank"` and built with DOM APIs only —
   never `innerHTML`.
 - **Project licence:** MIT (see `package.json`).
+
+---
+
+## What changed in v2.3.1
+
+A small, client-requested copy tidy-up plus one bug fix. App behaviour is
+otherwise unchanged from v2.3.0.
+
+- **Removed three UI copy lines** — the privacy disclosure line (from **both** the
+  footer and the location sheet), the "No account · no tracking · no backend"
+  footer note, and the date-picker range hint. The **±10-day selectable range
+  itself is unchanged** — the picker still accepts any date from 10 days before to
+  10 days after today, and the `‹ / ›` and `Alt + ← / →` navigation is untouched.
+- **Kept the CC BY 4.0 geocoder credit** deliberately — it is the licence-required
+  minimum while Open-Meteo/GeoNames data is displayed, so it is not removed.
+- **Fixed the date picker** — tapping the displayed date now opens the browser's
+  native calendar picker, and picking a date updates the day/night lists and the
+  inauspicious periods.
 
 ---
 
