@@ -420,9 +420,64 @@ detail.
 
 ---
 
-## 11. Revision log
+## 11. v2.3.0 delta — web storage enters the model (item 7, ADR-009)
+
+*Added by the v2.3.0 re-audit (SEC-1, `t_174049d9`). ADR-007 ("no web storage at all")
+is superseded **in part** by ARCH-1's ADR-009; this section is the threat-model
+consequence. Everything in §1–§10 not contradicted here still holds.*
+
+### 11.1 What changed
+
+`sessionStorage` (STORAGE_SCOPE='session', per-tab) now holds, via `session-store.js`
+(the ONLY module that may name a storage API — enforced by the SEC-STORAGE gate):
+
+- **settings** — `choghadiya.settings.timeFormat` / `.lang` / `.location`
+  (`{lat, lon, timezone, label}`; the device fix IS stored when geolocation is used).
+- **geocode cache** — `choghadiya.geocache.entry.<lang>\u0000<query>` (24 h TTL,
+  FIFO cap 64) + `choghadiya.geocache.index`. Recent queries and Open-Meteo results
+  are now **at rest locally** for up to 24 h.
+
+Physical keys are namespaced `choghadiya.*`; everything is JSON in a `{t, v}` envelope.
+
+### 11.2 New/changed assets & boundary
+
+**TB5 — same-origin web storage (new).** Writable by: any same-origin script, browser
+extensions with storage access, and anyone with physical/profile access to the tab.
+Trust rule (mirrors TB2): **stored values are untrusted input on every read.** Consumers
+must drop malformed envelopes (session-store does), allow-list fields
+(`hydrateSettings`/`normaliseStoredLocation` do), and treat cached third-party strings
+exactly like fresh API responses (textContent only — SEC-05 holds; **but** the
+geocache read path does not re-validate records → docs/09 v2.3.0 F10).
+
+| Asset | STRIDE delta | Control |
+|---|---|---|
+| stored settings | **T** tamper → wrong lang/format/coords (UI-level only) | field allow-lists + IANA validation on read (verified) |
+| geocache entries | **T** tamper → poisoned results / render crash (F10); **E** query+results at rest | envelope validation, 24 h TTL, FIFO-64, textContent rendering |
+| device coordinates | **E** at rest in `.location` | per-tab lifetime (sessionStorage); disclosed in `privacy.line` |
+| storage availability | **D** disabled/throwing storage | try/catch + in-memory Map fallback (verified live: app functional, no DOM leak) |
+
+### 11.3 Requirement deltas (additive to §6)
+
+- **SEC-STORAGE** (new, gate-persisted): `localStorage`/`sessionStorage` tokens only in
+  `session-store.js`; every other module goes through get/set/remove/clear.
+- **Read-path validation rule (new):** a consumer of stored data must apply the same
+  validation as the equivalent live input. Status: settings ✓, geocache ✗ (F10).
+- **Disclosure truthfulness rule (new):** `privacy.line` must track the actual storage
+  scope and TTL wording; changing `STORAGE_SCOPE` is a disclosure change (docs/09 F9).
+
+### 11.4 Pending: client-confirmed flip to localStorage
+
+`docs/00-brief.md` item 7 (uncommitted CTO edit, client-confirmed) now specifies
+**localStorage**: settings survive browser restarts with **no expiry**; only the API
+cache is TTL-gated. That is NOT the audited tree (which ships `STORAGE_SCOPE='session'`).
+If the flip lands: shared-device exposure ↑ (E), settings-at-rest lifetime becomes
+indefinite, `privacy.line` ("this browser tab") becomes false until reworded, and this
+section + docs/09 v2.3.0 addendum need a delta pass (F9).
+
+## 12. Revision log
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | security-engineer | Initial threat model: assets & attacker classes (§2), trust boundaries TB1–TB4 (§3), STRIDE per component (§4), risk register (§5), implementation checklist SEC-01..SEC-24 mapped to plan tickets (§6), OWASP Top 10 2021 + ASVS v4.0 chapter mapping (§7), architecture change verdict — origin list and CSP unchanged, 5 additive clarifications, no ADR amendment (§8), accepted residuals (§9), audit contract (§10). |
 | v1.0 + audit ticks | 2026-10-14 | security-engineer | Pre-release audit (`docs/09-security-audit.md`, commit `6112405`): §6 boxes ticked (20/24 verified; SEC-07/18/22 partial = F2/F1/F3 with fix cards; SEC-19 deploy half = release card), SEC-08/11/12 + RK9 re-verified closed after `6a41384` (REV-M3 follow-up). Verdict: PASS-with-accepted-risks (0 Critical, 0 High, 1 Medium, 2 Low). No change to §1–§5/§7–§10 content. |
+| v1.1 (v2.3.0 delta) | 2026-10-14 | security-engineer | New §11 (v2.3.0 re-audit, `t_174049d9`): web storage enters the model (ADR-007 superseded in part by ADR-009) — new boundary TB5 (same-origin web storage = untrusted input on read), storage STRIDE delta, SEC-STORAGE + read-path-validation + disclosure-truthfulness requirement deltas, pending localStorage flip note. Renumbered old §11 → §12. |

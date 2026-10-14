@@ -320,3 +320,261 @@ strict zero-open-findings release, wait for the two fix cards; otherwise release
 proceed with F1–F3 shown to the client as known issues. **No High/Critical finding is
 being softened**: had the geocoder hardening (`6a41384`) not landed, this audit would have
 failed on SEC-08/11/12.
+
+---
+---
+
+# V2.3.0 ADDENDUM — delta re-audit (storage, attribution, new surfaces)
+
+**VERDICT: PASS-with-accepted-risks (0 Critical · 0 High · 2 Medium · 1 Low · 1 Informational)**
+
+*SEC-1 card `t_174049d9`, security-engineer, 2026-10-14. This addendum audits the
+v2.3.0 delta (docs/00-brief.md change-log items 1–7) on top of the v2.2.0 audit above.
+Findings are numbered F8–F12, continuing this document's F-sequence. **Two GATE 2
+conditions attach to this verdict** — see §10.9.*
+
+## 10.1 Scope & audited tree
+
+- **Audited tree:** `main` @ `c68d00a` (`docs(qa): v2.3.0 test plan + report [t_e4d61d3a]`),
+  with the working tree clean except an **uncommitted `docs/00-brief.md` CTO edit**
+  (the client-confirmed localStorage change, §10.3/F9 — deliberately NOT part of the
+  audited code).
+- **Delta surface vs the v2.2.0 audit:** `session-store.js` + `inauspicious.js` (new
+  modules), `geocoder.js` cacheStore contract + persistence (item 7b), `app.js`
+  settings hydration/persist + cacheStore wiring (`068681c`), FE-2..FE-6 UI surfaces
+  (items 2–6), FE-4 attribution/privacy copy (items 3/7), quality gates in
+  `scripts/security-greps.mjs`/`smoke.mjs`.
+- **NOT covered:** the localStorage scope flip (not implemented), real-device
+  geolocation (QA MAN-03), the release/deploy step (SEC-19, release card).
+
+## 10.2 Gate runs at the audited tree (real output)
+
+| Gate | Command | Result |
+|---|---|---|
+| unit/contract tests | `make test` (node --test tests/) | **100 pass / 0 fail** |
+| SEC-22 source greps | `npm run greps` (scripts/security-greps.mjs) | **PASS — 0 hits across 4 gates** (SEC-05, SEC-03, SEC-14, SEC-STORAGE) |
+| browser smoke | `node scripts/smoke.mjs` | **66 passed / 0 failed** (incl. 12 new item-7b cache checks) |
+| axe accessibility | `node scripts/axe-check.mjs` | **PASS**, 5 states, 0 critical/serious |
+| dependency audit | `npm audit` (incl. dev) | **found 0 vulnerabilities** |
+| secret scan | `gitleaks detect --source .` | **no leaks found** (87 commits, ~1.26 MB) |
+| vendored suncalc | fresh `npm pack suncalc@2.1.1` → `diff -q package/index.js vendor/suncalc-2.1.1.js` | **BYTE-IDENTICAL**, sha256 `f5e86948…e4a197f` (= v2.2.0 record) |
+
+## 10.3 Item 7 — storage posture change (the privacy delta)
+
+**SEC-STORAGE containment.** Grep over shipped files for `localStorage|sessionStorage`
+→ hits **only** `session-store.js` (its own docs + the `STORAGE_SCOPE` constant);
+`scripts/security-greps.mjs` SEC-STORAGE gate enforces this persistently (0 hits, all
+other modules exempt-free). `geocoder.js` contains no storage tokens — it receives the
+store via injection (`cacheStore`, app.js:763 adapter exposing only get/set/remove).
+
+**Envelope parsing / injection safety — probed, not assumed** (node harness importing
+the real `session-store.js` + live browser seeding; 17/17 probe classes):
+
+- Malformed JSON, non-envelope shapes (`[]`, `""`, missing `t`/`v`, non-finite `t`),
+  and expired envelopes → **dropped and the key deleted**; never surfaced to the app.
+- Prototype-pollution payloads (`{"__proto__":{…}}` inside `v`, own `__proto__` at top
+  level, `constructor.prototype`) → `JSON.parse` own-property semantics + the envelope
+  guard mean **`Object.prototype` stays clean** in every case; no stored value is ever
+  merged via `Object.assign`/spread — `hydrateSettings` allow-lists (`'hi'|'en'`,
+  `'12h'|'24h'`) and `normaliseStoredLocation` destructures fixed fields onto a fresh
+  object with IANA-validation (bad `lat` type, `Evil/Zone`, wrong shape → rejected).
+- **Gap found (F10, Low):** the geocache read path (`geocoder.js` `persistGet`) accepts
+  any stored **array** without re-validating elements (mapResult runs only on network
+  data). Live probe: a seeded entry with `timezone:"Not/AZone"` + `latitude:999`
+  rendered inert (HTML payloads in `name`/`admin1` are textContent — no execution),
+  but **selecting** it threw an uncaught `RangeError: Invalid time zone specified`
+  that aborted `render()` (empty date label, 0 rows). Local-tamper DoS of the UI —
+  not remotely reachable (the network path is validated), so Low; fix = run persisted
+  entries through the mapResult validation on read (or guard `selectResult`).
+
+**Fallback (storage throwing).** Live: `sessionStorage` accessor overridden to throw
+`SecurityError` before any page script → app renders, language toggle + 24h toggle +
+sheet all work, **no failure text leaks into the DOM** (regex scan for
+`SecurityError|storage blocked|undefined` over `body.innerText` → false). Node probes
+additionally cover per-operation throws (getItem/setItem/removeItem), QuotaExceeded on
+write (memory shadow serves reads), and a throwing accessor. `session-store.js` never
+throws at the call site — contract held.
+
+**What is actually written (live run, real API).** After a full flow (search → select →
+reload → repeat search → toggles) `sessionStorage` contained **only**:
+
+```text
+choghadiya.settings.location   {"t":null,"v":{"lat":26.91962,"lon":75.78781,"timezone":"Asia/Kolkata","label":"जयपुर, राजस्थान, भारत"}}
+choghadiya.geocache.index      {"t":null,"v":["hi\u0000jaipur"]}
+choghadiya.geocache.entry.hi\u0000jaipur  {"t":<now+24.00h>,"v":[…8 mapped results…]}
+```
+
+plus `settings.timeFormat` / `settings.lang` when toggled. Exactly the client-specified
+fields; **no history/favourites/keys creep**; every key namespaced `choghadiya.*`;
+envelope TTL = 24.00 h as designed. **US-17 invariant re-verified live:** with a
+device geolocation fix applied AND a search, every request URL in the page is
+self-origin except
+`https://geocoding-api.open-meteo.com/v1/search?name=Pune&count=8&language=hi` —
+**no coordinate value or `lat`/`lon` parameter appears in any URL** (string scan of
+the full resource list). Cache-hit behaviour verified: repeat query after
+`location.reload()` renders 8 rows with **0** geocoding requests.
+
+**Privacy disclosure truth audit (post FE-4, byte-level).** Rendered strings match
+`i18n.js` values (the i18n test asserts byte-verbatim) —
+"Your searched city name is sent to Open-Meteo to find coordinates. No server storage —
+settings and recent searches stay only in this browser tab." (+ Hindi).
+
+| Claim | Reality at the audited tree | Verdict |
+|---|---|---|
+| city name sent to Open-Meteo | exactly `name=<query>` + fixed `count=8` + UI `language` to geocoding-api only (v2.2.0 F4 nuance stands) | ✅ truthful |
+| "No server storage" | no backend exists; nothing is sent but the query | ✅ truthful |
+| "settings and recent searches stay only in this browser tab" | sessionStorage per-tab; geocache = recent queries+results | ✅ truthful **only because** FE-FIX (`068681c`) wired the cache — before it, "recent searches" over-claimed (TL-1 F1, now fixed and verified above) |
+| TTL / expiry not disclosed | cache expires at 24 h; settings never (in-tab) | ⚠️ **incomplete** (F9) |
+| "this browser tab" under the **pending localStorage flip** | flip = data survives browser restarts, settings without expiry | ❌ becomes **false** if the flip lands without a copy change (F9) |
+
+## 10.4 Item 3 — attribution / licence compliance (RS-3)
+
+**Applied option = B** (the RS-3 recommendation), implemented by FE-4 — verified live:
+the two v2.2.0 body lines are gone; one footer credit
+`स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0` /
+`Location search by Open-Meteo · Data from GeoNames · CC BY 4.0` plus the rewritten
+`privacy.line`, both byte-equal to the RS-3 §13.6 B1/B2 dictionary values. This is
+NOT the client's literal request (full removal, option A) — RS-3 proved A is a
+CC BY 4.0 breach, and GATE 2 must surface the divergence (TL-1 handoff, unchanged).
+
+**BUT the B1 hyperlinks are missing (F8, Medium).** RS-3 §13.6 is explicit: *"the
+licence requires links, not just text"* — targets `open-meteo.com`, `geonames.org`,
+`creativecommons.org/licenses/by/4.0/` with `rel="noopener noreferrer"`. Live DOM
+probe: **zero `<a>` elements on the page**; the credit ships as plain text. Against
+the quoted terms this is not yet compliant: Open-Meteo requires *"a link next to any
+location Open-Meteo data are displayed"*, GeoNames asks for credit *"with a link or
+another reference"*, and CC BY 4.0 §3(a) requires the licence *"URI or hyperlink"*
+(the bare words "CC BY 4.0" are neither). The deferral rationale recorded by FE-4
+(SEC-14 allow-list rejects new origins) is a **self-imposed grep gate, not a CSP
+constraint** — top-level navigation links are not restricted by the shipped CSP
+(`default-src`/`connect-src` govern subresource loads; the live CSP probes in §10.6
+show what enforcement actually blocks). RS-3 itself sanctions the fix: extend
+`ALLOWED_ORIGINS` in `scripts/security-greps.mjs` with the three hosts and render the
+three links. **GATE 2 must either land the links (FE fix + DO gate tweak) or record
+the client's explicit acceptance of an attribution-terms breach** — do not ship
+silently.
+
+## 10.5 New attack surfaces (items 2, 4, 5, 6 + i18n expansion)
+
+- **Date picker (item 4).** Native `type="date"`, `min`/`max` = location civil date
+  ±10 (live: `2026-10-04`..`2026-10-24`). `onPickDate` re-validates on every event:
+  ISO-regex **and** range check (`app.js:519-525`); `clampISO` for the buttons. Live
+  tamper probes: out-of-range `2030-01-01` → reverted to the viewed date; `0001-01-01`
+  → reverted; garbage string → native control neutralises it (value `''`; `change`
+  snaps back per design, `input` deliberately doesn't fight the keystroke). No `NaN`
+  anywhere in the DOM after any probe. min/max bypass via DOM writes cannot leave the
+  ±10 window (single clamp rule).
+- **Detail panel / all rendering (items 5–6).** SEC-05 gate: **0 hits** for
+  `innerHTML|outerHTML|insertAdjacentHTML|document.write|eval(|new Function|javascript:|setAttribute('style'`
+  across all 10 shipped files. Live hostile-payload probe (HTML/script/svg in cached
+  `name`/`admin1`) rendered as **literal text** (`window.__xss`/`__xss2` never set).
+  Panel content (dictionary strings, `panel.note.overlay.*`) enters via `t()` +
+  `textContent` only — NFR-S2 holds on every new surface.
+- **Geolocation button (item 2).** No auto-prompt when a stored location exists
+  (FE-1); the manual button is single-fire: 3 rapid clicks → **exactly 1**
+  `getCurrentPosition` call (call-counter probe), button `disabled` + `aria-busy`
+  while in flight; a hard **denial** re-enables the button and offers the S5
+  copy + city fallback (no dead end, no prompt loop). Success path verified with a
+  stub (chip `मेरी लोकेशन`); coordinates stay on-device (§10.3 URL scan).
+- **i18n expansion.** Dictionary is a static object literal in `i18n.js` (122 keys,
+  `tests/i18n.test.js` asserts byte-verbatim both languages + every `data-i18n` hook
+  resolves); `t()` interpolates `{vars}` via `String()` into `textContent`/`setAttribute`
+  sinks only; research-derived key/data strings enter through the dictionary, never as
+  dynamic HTML. No dynamic key computation exists.
+
+## 10.6 Standing gates re-verified (CSP, greps, scanners, suncalc)
+
+- **CSP meta byte-exact + enforcing.** `content` is byte-identical (whitespace-
+  normalised) to `04-architecture.md` §5.3; placement verified: first element of
+  `<head>` (only a comment precedes it), ahead of `<meta charset>` and every
+  `<link>/<script>`. **Enforcement probed live:** injected inline `<script>` did not
+  execute; injected external `https://example.com/evil.js` refused (`onerror`,
+  `transferSize: 0`, `responseStatus: 0` — no bytes fetched); `fetch('https://example.com/')`
+  blocked by `connect-src` (TypeError) while the allow-listed geocoder fetch succeeds
+  (HTTP 200). Zero CSP violations during normal flows.
+- **`make greps` SEC-03/05/14 + the new storage rule:** 0 hits / 4 gates (§10.2),
+  now a persistent failing gate in `make check` (v2.2.0 F3 closed).
+- **`make check`** green at `c68d00a` (tests 100/100, greps, smoke 66/66, axe 5/5).
+- **gitleaks** clean over 87 commits; **npm audit** 0 vulnerabilities.
+- **Vendored suncalc unchanged:** sha256 `f5e86948…e4a197f` matches the v2.2.0 record
+  AND a fresh `suncalc@2.1.1` registry download (`diff -q` byte-identical).
+
+## 10.7 SEC-01..SEC-24 delta ticks
+
+| Gate | v2.3.0 delta status |
+|---|---|
+| SEC-01 CSP meta | ✅ re-verified byte-exact + first-in-head + enforcing (3 live vectors) |
+| SEC-02 referrer | ✅ `no-referrer` meta present (index.html:12) |
+| SEC-03 no inline style/handlers | ✅ 0 hits; gate covers the two new modules |
+| SEC-04 assets same-origin+versioned | ✅ **with note F12**: `inauspicious.js:24` imports `./choghadiya.js` WITHOUT `?v=` → duplicate unversioned fetch (live resource list shows both `choghadiya.js?v=2.2.0` and bare `choghadiya.js`) |
+| SEC-05 no HTML sinks | ✅ 0 hits + hostile-payload probe inert |
+| SEC-06 t() via textContent | ✅ dictionary + panel + rows all textContent |
+| SEC-07 DOM-clobbering hygiene | ✅ now fully met (v2.2.0 F2 `name="city"` removed; grep 0 hits) |
+| SEC-08 query validation | ✅ unchanged (control chars rejected, no request) |
+| SEC-09 URL building | ✅ unchanged; live URLs carry only `name/count/language` |
+| SEC-10 allow-listed mapping | ✅ unchanged on the network path; **read path gap → F10** |
+| SEC-11 third-party validation | ✅ network path unchanged; **F10 = persisted records skip it** |
+| SEC-12 caps | ✅ persisted cache inherits FIFO-64 (`persistSet`) + 24 h TTL |
+| SEC-13 single fetch + omit credentials | ✅ live-verified; geocache adds query+results **at rest** (disclosed) |
+| SEC-14 origin allow-list | ✅ 0 hits; **gate too narrow for the licence links → F8** |
+| SEC-15 privacy claims | ⚠️ truthful for the shipped session scope; TTL undisclosed + flip hazard → **F9** |
+| SEC-16 suncalc byte-identity | ✅ fresh-registry re-verified |
+| SEC-17 pinned deps | ✅ unchanged (axe-core 4.10.2 exact, dev-only) |
+| SEC-18 CI hardening | ✅ now SHA-pinned (`.github/workflows/ci.yml:23,26`) — v2.2.0 F1 closed |
+| SEC-19 release ops | ⏳ release-card scope, unchanged |
+| SEC-20 secrets | ✅ gitleaks clean (87 commits) |
+| SEC-21 no logging | ✅ `console.`/beacon/XHR grep 0 hits |
+| SEC-22 persistent greps | ✅ `scripts/security-greps.mjs` in `make check` — v2.2.0 F3 closed |
+| SEC-23 test-suite network-free | ✅ tests mocked, smoke fixture-intercepted (item-7b checks included) |
+| SEC-24 manual browser pass | ✅ executed for this addendum (§10.3–10.6) |
+
+## 10.8 Threat-model drift check
+
+See the new **docs/06 §11** (v2.3.0 delta, written in this card): ADR-007 superseded
+in part by ADR-009; new boundary **TB5 (same-origin web storage = untrusted input on
+read)**; storage STRIDE delta; SEC-STORAGE + read-path-validation + disclosure-
+truthfulness requirement deltas. v2.2.0 drift items F1/F2/F3 are **closed**; A5
+(no SW/postMessage/iframes/URL-state) re-greps to 0 hits; §1.1 "one network request
+type" holds.
+
+## 10.9 Findings (F8–F12)
+
+| ID | Severity | Finding | Location | Fix | Disposition |
+|----|----------|---------|----------|-----|-------------|
+| F8 | **Medium** | Attribution credit ships WITHOUT the hyperlinks RS-3 §13.6 B1 requires ("the licence requires links, not just text"); Open-Meteo's terms require a link next to displayed location data and CC BY 4.0 §3(a) requires the licence URI/hyperlink. The SEC-14 deferral is a self-imposed grep gate — CSP does not block navigation links | `index.html:298-300`, `i18n.js:84,208`, `scripts/security-greps.mjs:72-75` | Add 3 `<a rel="noopener noreferrer" target="_blank">` links (open-meteo.com / geonames.org / creativecommons.org/by/4.0) to `attribution.geocoding`; extend `ALLOWED_ORIGINS` with exactly those 3 link-only hosts (RS-3 explicitly sanctions this) | **GATE 2 condition**: land the links OR record the client's explicit acceptance of an attribution-terms breach. Fix cards: frontend-dev (links) + devops-engineer (gate allow-list) |
+| F9 | **Medium** | Disclosure-vs-storage truthfulness is time-bombed: (a) `privacy.line` does not disclose the 24 h cache TTL/expiry; (b) the client-confirmed localStorage flip (uncommitted `docs/00-brief.md` edit) would make "this browser tab" **false** and extends settings-at-rest lifetime to indefinite (shared-device exposure) | `i18n.js:83,207`, `index.html:299,336`, `session-store.js:38` | If the flip lands, same commit must reword `privacy.line` ("this browser tab"→"this browser", add "TTL-gated cache" wording per the brief), update ADR-009 + docs/06 §11.4, and re-run this delta. Consider adding the TTL to the copy regardless | **GATE 2 sequencing item** (matches TL-1 F2). Owner: CTO routes (copy = UX/tech-writer + one-line scope flip) |
+| F10 | **Low** | Geocache read path returns stored arrays without re-validating records (mapResult runs only on network data): a tampered/legacy entry with an invalid IANA tz or non-finite coords reaches `selectResult`, throws uncaught `RangeError`, and blanks the render (live-proven). TextContent rendering prevents any XSS (verified) | `geocoder.js:244-253` (`persistGet`), `app.js:937-955` (`selectResult`) | Run persisted entries through the same validation as `mapResult` (drop bad records on read), or guard `selectResult`'s `timezone` with the existing `isValidTimeZone` fallback to `deviceTimeZone()` | Fix card → backend-dev (geocoder.js read path) — CTO routes |
+| F11 | *(informational, carried)* | The v2.2.0 F4 nuance stands: `privacy.line` names only the typed city name; the request also carries fixed `count=8` and the UI `language` | `i18n.js:83,207` | optionally widen copy (coordinated UX + i18n-gate change) | Accepted, unchanged |
+| F12 | *(informational)* | `inauspicious.js:24` imports `./choghadiya.js` with no `?v=` token → the module is fetched twice (versioned + bare) and the bare specifier bypasses cache-busting (version-skew risk on redeploy; US-19 AC3 letter). Smoke's assetVersions() checks token *values*, not token *presence* | `inauspicious.js:24` | add `?v=${ASSET_VERSION}`-style token to the import (and extend smoke to assert every internal specifier carries one) | Flag to CTO → fix card candidates (BE lane for the import, DO lane for the smoke assertion) |
+
+## 10.10 Residual risk (post v2.3.0 delta)
+
+1. **F8 licence exposure is the top GATE 2 item** — enforcement risk is realistically
+   low (small non-commercial tool) but the breach is formal and the fix is tiny;
+   RS-3's own recommendation ships with links.
+2. **F9 flip sequencing** — if the localStorage flip lands after this audit (or after
+   QA-1/TW-1), every report citing "this browser tab"/session semantics needs a delta
+   pass; the disclosure must not ship wrong even briefly.
+3. **F10** is local-tamper-only (extensions / shared device / devtools): worst case a
+   blank render until TTL expiry or tab close; no code-execution or data-leak path.
+4. Shared-device exposure of the geocache (recent queries visible in the tab for 24 h)
+   is inherent to item 7 as specified and disclosed; per-tab lifetime bounds it.
+5. The smoke reload scenarios still rely on `sessionStorage` surviving `Page.reload`
+   in one target (DO-1 residual, unchanged); the new item-7b checks share it.
+
+## 10.11 Verdict
+
+**VERDICT: PASS-with-accepted-risks (0 Critical · 0 High · 2 Medium · 1 Low · 1 Informational)**
+
+Per the audit contract (docs/06 §10) the FAIL trigger is an open Critical/High —
+none exists. The v2.3.0 privacy-posture delta is soundly built: storage is confined to
+`session-store.js` behind a persistent gate, envelope parsing is injection-safe under
+malformed and prototype-polluting payloads (probed), the throwing-storage fallback
+keeps the app fully functional with zero leakage into the DOM, live inspection shows
+exactly the client-specified fields and a working 24 h TTL cache with no coordinate
+ever in a URL, and every new rendering surface (panel, picker, geolocation, i18n)
+stays textContent-only under hostile payloads. **GATE 2 conditions: F8 (attribution
+links — fix or explicitly accept) and F9 (storage-scope/disclosure sequencing).**
+F10–F12 are Low/informational and non-blocking. No finding here is being softened:
+had the FE-FIX cache wiring not landed (`068681c`) or the disclosure been left
+over-claiming, item 7 would have failed this audit.
