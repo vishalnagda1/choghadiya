@@ -87,36 +87,57 @@ adds a **choghadiya detail panel** explaining each slot, and — for the first t
 
 ## Known issues & limitations
 
-> **Reconciliation status — PLACEHOLDER.** The v2.3.0 QA report
-> ([docs/08-test-report.md](docs/08-test-report.md)) and security audit
-> ([docs/09-security-audit.md](docs/09-security-audit.md)) **have not yet been run
-> for v2.3.0** (those documents still describe v2.2.0). The items below are the
-> known state from the **integration review (TL-1)** and must be reconciled with
-> the QA-1 / SEC-1 verdicts by the release step before publishing.
+> **Reconciliation — DONE.** This section is reconciled with the final v2.3.0
+> verdicts: **QA-1** ([docs/08-test-report.md](docs/08-test-report.md) §13 —
+> *PASS-WITH-KNOWN-ISSUES*, tested HEAD `d45fef1`) and **SEC-1**
+> ([docs/09-security-audit.md](docs/09-security-audit.md) §10 —
+> *PASS-with-accepted-risks*, audited tree `c68d00a`). Neither verdict is FAIL and
+> no Critical/High finding is open, so the release is shippable pending GATE 2.
+> The findings below are the QA/security findings as filed (`F*` ids); none is a
+> code defect that blocks the release, and each open *decision* is surfaced to the
+> client at GATE 2.
 
-1. **Manual/browser checks pending QA-1.** Real-browser exploratory checks for the
-   new surfaces (picker, periods, panel, geolocation button) and their
-   accessibility are carried by the QA-1 card; the integration review's live
-   Chromium spot-runs passed, but the formal QA report has not landed.
-2. **Security re-audit pending SEC-1.** The hyperlink half of the attribution
-   credit is **deferred** — Open-Meteo's terms ask for a link *next to* displayed
-   location data, but adding three `http(s)` hyperlink origins would extend the
-   shipped CSP origin allow-list, which the SEC-14 gate and the current audit
-   scope freeze. The credit therefore ships as **plain text**; the hyperlinks are
-   an open item for SEC-1 / GATE 2.
-3. **Storage scope is session-based (client-confirmed change pending).** Shipped
-   behaviour is per-tab **`sessionStorage`** (cleared on tab close). The client's
-   confirmed change request describes `localStorage` (settings surviving full
-   browser restarts); that is a one-line flip in `session-store.js` plus copy/ADR
-   updates and is sequenced against the QA-1 / SEC-1 / TW-1 cards at GATE 2. If it
-   lands before release, the privacy copy and these notes need a delta pass.
-4. **`panel.note.overlay.*` copy defect (UX-1, low).** The overlap-warning copy
+1. **Storage scope — `sessionStorage` vs client-requested `localStorage` (QA F2 /
+   SEC F9, Medium).** The shipped build is per-tab **`sessionStorage`**
+   (`session-store.js` `STORAGE_SCOPE='session'`), so settings survive a **reload**
+   but are cleared on tab close. The client addendum records a confirmed change to
+   `localStorage` (settings surviving full browser restarts); that flip is a
+   one-line change plus copy/ADR updates and is **not** in this build. **GATE 2
+   decision:** keep per-tab session scope (as audited here) or flip to
+   `localStorage` in a follow-up change card. If the flip lands, `privacy.line`,
+   this file, README, CHANGELOG and ADR-009 need a delta pass (SEC-1 F9) — see
+   docs/07 §12.
+2. **Attribution credit ships as plain text (QA F4 / SEC F8, Medium).** Full
+   removal of the geocoder credit would breach Open-Meteo's and GeoNames' CC BY 4.0
+   terms, so v2.3.0 keeps one minimal footer credit ("Location search by Open-Meteo
+   · Data from GeoNames · CC BY 4.0") with `privacy.line` rewritten to the new
+   storage stance. The licence **hyperlinks** (open-meteo.com / geonames.org /
+   creativecommons.org) are **deferred**: they would extend the shipped CSP origin
+   allow-list, which the SEC-14 gate freezes. **GATE 2 decision:** land the links
+   (and extend the allow-list) or record the client's explicit acceptance of the
+   plain-text credit. See docs/09 §10.3.
+3. **`panel.note.overlay.*` copy defect (QA F3, Low).** The overlap-warning copy
    reads "within this *auspicious* choghadiya" even when the overlapped slot is
-   inauspicious; the front-end implemented the UX spec verbatim. Routed as a UX
-   copy fix.
-5. **±1–2 min vs a printed panchang.** Expected and disclosed in the UI footer;
-   suncalc uses the upper-limb + refraction convention.
-6. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg /
+   inauspicious; the front-end implemented the UX spec verbatim. UX-owned copy fix.
+4. **Geocode-cache read path skips re-validation (SEC F10, Low).** A tampered
+   stored entry (e.g. `timezone:"Not/AZone"`) renders inert but **selecting** it
+   throws an uncaught `RangeError` and blanks the render. Local-tamper-only (not
+   remotely reachable); fix = re-validate persisted entries on read or guard
+   `selectResult`. Routed as a backend fix.
+5. **Stale `docs/04` keys (QA F5, Low).** `docs/04-architecture.md` §16.3
+   documents an older geocode-cache key layout and §16.2 an older `createGeocoder`
+   signature; the shipped `geocoder.js` layout is
+   `choghadiya.geocache.entry.<lang>\0<query>` + `choghadiya.geocache.index`.
+   Architect doc fix.
+6. **Bare module specifier (SEC F12, Informational).** `inauspicious.js` imports
+   `./choghadiya.js` without a `?v=` token, so that edge of the module graph is a
+   second, unversioned fetch that the `make bump` `?v=` rewrite does not cover.
+   Harmless (the module is stateless) but it bypasses cache-busting there; routed
+   as an import-token fix.
+7. **±1–2 min vs a printed panchang.** Expected and disclosed in the UI footer;
+   suncalc uses the upper-limb + refraction convention (also verified by QA-1
+   MAN-01 M3: max **1 min** delta for the three new periods vs live Drik Panchang).
+8. **English slot-name spellings.** `Labh / Amrit / Kaal / Char / Rog / Udveg /
    Shubh` are deliberately shorter than Drik Panchang's long forms — a product
    decision fixed by [docs/02-prd.md](docs/02-prd.md) US-2 AC5 / US-11 AC4 and
    [docs/03-ux.md](docs/03-ux.md) §6.
@@ -125,40 +146,53 @@ Items carried from v2.2.0 that remain open as post-release verification (not
 defects): the real-device geolocation *grant* path (MAN-03) and a live
 screen-reader pass (MAN-05); the city-sheet loading/`recent cities` polish was
 formally **cut** at the v2.2.0 GATE 2 and remains on the post-release backlog.
+QA-1's residual risks for v2.3.0 are in docs/08 §13.8 (item-7b hit/expiry paths
+rest on smoke + unit tests; no real-device geolocation; no real screen reader; the
+M6 Lighthouse FCP is owned by the release/publish step).
 
 ---
 
 ## Security
 
-Pre-release audit for v2.3.0: **PENDING (SEC-1)**. The v2.2.0 audit
-([docs/09-security-audit.md](docs/09-security-audit.md), **PASS-with-accepted-risks**,
-0 Critical / 0 High) is the last completed audit. What is already known for
+Pre-release audit for v2.3.0: **PASS-with-accepted-risks** (SEC-1,
+[docs/09-security-audit.md](docs/09-security-audit.md) §10) — **0 Critical · 0 High
+· 2 Medium · 1 Low · 1 Informational**, audited tree `c68d00a`, **0**
+vulnerabilities (`npm audit`, incl. dev) and no secret leaks (`gitleaks`, 87
+commits). The two Medium findings are the attribution hyperlinks and the
+storage-scope disclosure (Known issues #1–#2) — both **GATE 2 decisions**, neither
+an open code defect; the Low finding is the geocode-cache read path (#4) and the
+Informational item is the bare `?v=`-less import (#6). What is relevant to
 v2.3.0:
 
-- The **CSP is unchanged** (`script-src 'self'`); the session cache adds no
-  network origin and never transmits stored data.
+- The **CSP is unchanged** (`script-src 'self'`, byte-exact vs docs/04 §5.3); the
+  browser cache adds no network origin and never transmits stored data — the
+  geocoder still calls **only** `geocoding-api.open-meteo.com`, and no coordinates
+  ever appear in a URL (US-17, probed live).
 - A new **SEC-STORAGE** grep gate fails `make check` if a web-storage token
-  appears outside `session-store.js`.
-- The **SSR/attribution hyperlink** item (see Known issues #2) is the main open
-  security-adjacent decision.
+  appears outside `session-store.js`; every module reaches storage only through
+  that module's `get/set/remove` (envelope-parsed, injection-safe, throw-tolerant).
+- The **attribution hyperlink** item (Known issues #2) is the main open
+  security-adjacent decision, surfaced at GATE 2.
 
 ---
 
 ## Verification summary
 
-> **Numbers marked "placeholders" are expected to be re-confirmed on the release
-> commit by the packaging step.** The figures below are the last measured values
-> on the integrated v2.3.0 tree (integration review **TL-1** at `9693f10`, plus
-> this docs card's own re-runs of `make test` / `make greps` / `make smoke` /
-> `make axe`).
+> **Re-confirmed on the release commit.** The packaging step ran
+> `make bump VERSION=2.3.0` and then `make check` **exit 0** on the bumped tree;
+> the figures below match the final QA-1 report
+> ([docs/08](docs/08-test-report.md) §13, tested HEAD `d45fef1`) and the SEC-1
+> audit ([docs/09](docs/09-security-audit.md) §10, audited tree `c68d00a`).
 
 | Check | Command | Result |
 |-------|---------|--------|
-| Unit + contract suites | `make test` | **100 tests / 100 pass / 0 fail** (≈0.57 s; includes the 122-key §6 vertical-slice i18n contract) |
-| Headless render smoke | `make smoke` | **54 / 54 checks pass** (16 rows from the Mumbai fixture, 12h default + 24h toggle, S8 periods fixture, S9 panel default/select/revert/reload, ±10-day picker, settings persistence across reload, cache-busting) |
+| Unit + contract suites | `make test` | **100 tests / 100 pass / 0 fail** (≈0.56 s; includes the 122-key §6 vertical-slice i18n contract) |
+| Headless render smoke | `make smoke` | **66 / 66 checks pass** (16 rows from the Mumbai fixture, 12h default + 24h toggle, S8 periods fixture, S9 panel default/select/revert/reload, ±10-day picker, settings persistence across reload, cache-busting, plus 12 item-7b geocode-cache checks) |
 | Accessibility gate | `make axe` | **0 critical/serious** and **0 moderate/minor** across 5 states (base, city dialog, row selected with panel, off-today + picker focused, base @320 px) |
 | Security greps | `make greps` | **PASS — 0 hits across 4 gates** (SEC-05 HTML sinks, SEC-03 inline styles/handlers, SEC-14 origins, SEC-STORAGE) |
-| Full gate | `make check` | **exit 0** on the integrated tree (re-confirm on the release commit) |
+| Full gate | `make check` | **exit 0** on the release commit (test + greps + smoke + axe) |
+| Dependency audit | `npm audit` (incl. dev) | **0 vulnerabilities** |
+| Secret scan | `gitleaks detect --source .` | **no leaks found** (87 commits) |
 | Perf budget | (printed by smoke) | shipped JS **177.8 KB raw / 55.8 KB gzip** upper bound (7 files) < 60 KB min+gzip (NFR-P3) |
 
 ### Post-deploy verification (deployed URL)
