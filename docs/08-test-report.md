@@ -537,3 +537,148 @@ devops-owned).
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | v2.3.0 | 2026-10-14 | qa-engineer | Executed `07-test-plan.md` §12 (`QA230-*`) on the v2.3.0 tree: exploratory pass on `068681c`, gate re-run on `d45fef1` — `make test` 100/100, `make check` exit 0 (greps 4 gates · smoke 66/66 · axe 5 states), live pass over all 7 change items + the v2.2.0 regression set (S3/S5/S6/S7, `aria-current` exclusivity, night-after-midnight, DST, CSP, 320 px), MAN-01 M3 **±1 min** for the three new periods (4 combos, live Drik). Verdict **PASS-WITH-KNOWN-ISSUES** — F2 (Medium, item-7 `localStorage` client-confirmed vs shipped `sessionStorage`), F3/F4/F5 (Low). F1 (item-7b unwired) fixed by `068681c`; F6 (item-7b gate gap) closed mid-run by `t_7ed6b2ab`. No fix cards filed (CTO routes from this report). |
+
+---
+
+## 14. v2.3.0 fix-wave re-test (QA-2)
+
+Card: `t_087f8775` (QA-2 · fix-wave re-test & regression → v2.3.0 release verdict).
+Plan executed: `docs/07-test-plan.md` §12.12 (`QA230-R*`); baselines `docs/08` §13 (QA-1
+`PASS-WITH-KNOWN-ISSUES`) and `docs/07` §12 (`QA230-*`).
+
+## VERDICT: PASS
+
+**No open Critical, High or Medium finding. All MVP acceptance criteria (US-1 … US-19) pass, and
+every `QA230-R*` re-test case passes.** The fix wave closed all four QA-1 findings — **F2** (Medium,
+item-7 `localStorage` scope) plus **F3/F4/F5** (Low) — and the two SEC-FIX GATE-2 conditions
+**F8/F9**. The gate is green on the post-wave tree (`make test` 108/108, `make check` exit 0). The
+only open items are the CTO-routed **informational** residuals from SEC-FIX (F13/F14/F15) and the
+two standing product decisions; none is a defect and none blocks release. Nothing was softened to
+reach this verdict: every check below ran on the committed tree, and everything not executed is
+listed as a gap in §14.7.
+
+HEAD tested: `5706752` (working tree clean) — the shipped code is `61282a8`/`c7fc4ad` (DO-FIX gate +
+a11y) on top of `d8b5cdc` (BE-FIX-2), `0cc4144` (FE-FIX), `20fe1c1` (BE-FIX-1); the commits after
+those touch docs only (`docs/07`/`docs/08` for this card).
+
+---
+
+### 14.1 Environment
+
+| Item | Value |
+|------|-------|
+| Repo / workspace | `/Users/vishu/hermes-company/projects/choghadiya` (git, branch `main`) |
+| Commit under test | `5706752da1f6116a08861c3491be9979d1da260e` |
+| Shipped code commit | `61282a8` (DO-FIX a11y) on `c7fc4ad` (DO-FIX gates) ← `d8b5cdc` (BE-FIX-2) ← `0cc4144` (FE-FIX) ← `20fe1c1` (BE-FIX-1) |
+| Working tree | clean before and after the run (`git status --short` empty) |
+| Node / npm | v26.7.0 / 11.19.0 |
+| OS | macOS 26.5.2 (arm64) |
+| Browser engine | Google Chrome 155.0.8059.40 (headless, CDP) — `scripts/smoke.mjs`, `scripts/axe-check.mjs` and the QA-2 probes |
+| axe-core | 4.10.2 (pinned devDependency, dev-only, never shipped) |
+| Network | no live network in any automated suite (fake `fetchImpl`; a CDP `Fetch` fixture fulfils the one geocode call). The QA-2 probes are offline too. |
+
+### 14.2 Quality gate on the post-wave tree — **`make test` 108/108 · `make check` exit 0**
+
+```
+$ make test    →  ℹ tests 108 · pass 108 · fail 0 · duration_ms 625
+$ make check   →  exit 0
+   greps : PASS — 0 hits across 4 gates (SEC-05, SEC-03, SEC-14, SEC-STORAGE)
+   smoke : SMOKE RESULT: 67 passed, 0 failed
+   axe   : AXE RESULT: PASS — 5 states, 0 critical/serious, 0 moderate/minor
+```
+
+`make check` exit 0 is the M7/M8 gate. Smoke **67/67** (was 66 at QA-1; +1 = DO-FIX's new F12
+specifier-presence check 10b) and greps **0 hits / 4 gates** (SEC-14 now admits exactly the three
+link-only licence hosts). Axe scans 5 states with 0 critical/serious and 0 moderate/minor; the single
+`incomplete` `color-contrast` rule is the same decorative `aria-hidden` chevron as v2.2.0 (not a
+violation). Perf (smoke `PERF BUDGET`): shipped JS 7 files, **184.9 KB raw / 58.5 KB gzip** —
+under the 60 KB min+gzip budget (NFR-P3).
+
+### 14.3 Targeted flip verification — `QA230-R1 … R7`
+
+Each row is a live check on the post-wave tree; scratch harnesses are listed in §14.8.
+
+| Case | What was verified | Evidence | Result |
+|------|-------------------|----------|--------|
+| `QA230-R1` | **Full browser-process restart.** Chrome #1 (persistent profile) wrote `timeFormat=24h` + `lang=en` **through the real UI**; the process was then **killed and relaunched** (new PID, same `--user-data-dir`, same origin) — Chrome #2 hydrated both: `#b-h24 aria-pressed="true"`, `<html lang="en">`, and the three `choghadiya.settings.*` keys present | `qa2_restart.mjs` — 3/3 write checks, then after restart: `h24=true h12=false`, `lang=en`, keys `["…location","…lang","…timeFormat"]` | **PASS** |
+| `QA230-R2` | **Scope + expiry semantics** (shipped `session-store.js` probed in-page via dynamic import): `STORAGE_SCOPE==='local'`; a no-expiry entry (`t:null`) persisted **across the process restart**; a `past-t` entry returned `null` (not served); a 24 h entry returned its value with `t ≈ page-now + 86 400 000 ms`; settings envelopes carry `t:null` | `qa2_restart.mjs` — `scope=local`, `persisted=X`, `expiredRead=null`, `ttlRead=Z`, `ttlRaw={"t":1792033200000,"v":"Z"}` | **PASS** |
+| `QA230-R3` | **Privacy truth audit.** Rendered `privacy.line` in the footer **and** the city sheet, in **HI and EN**, is **byte-equal** to the `docs/03-ux.md` §6 cell and to the `i18n.js` dictionary; the false "this browser tab" / "टैब" claim is absent; settings-no-expiry and the 24 h cache TTL are disclosed | `qa2_surfaces.mjs` — footer==sheet==§6==DICT in both languages; `/this browser tab/` and `/टैब/` not found | **PASS** |
+| `QA230-R4` | **Attribution links.** `#footer-credit` renders **exactly 3 real `<a>`** — `Open-Meteo`→`https://open-meteo.com/`, `GeoNames`→`https://www.geonames.org/`, `CC BY 4.0`→`https://creativecommons.org/licenses/by/4.0/` — each `rel="noopener noreferrer" target="_blank"` with **no other attributes** (`href,rel,target` only); concatenated `textContent` byte-equal to the dictionary in **EN and HI**; the node's children are `text,A,text,A,text,A` (DOM-API build, no `innerHTML`); `make greps` SEC-05 0 hits | `qa2_surfaces.mjs` — 3 anchors exact; HI text `स्थान खोज Open-Meteo द्वारा · डेटा GeoNames से · CC BY 4.0`, EN `Location search by Open-Meteo · Data from GeoNames · CC BY 4.0` | **PASS** |
+| `QA230-R5` | **F3 overlay copy tier-neutral** (row-19 repro). The inauspicious `रोग · Rog` slot, overlapped by Vaar Vela, shows a warning that **names the period** and is neutral about the slot tier: HI `इस चौघड़िया के भीतर वार वेला पड़ रही है — इस समय शुभ काम शुरू न करें।` (no "इस शुभ चौघड़िया"), EN `Vaar Vela falls inside this choghadiya — do not begin auspicious work now.` (no "otherwise-good") | `qa2_surfaces.mjs` — both languages | **PASS** |
+| `QA230-R6` | **F10 tampered geocache is render-safe.** Seeded a **wholly-invalid** entry (non-finite coords via `null` + invalid IANA tz `Evil/Zone`) → treated as a **miss**, refetched (1 request, healed) and the render was **not blanked** (3 results); seeded a **mixed** entry (1 valid + 1 tampered) → served from cache (0 refetch) rendering **only the valid record**; 0 `NaN`/`Invalid Date`/`undefined`; 0 console errors | `qa2_surfaces.mjs` — case1 `rows=3 requests=1`, case2 `rows=1 requests=0`, `consoleErrors=[]` | **PASS** |
+| `QA230-R7` | **F12 cache-busting.** All **7** internal module specifiers in the shipped graph carry `?v=`; every `?v=` token in `index.html` + the modules equals `2.3.0`; `inauspicious.js → ./choghadiya.js?v=2.3.0` is versioned | `qa2_surfaces.mjs` (uses smoke's `internalModuleSpecifiers()`/`assetVersions()`) + smoke check 10b | **PASS** |
+
+### 14.4 v2.2.0 regression bar — `QA230-R8` (holds)
+
+| Area | Result |
+|------|--------|
+| **S3** not-defined (polar, 89.9 N) | PASS — `#not-defined` visible, **0** slot rows, S8 periods block hidden, no `NaN`/`Invalid Date`/`undefined` |
+| **S5** geolocation-denied/unavailable | PASS — page-level `ℹ लोकेशन उपलब्ध नहीं — शहर लिखें` + `शहर चुनें`, empty state, 0 rows, no dead end |
+| **S6** geocoder unreachable | PASS — `role="alert"` `खोज नहीं हो सकी। दोबारा कोशिश करें` (network reject) |
+| **S7** no city found | PASS — `role="alert"` `कोई शहर नहीं मिला — वर्तनी जाँचें`, field keeps its value, sheet stays open |
+| `aria-current` "Now" exclusivity | PASS — exactly **1** live row at rest and after selecting another row (US-14) |
+| Night-after-midnight attribution | PASS — night list starts at sunset (`06:16 pm`) and ends next-morning (`06:32 am`); `SCH-*` unit fixtures unchanged (112-assertion lock green) |
+| DST / IANA tz · CSP / textContent-only | PASS — `make test` DST-London fixtures; `make greps` 0 hits / 4 gates |
+| 320 px no-scroll | PASS — `scrollWidth === clientWidth` (305 = 305) with S8/S9/panel visible |
+| 12h default / toggle / persistence | PASS — smoke 12h/24h assertions + `QA230-R1` restart hydration |
+
+### 14.5 Findings — disposition (no fix cards filed; CTO routes)
+
+| ID | Sev | Status | Note |
+|----|-----|--------|------|
+| **F2** | Medium | **CLOSED** | Item-7 scope is now `localStorage` (`STORAGE_SCOPE='local'`, BE-FIX-1 `20fe1c1`); settings survive a full browser restart (`QA230-R1/R2`). |
+| **F3** | Low | **CLOSED** | `panel.note.overlay.vaarVela`/`.kaalVela` reworded tier-neutral (UX-FIX + FE-FIX); `QA230-R5` repro clean. |
+| **F4** | Low | **CLOSED** | Attribution now renders 3 real links (FE-FIX `0cc4144`, DO-FIX allow-list `c7fc4ad`); `QA230-R4` clean. |
+| **F5** | Low | **CLOSED** | `docs/04-architecture.md` §16.2/§16.3 corrected to the shipped key layout + `createGeocoder({lang, cacheStore})` (ARCH-FIX `80fd25a`). |
+| **F8** | Medium (SEC) | **CLOSED** | Attribution hyperlinks landed; SEC-FIX `t_7b42e0d0` re-signed; `QA230-R4`. |
+| **F9** | Medium (SEC) | **CLOSED** | `privacy.line` rewritten truthful (localStorage, no tab claim, TTL disclosed); `QA230-R3`. |
+| **F10** | Low (SEC) | **CLOSED** | Geocache read-path re-validation (BE-FIX-2 `d8b5cdc`); `QA230-R6`. |
+| **F12** | Info (SEC) | **CLOSED** | Every internal specifier versioned (BE-FIX-2); `QA230-R7`. |
+| **F13** | Low | **OPEN (informational, CTO-routed)** | `scripts/axe-check.mjs` does not pin an emulated `prefers-color-scheme`, so a contrast regression can hide on a light-mode host (this machine is dark). A **gate** blind spot, not a product defect; no MVP AC affected. |
+| **F14** | Info | **OPEN (informational)** | The `style.css` footer-link colour rule (`footer.app a { color: inherit }`) is an out-of-lane a11y fix (DO-FIX `61282a8`) pending a UX design-token blessing. |
+| **F15** | Info | **OPEN (informational)** | Smoke item-7a's "12h/24h persists across reload" pin also passes under `sessionStorage`; the language-key and geocache-key checks are the strong discriminators. |
+| **F11** | Info | **OPEN (carried, accepted)** | Carried from SEC-1; accepted, no action. |
+
+### 14.6 Quality-gate scoreboard (v2.3.0 post-wave)
+
+| Gate | Metric | Measured | Expected | Result |
+|------|--------|----------|----------|--------|
+| M1 | Algorithm correctness | 112/112 slot assertions (unchanged) | 112/112 | **PASS** |
+| M2 | No hardcoded clock | `SCH-03` + fixture checks | 0 hardcoded | **PASS** |
+| M3 | ±2 min vs mainstream panchang | max Δ 1 min (QA-1 §13.5, 4 combos, live Drik) — no calc-path change in the wave | ≤ 2 min | **PASS** (carried) |
+| M4 | Bilingual coverage | 122/122 keys × 2 languages, 0 fallbacks; byte-lock green | 122/122 | **PASS** |
+| M5 | No blocking path | S3/S5/S6/S7 + polar + tampered-cache exercised; 0 `NaN`/`Invalid Date`/`undefined` | 0 broken values | **PASS** |
+| M6 | Mobile FCP < 1.5 s | not re-measured (no perf-affecting change beyond the wave's ~1 KB JS/CSS); owned by the release card | < 1500 ms | **DEFERRED** to release card |
+| M7 | Accessibility | axe **5 states**, 0 critical/serious, 0 moderate/minor | 0 critical/serious | **PASS** |
+| M8 | Release gate | this report's verdict: **PASS** | verdict | **PASS** |
+
+### 14.7 Honest gaps (not executed / not fully verified here)
+
+| Item | Why | Residual risk |
+|------|-----|---------------|
+| Real screen reader (NVDA/VoiceOver) | Not available headless. | Pronunciation/order unverified beyond the AX-tree + axe. |
+| M6 Lighthouse FCP | No perf-affecting change in the wave; the release card re-measures on the deployed build. | Low. |
+| Real-device geolocation grant (physical phone) | No physical device; the grant path was exercised with a CDP override + granted permission (and a stubbed `getCurrentPosition` for the polar/denied states). | Low — same code path as the city search; device-tz resolution unit-tested. |
+| F13 axe theme determinism | The gate runs on the host theme (dark here); a light-mode CI run would not catch an anchor-contrast regression. Recorded, not fixed (Low, CTO-routed). | Low — gate blind spot, not a shipped defect. |
+| MAN-01 M3 (three new periods) | Not re-measured this wave — the wave touched no solar/period calculation (only storage, copy, links, gates); QA-1's §13.5 measurement (±1 min, 4 combos) stands. | Low. |
+
+### 14.8 Reproducible commands
+
+```
+make test                                   # 108/108 pass, 0 fail
+make check                                  # tests 108/108 + greps 0/4 + SMOKE 67/67 + AXE PASS (exit 0)
+node scripts/smoke.mjs                      # SMOKE RESULT: 67 passed, 0 failed (+ PERF BUDGET line)
+node scripts/axe-check.mjs                  # AXE RESULT: PASS (5 states)
+node scripts/security-greps.mjs             # SECURITY GREPS RESULT: PASS — 0 hits across 4 gates
+
+# QA-2 live probes (QA scratch dir, not the repo — scripts/ is devops-owned):
+node "$HOME/.hermes/profiles/qa-engineer/cache/scratch/qa2_restart.mjs"     # QA230-R1/R2 — 12/12 (two Chrome processes, one profile)
+node "$HOME/.hermes/profiles/qa-engineer/cache/scratch/qa2_surfaces.mjs"    # QA230-R3..R7 — 42/42 (real Chrome, offline)
+node "$HOME/.hermes/profiles/qa-engineer/cache/scratch/qa2_regression.mjs"  # QA230-R8 — 13/13 (S3/S5/S6/S7 + bar)
+```
+
+### 14.9 v2.3.0 fix-wave re-test revision log
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| v2.3.0 QA-2 | 2026-10-14 | qa-engineer | Executed `docs/07-test-plan.md` §12.12 (`QA230-R*`) on the post-wave tree `5706752`: `make test` 108/108, `make check` exit 0 (greps 0/4 · smoke 67/67 · axe 5 states), plus 67 live checks across three probes — full browser-process-restart persistence (12/12), privacy/attribution/F3/F10/F12 surfaces (42/42), v2.2.0 bar S3/S5/S6/S7 + `aria-current` + 320 px (13/13). Verdict **PASS** — no open Critical/High/Medium; QA-1 F2/F3/F4/F5 and SEC F8/F9/F10/F12 closed. Informational residuals F13/F14/F15 + F11 carried (CTO-routed). No fix cards filed. |

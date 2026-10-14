@@ -383,6 +383,7 @@ two explicitly-manual measurements (MAN-01, MAN-02).**
 |---------|------|--------|--------|
 | v1.0 (initial) | 2026-10-14 | qa-engineer | Initial test plan: levels & tooling, environments, entry/exit criteria, regression scope, severity taxonomy, named suites (S-SEQ 112-assertion, S-SCHED fixture/polar/DST, S-GEO error taxonomy, S-I18N M4 gate, S-SMOKE, S-AXE M7 gate), US-1..US-19 traceability matrix. |
 | v2.3.0 addendum | 2026-10-14 | qa-engineer | §12 appended: change items 1–7 → named test cases `QA230-*`, acceptance criteria traced to `docs/00-brief.md` change log + `docs/03-ux.md` §6/§7.5 + `docs/04-architecture.md` §16 + `docs/01-research.md` §11–13. |
+| v2.3.0 re-test addendum | 2026-10-14 | qa-engineer | §12.12 appended: fix-wave re-test cases `QA230-R1..R9` (full browser-restart persistence, scope/expiry semantics, privacy truth audit, attribution links, F3 tier-neutral copy, F10 tampered-geocache safety, F12 specifiers, v2.2.0 bar, quality gate). Executed in `docs/08-test-report.md` §14. |
 
 ---
 
@@ -534,3 +535,25 @@ Regression scope for this wave (§5 of the base plan): full `make test` + `make 
 Same bar as §4, extended: every `QA230-*` case either passes an automated test / named manual
 check or is reported as an explicit finding; **no open Critical/High**; all seven change items
 traced; `MAN-01` measured with real numbers; verdict recorded in `docs/08-test-report.md` §13.
+
+---
+
+### 12.12 v2.3.0 fix-wave re-test addendum — `QA230-R*` (card `t_087f8775`, QA-2)
+
+Scope: the GATE-2 fix wave (8 cards) that flipped item-7 storage `session`→`local`, rewrote the
+privacy disclosure (F9), rendered the RS-3 B1 attribution links (F8), made the F3 overlay copy
+tier-neutral, fixed F5/F10/F12, and re-synced the gates/docs. The `QA230-R*` cases re-test the
+**post-wave** tree and re-run the regression bar; they extend §12.2–§12.11 (all base and v2.3.0
+cases still apply). Verdict and evidence in `docs/08-test-report.md` §14.
+
+| ID | Case | Expected (traced) | Level |
+|----|------|-------------------|-------|
+| `QA230-R1` | **Full browser-process restart**: write `timeFormat=24h` + `lang=en` through the real UI, kill the Chrome process, relaunch a brand-new process against the **same profile + origin**; the app hydrates both from `localStorage` | `00-brief` item 7; ADR-009 | L4 live (two Chrome processes, one profile) |
+| `QA230-R2` | **Scope/expiry semantics**: `STORAGE_SCOPE==='local'`; settings envelopes carry `t:null` (never expire, survive restart); a `past-t` geocache entry is **not served**; a 24 h entry is served and its `t ≈ now + 86 400 000 ms` | `04-arch` §16.2/§16.3; ADR-009 | L1 `session-store.test.js` + L4 live (shipped-module probe) |
+| `QA230-R3` | **Privacy truth audit**: rendered `privacy.line` (footer + city sheet, EN **and** HI) is byte-equal to the `docs/03-ux.md` §6 cell and the `i18n.js` dictionary; no "this browser tab"/"टैब" claim; settings-no-expiry + 24 h cache TTL disclosed | F9; `docs/09` §10.3 truth table | L4 live DOM + deck/dictionary byte-compare |
+| `QA230-R4` | **Attribution links**: `#footer-credit` renders exactly 3 real `<a>` (`Open-Meteo`→`https://open-meteo.com/`, `GeoNames`→`https://www.geonames.org/`, `CC BY 4.0`→`https://creativecommons.org/licenses/by/4.0/`), each `rel="noopener noreferrer" target="_blank"` with **no other attributes**; concatenated `textContent` byte-equal to the dictionary in EN **and** HI; node built from text nodes + anchors (DOM API, no `innerHTML`) | F8; RS-3 §13.6 B1; `03-ux` §6.1e | L4 live DOM + `SEC-05` grep |
+| `QA230-R5` | **F3 overlay copy tier-neutral**: the `रोग · Rog` slot (inauspicious, overlapped by Vaar Vela) shows a warning that names the period and is neutral about the slot tier — HI has **no** "इस शुभ चौघड़िया", EN has **no** "otherwise-good" | F3; `03-ux` §6.1e | L4 live (row-19 repro) |
+| `QA230-R6` | **F10 tampered geocache is render-safe**: a wholly-invalid entry (non-finite coords + invalid IANA tz) is treated as a **miss** → refetch (healed) and the render is **not blanked**; a mixed entry serves only the valid record (tampered dropped, 0 refetch); 0 `NaN`/`Invalid Date`/`undefined`; 0 console errors | F10; `04-arch` §16.2 | L1 `geocoder.test.js` + L4 live (seeded `localStorage`) |
+| `QA230-R7` | **F12 cache-busting**: every internal module specifier in the shipped graph carries `?v=`, and every `?v=` token equals `2.3.0` (incl. `inauspicious.js` → `./choghadiya.js`) | F12; US-19 AC3 | L3 smoke check 10b + L4 static graph |
+| `QA230-R8` | **v2.2.0 regression bar holds** on the post-wave tree: S3 polar / S5 denied / S6 unreachable / S7 no-city, `aria-current` exclusivity, night-after-midnight list bounds, 320 px no-scroll | §5, §13.4 | L3 smoke + L4 live |
+| `QA230-R9` | **Quality gate**: `make test` and `make check` (tests + greps + smoke + axe) exit 0; exact counts recorded | §4; M7/M8 | L1/L3 (`make check`) |
