@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<!-- SEC-01 (docs/06-threat-model.md §6.1): the CSP <meta> is the FIRST element of <head>,
+     before any <link>/<script>/<style>, because a meta-delivered CSP is not retroactive.
+     Value is verbatim docs/04-architecture.md §5.3 (origin list fixed by 04 §5.2; changing
+     it requires an ADR amendment). form-action 'none' is safe: the city form is handled by
+     JS with preventDefault(), and the sheet cannot even open without JS. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https://geocoding-api.open-meteo.com; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta charset="utf-8">
+<!-- SEC-02: no referrer context leaks to the geocoder. -->
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>चौघड़िया — आज का शुभ मुहूर्त</title>
+<!-- SEC-04: every asset reference is same-origin and carries ?v=${ASSET_VERSION}
+     (04-architecture §7 / §11.5). ASSET_VERSION == package.json version == 2.1.0 baseline;
+     the release card bumps it to 2.2.0 in the same commit as the tag (05-plan §M4). -->
+<link rel="icon" href="favicon.svg?v=2.1.0">
+<link rel="stylesheet" href="style.css?v=2.1.0">
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ===== Header (banner landmark) — 03-ux §1.1, US-12 ===== -->
+  <header class="app">
+    <div class="hrow">
+      <div class="brand">
+        <span class="brand-glyph" aria-hidden="true">☀</span>
+        <h1 data-i18n="app.title">चौघड़िया</h1>
+        <span class="brand-sub" data-i18n="app.subtitle">आज का शुभ मुहूर्त</span>
+      </div>
+      <div class="lang-toggle" role="group" aria-label="भाषा">
+        <button type="button" id="b-hi" aria-pressed="true">हिं</button>
+        <button type="button" id="b-en" aria-pressed="false">EN</button>
+      </div>
+      <button type="button" class="loc-chip" id="loc-chip" aria-label="लोकेशन बदलें">
+        <span aria-hidden="true">📍</span>
+        <span class="name" data-i18n="loc.choose">शहर चुनें</span>
+        <span aria-hidden="true">⌄</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ===== Date bar — 03-ux §1.1, US-12/US-13 ===== -->
+    <div class="datebar">
+      <button type="button" class="nav" id="prev-day" aria-label="पिछला दिन">‹</button>
+      <div class="label">
+        <p class="d" id="date-label"></p>
+        <!-- [hidden] reset (03-ux §10 fix 2) is exercised by this element: it carries
+             leaf-class display rules AND a JS-driven hidden toggle. -->
+        <button type="button" class="today-pill" id="today-pill" hidden data-i18n="date.today">आज</button>
+      </div>
+      <button type="button" class="nav" id="next-day" aria-label="अगला दिन">›</button>
+    </div>
+
+    <!-- Live region for loading.status (03-ux §7.3). -->
+    <p class="sr" role="status" id="live" data-i18n="loading.status">लोड हो रहा है</p>
+
+    <!-- ===== S1 Today view — day + night sections. Static markup renders S4 (skeleton):
+         header + date bar are live, both lists are skeleton blocks with aria-busy="true"
+         (03-ux §3 S1 "Loading", §3 S4). FE-02 replaces the list contents with the 16 real
+         rows; the empty dynamic nodes below (date label, section edges, small print) are
+         filled by FE-02 from the dictionary / schedule. ===== -->
+    <div class="panes">
+
+      <section class="pane day" aria-labelledby="day-h">
+        <h2 id="day-h">
+          <span data-i18n="section.day">दिन</span>
+          <span class="edge" id="day-edge"></span>
+        </h2>
+        <ol class="slot-list" id="day-list" aria-busy="true">
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+        </ol>
+        <p class="smallprint" id="day-smallprint"></p>
+      </section>
+
+      <section class="pane night" aria-labelledby="night-h">
+        <h2 id="night-h">
+          <span data-i18n="section.night">रात</span>
+          <span class="edge" id="night-edge"></span>
+        </h2>
+        <ol class="slot-list" id="night-list" aria-busy="true">
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+          <li class="skeleton" aria-hidden="true"></li>
+        </ol>
+        <p class="smallprint" id="night-smallprint"></p>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===== Footer (contentinfo landmark) — 03-ux §1.1, US-6/US-17 ===== -->
+  <footer class="app">
+    <p data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
+    <p data-i18n="attribution.geocoding">Geocoding by Open-Meteo / GeoNames</p>
+    <p data-i18n="convention.note">सूर्योदय/सूर्यास्त की गणना में ±1–2 मिनट का अंतर संभव है</p>
+    <p data-i18n="footer.noTracking">कोई अकाउंट नहीं · कोई ट्रैकिंग नहीं · कोई बैकएंड नहीं</p>
+  </footer>
+
+  <!-- ===== No-JS message — NFR-B3, 03-ux §6 (noscript key) ===== -->
+  <noscript>
+    <p class="notice" data-i18n="noscript">इस ऐप को चलाने के लिए JavaScript चालू करें</p>
+  </noscript>
+
+</div>
+
+<!-- ===== S2 City search sheet — modal <dialog> (03-ux §1.1 overlay, §3 S2).
+     showModal() gives focus containment, backdrop and Esc-to-close for free; opened by
+     FE-03 from the location chip. The <form> is submit-only (Enter / खोजें) and is
+     handled by JS in FE-03/FE-04 — never a request per keystroke (US-5 AC4).
+     Result rows (S6/S7 inline errors, .results list) are FE-03/FE-04's state blocks. ===== -->
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-h">
+  <div class="sheet-head">
+    <h2 id="sheet-h" data-i18n="city.sheetTitle">शहर चुनें</h2>
+    <button type="button" class="sheet-close" id="close-sheet" aria-label="बंद करें">✕</button>
+  </div>
+  <div class="sheet-body">
+    <p class="sheet-privacy" data-i18n="privacy.line">शहर खोजने पर लिखा गया नाम Open-Meteo/GeoNames को भेजा जाता है। लोकेशन सेव नहीं होती।</p>
+    <form class="field-row" id="city-form">
+      <label class="sr" for="city" data-i18n="city.fieldLabel">शहर का नाम</label>
+      <input id="city" name="city" type="text" inputmode="text" autocomplete="off" maxlength="64"
+             placeholder="जैसे: लंदन, जयपुर" data-i18n-ph="city.placeholder">
+      <button type="submit" data-i18n="city.submit">खोजें</button>
+    </form>
+    <ul class="results" id="results"></ul>
+  </div>
+</dialog>
+
+</body>
+</html>
